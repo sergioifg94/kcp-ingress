@@ -83,15 +83,19 @@ func TestIngress(t *testing.T) {
 	ingress := GetIngress(test, namespace, name)
 
 	// Check a DNSRecord for the root Ingress is created with the expected Spec
-	test.Eventually(DNSRecord(test, namespace, name)).Should(PointTo(MatchFields(IgnoreExtras, Fields{
-		"Spec": MatchFields(IgnoreExtras,
+	test.Eventually(DNSRecord(test, namespace, name)).Should(And(
+		WithTransform(DNSRecordEndpoints, HaveLen(1)),
+		WithTransform(DNSRecordEndpoints, ContainElement(PointTo(MatchFields(IgnoreExtras,
 			Fields{
-				"DNSName":    Equal(ingress.Annotations[kuadrantcluster.ANNOTATION_HCG_HOST]),
-				"Targets":    ConsistOf(ingress.Status.LoadBalancer.Ingress[0].IP),
-				"RecordType": Equal(kuadrantv1.ARecordType),
-				"RecordTTL":  Equal(int64(60)),
-			}),
-	})))
+				"DNSName":          Equal(ingress.Annotations[kuadrantcluster.ANNOTATION_HCG_HOST]),
+				"Targets":          ConsistOf(ingress.Status.LoadBalancer.Ingress[0].IP),
+				"RecordType":       Equal("A"),
+				"RecordTTL":        Equal(kuadrantv1.TTL(60)),
+				"SetIdentifier":    Equal(ingress.Status.LoadBalancer.Ingress[0].IP),
+				"ProviderSpecific": ConsistOf(kuadrantv1.ProviderSpecific{{Name: "aws/weight", Value: "100"}}),
+			})),
+		)),
+	))
 
 	// Register workload cluster 2 into the test workspace
 	cluster2 := test.NewWorkloadCluster("kcp-cluster-2", WithKubeConfigByName, InWorkspace(workspace))
@@ -117,18 +121,29 @@ func TestIngress(t *testing.T) {
 	ingress = GetIngress(test, namespace, name)
 
 	// Check a DNSRecord for the root Ingress is updated with the expected Spec
-	test.Eventually(DNSRecord(test, namespace, name)).Should(PointTo(MatchFields(IgnoreExtras, Fields{
-		"Spec": MatchFields(IgnoreExtras,
+	test.Eventually(DNSRecord(test, namespace, name)).Should(And(
+		WithTransform(DNSRecordEndpoints, HaveLen(2)),
+		WithTransform(DNSRecordEndpoints, ContainElement(PointTo(MatchFields(IgnoreExtras,
 			Fields{
-				"DNSName": Equal(ingress.Annotations[kuadrantcluster.ANNOTATION_HCG_HOST]),
-				"Targets": ConsistOf(
-					ingress.Status.LoadBalancer.Ingress[0].IP,
-					ingress.Status.LoadBalancer.Ingress[1].IP,
-				),
-				"RecordType": Equal(kuadrantv1.ARecordType),
-				"RecordTTL":  Equal(int64(60)),
-			}),
-	})))
+				"DNSName":          Equal(ingress.Annotations[kuadrantcluster.ANNOTATION_HCG_HOST]),
+				"Targets":          ConsistOf(ingress.Status.LoadBalancer.Ingress[0].IP),
+				"RecordType":       Equal("A"),
+				"RecordTTL":        Equal(kuadrantv1.TTL(60)),
+				"SetIdentifier":    Equal(ingress.Status.LoadBalancer.Ingress[0].IP),
+				"ProviderSpecific": ConsistOf(kuadrantv1.ProviderSpecific{{Name: "aws/weight", Value: "100"}}),
+			})),
+		)),
+		WithTransform(DNSRecordEndpoints, ContainElement(PointTo(MatchFields(IgnoreExtras,
+			Fields{
+				"DNSName":          Equal(ingress.Annotations[kuadrantcluster.ANNOTATION_HCG_HOST]),
+				"Targets":          ConsistOf(ingress.Status.LoadBalancer.Ingress[1].IP),
+				"RecordType":       Equal("A"),
+				"RecordTTL":        Equal(kuadrantv1.TTL(60)),
+				"SetIdentifier":    Equal(ingress.Status.LoadBalancer.Ingress[1].IP),
+				"ProviderSpecific": ConsistOf(kuadrantv1.ProviderSpecific{{Name: "aws/weight", Value: "100"}}),
+			})),
+		)),
+	))
 
 	// Update the root Service to have it placed on cluster 2 only
 	_, err = test.Client().Core().Cluster(namespace.ClusterName).CoreV1().Services(namespace.Name).
@@ -145,15 +160,19 @@ func TestIngress(t *testing.T) {
 	ingress = GetIngress(test, namespace, name)
 
 	// Check a DNSRecord for the root Ingress is updated with the expected Spec
-	test.Eventually(DNSRecord(test, namespace, name)).Should(PointTo(MatchFields(IgnoreExtras, Fields{
-		"Spec": MatchFields(IgnoreExtras,
+	test.Eventually(DNSRecord(test, namespace, name)).Should(And(
+		WithTransform(DNSRecordEndpoints, HaveLen(1)),
+		WithTransform(DNSRecordEndpoints, ContainElement(PointTo(MatchFields(IgnoreExtras,
 			Fields{
-				"DNSName":    Equal(ingress.Annotations[kuadrantcluster.ANNOTATION_HCG_HOST]),
-				"Targets":    ConsistOf(ingress.Status.LoadBalancer.Ingress[0].IP),
-				"RecordType": Equal(kuadrantv1.ARecordType),
-				"RecordTTL":  Equal(int64(60)),
-			}),
-	})))
+				"DNSName":          Equal(ingress.Annotations[kuadrantcluster.ANNOTATION_HCG_HOST]),
+				"Targets":          ConsistOf(ingress.Status.LoadBalancer.Ingress[0].IP),
+				"RecordType":       Equal("A"),
+				"RecordTTL":        Equal(kuadrantv1.TTL(60)),
+				"SetIdentifier":    Equal(ingress.Status.LoadBalancer.Ingress[0].IP),
+				"ProviderSpecific": ConsistOf(kuadrantv1.ProviderSpecific{{Name: "aws/weight", Value: "100"}}),
+			})),
+		)),
+	))
 
 	gracePeriodDuration := deleteDelay.TTLDefault - 10*time.Second // take some slack
 	cluster1LabelSelector := ClusterLabel + "=" + cluster1.Name

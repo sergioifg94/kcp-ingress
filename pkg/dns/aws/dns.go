@@ -2,13 +2,12 @@ package aws
 
 import (
 	"fmt"
-	"strings"
+	"strconv"
 
 	"github.com/kuadrant/kcp-glbc/pkg/apis/kuadrant/v1"
 	"github.com/kuadrant/kcp-glbc/pkg/dns"
 
 	"github.com/aws/aws-sdk-go/aws"
-	"github.com/aws/aws-sdk-go/aws/awserr"
 	"github.com/aws/aws-sdk-go/aws/endpoints"
 	"github.com/aws/aws-sdk-go/aws/session"
 	"github.com/aws/aws-sdk-go/service/route53"
@@ -20,6 +19,13 @@ import (
 const (
 	// chinaRoute53Endpoint is the Route 53 service endpoint used for AWS China regions.
 	chinaRoute53Endpoint = "https://route53.amazonaws.com.cn"
+
+	ProviderSpecificEvaluateTargetHealth = "aws/evaluate-target-health"
+	ProviderSpecificWeight               = "aws/weight"
+	ProviderSpecificRegion               = "aws/region"
+	ProviderSpecificFailover             = "aws/failover"
+	ProviderSpecificMultiValueAnswer     = "aws/multi-value-answer"
+	ProviderSpecificHealthCheckID        = "aws/health-check-id"
 )
 
 var (
@@ -109,21 +115,10 @@ func (m *Provider) Delete(record *v1.DNSRecord, zone v1.DNSZone) error {
 
 // change will perform an action on a record.
 func (m *Provider) change(record *v1.DNSRecord, zone v1.DNSZone, action action) error {
-	if record.Spec.RecordType != v1.ARecordType {
-		return fmt.Errorf("unsupported record type %s", record.Spec.RecordType)
-	}
-	domain, targets := record.Spec.DNSName, record.Spec.Targets
-	if len(domain) == 0 {
-		return fmt.Errorf("domain is required")
-	}
-	if len(targets) == 0 {
-		return fmt.Errorf("targets is required")
-	}
-
 	// Configure records.
-	err := m.updateRecord(domain, zone.ID, string(action), targets, record.Spec.RecordTTL)
+	err := m.updateRecord(record, zone.ID, string(action))
 	if err != nil {
-		return fmt.Errorf("failed to update alias in zone %s: %v", zone.ID, err)
+		return fmt.Errorf("failed to update record in zone %s: %v", zone.ID, err)
 	}
 	switch action {
 	case upsertAction:
@@ -134,39 +129,74 @@ func (m *Provider) change(record *v1.DNSRecord, zone v1.DNSZone, action action) 
 	return nil
 }
 
-func (m *Provider) updateRecord(domain, zoneID, action string, targets []string, ttl int64) error {
+func (m *Provider) updateRecord(record *v1.DNSRecord, zoneID, action string) error {
 	input := route53.ChangeResourceRecordSetsInput{HostedZoneId: aws.String(zoneID)}
 
-	var resourceRecords []*route53.ResourceRecord
-	for _, target := range targets {
-		resourceRecords = append(resourceRecords, &route53.ResourceRecord{Value: aws.String(target)})
+	var changes []*route53.Change
+
+	for _, endpoint := range record.Spec.Endpoints {
+
+		if endpoint.RecordType != string(v1.ARecordType) {
+			return fmt.Errorf("unsupported record type %s", endpoint.RecordType)
+		}
+		domain, targets := endpoint.DNSName, endpoint.Targets
+		if len(domain) == 0 {
+			return fmt.Errorf("domain is required")
+		}
+		if len(targets) == 0 {
+			return fmt.Errorf("targets is required")
+		}
+
+		var resourceRecords []*route53.ResourceRecord
+		for _, target := range endpoint.Targets {
+			resourceRecords = append(resourceRecords, &route53.ResourceRecord{Value: aws.String(target)})
+		}
+
+		resourceRecordSet := &route53.ResourceRecordSet{
+			Name:            aws.String(endpoint.DNSName),
+			Type:            aws.String(route53.RRTypeA),
+			TTL:             aws.Int64(int64(endpoint.RecordTTL)),
+			ResourceRecords: resourceRecords,
+		}
+
+		if endpoint.SetIdentifier != "" {
+			resourceRecordSet.SetIdentifier = aws.String(endpoint.SetIdentifier)
+		}
+		if prop, ok := endpoint.GetProviderSpecificProperty(ProviderSpecificWeight); ok {
+			weight, err := strconv.ParseInt(prop.Value, 10, 64)
+			if err != nil {
+				klog.Errorf("Failed parsing value of %s: %s: %v; using weight of 0", ProviderSpecificWeight, prop.Value, err)
+				weight = 0
+			}
+			resourceRecordSet.Weight = aws.Int64(weight)
+		}
+		if prop, ok := endpoint.GetProviderSpecificProperty(ProviderSpecificRegion); ok {
+			resourceRecordSet.Region = aws.String(prop.Value)
+		}
+		if prop, ok := endpoint.GetProviderSpecificProperty(ProviderSpecificFailover); ok {
+			resourceRecordSet.Failover = aws.String(prop.Value)
+		}
+		if _, ok := endpoint.GetProviderSpecificProperty(ProviderSpecificMultiValueAnswer); ok {
+			resourceRecordSet.MultiValueAnswer = aws.Bool(true)
+		}
+		if prop, ok := endpoint.GetProviderSpecificProperty(ProviderSpecificHealthCheckID); ok {
+			resourceRecordSet.HealthCheckId = aws.String(prop.Value)
+		}
+
+		change := &route53.Change{
+			Action:            aws.String(action),
+			ResourceRecordSet: resourceRecordSet,
+		}
+		changes = append(changes, change)
 	}
 
 	input.ChangeBatch = &route53.ChangeBatch{
-		Changes: []*route53.Change{
-			{
-				Action: aws.String(action),
-				ResourceRecordSet: &route53.ResourceRecordSet{
-					Name:            aws.String(domain),
-					Type:            aws.String(route53.RRTypeA),
-					TTL:             aws.Int64(ttl),
-					ResourceRecords: resourceRecords,
-				},
-			},
-		},
+		Changes: changes,
 	}
 	resp, err := m.route53.ChangeResourceRecordSets(&input)
 	if err != nil {
-		if action == string(deleteAction) {
-			if aerr, ok := err.(awserr.Error); ok {
-				if strings.Contains(aerr.Message(), "not found") {
-					klog.Infof("record not found: zone id: %s, domain: %s, targets: %s", zoneID, domain, targets)
-					return nil
-				}
-			}
-		}
-		return fmt.Errorf("couldn't update DNS record in zone %s: %v", zoneID, err)
+		return fmt.Errorf("couldn't update DNS record %s in zone %s: %v", record.Name, zoneID, err)
 	}
-	klog.Infof("updated DNS record: zone id: %s, domain: %s, targets: %s, resp: %v", zoneID, domain, targets, resp)
+	klog.Infof("updated DNS record: record name: %s zone id: %s resp: %v", zoneID, record.Name, resp)
 	return nil
 }

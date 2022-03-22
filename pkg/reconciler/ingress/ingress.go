@@ -3,6 +3,8 @@ package ingress
 import (
 	"context"
 	"fmt"
+
+	"github.com/kuadrant/kcp-glbc/pkg/dns/aws"
 	svc "github.com/kuadrant/kcp-glbc/pkg/reconciler/service"
 	"github.com/kuadrant/kcp-glbc/pkg/util/deleteDelay"
 	"github.com/kuadrant/kcp-glbc/pkg/util/metadata"
@@ -66,9 +68,8 @@ func (c *Controller) reconcileRoot(ctx context.Context, ingress *networkingv1.In
 				}
 			}
 		}
-		// delete DNSRecord
-		err = c.dnsRecordClient.Cluster(ingress.ClusterName).KuadrantV1().DNSRecords(ingress.Namespace).Delete(ctx, ingress.Name, metav1.DeleteOptions{})
-		if err != nil && !errors.IsNotFound(err) {
+		// delete any DNS records
+		if err := c.ensureDNS(ctx, ingress); err != nil {
 			return err
 		}
 		// delete any certificates
@@ -267,6 +268,16 @@ func (c *Controller) copyRootTLSSecretForLeafs(ctx context.Context, root *networ
 }
 
 func (c *Controller) ensureDNS(ctx context.Context, ingress *networkingv1.Ingress) error {
+
+	if ingress.DeletionTimestamp != nil && !ingress.DeletionTimestamp.IsZero() {
+		// delete DNSRecord
+		err := c.dnsRecordClient.Cluster(ingress.ClusterName).KuadrantV1().DNSRecords(ingress.Namespace).Delete(ctx, ingress.Name, metav1.DeleteOptions{})
+		if err != nil && !errors.IsNotFound(err) {
+			return err
+		}
+		return nil
+	}
+
 	if len(ingress.Status.LoadBalancer.Ingress) > 0 {
 		// Start watching for address changes in the LBs hostnames
 		for _, lbs := range ingress.Status.LoadBalancer.Ingress {
@@ -275,8 +286,7 @@ func (c *Controller) ensureDNS(ctx context.Context, ingress *networkingv1.Ingres
 			}
 		}
 
-		// The ingress has been admitted, let's expose the local load-balancing point to the global LB.
-		record, err := c.getDNSRecord(ctx, ingress.Annotations[cluster.ANNOTATION_HCG_HOST], ingress)
+		record, err := c.dnsRecordFromIngress(ctx, ingress)
 		if err != nil {
 			return err
 		}
@@ -318,6 +328,102 @@ func (c *Controller) delayDeleteLeaf(ctx context.Context, leaf *networkingv1.Ing
 		return err
 	}
 	return nil
+}
+
+func (c *Controller) currentDNSRecords(ctx context.Context, ingress *networkingv1.Ingress) ([]v1.DNSRecord, error) {
+	list, err := c.dnsRecordClient.Cluster(ingress.ClusterName).KuadrantV1().DNSRecords(ingress.Namespace).
+		List(ctx, metav1.ListOptions{LabelSelector: fmt.Sprintf("%s=%s", resourceLabel, ingressResourceLabelValue(ingress))})
+	if err != nil {
+		return nil, err
+	}
+	return list.Items, nil
+}
+
+func (c *Controller) dnsRecordFromIngress(ctx context.Context, ingress *networkingv1.Ingress) (*v1.DNSRecord, error) {
+	endpoints, err := c.endpointsFromIngress(ctx, ingress)
+	if err != nil {
+		return nil, err
+	}
+
+	record := &v1.DNSRecord{
+		TypeMeta: metav1.TypeMeta{
+			APIVersion: v1.SchemeGroupVersion.String(),
+			Kind:       "DNSRecord",
+		},
+		ObjectMeta: metav1.ObjectMeta{
+			ClusterName: ingress.ClusterName,
+			Namespace:   ingress.Namespace,
+			Name:        ingress.Name,
+		},
+		Spec: v1.DNSRecordSpec{
+			Endpoints: endpoints,
+		},
+	}
+
+	// Sets the Ingress as the owner reference
+	record.SetOwnerReferences([]metav1.OwnerReference{
+		{
+			APIVersion:         networkingv1.SchemeGroupVersion.String(),
+			Kind:               "Ingress",
+			Name:               ingress.Name,
+			UID:                ingress.UID,
+			Controller:         pointer.Bool(true),
+			BlockOwnerDeletion: pointer.Bool(true),
+		},
+	})
+	return record, nil
+}
+
+func (c *Controller) endpointsFromIngress(ctx context.Context, ingress *networkingv1.Ingress) ([]*v1.Endpoint, error) {
+	var endpoints []*v1.Endpoint
+
+	targets, err := c.targetsFromIngressStatus(ctx, ingress.Status)
+	if err != nil {
+		return nil, err
+	}
+
+	hostname := ingress.Annotations[cluster.ANNOTATION_HCG_HOST]
+
+	providerSpecific := v1.ProviderSpecific{
+		{
+			Name:  aws.ProviderSpecificWeight,
+			Value: "100",
+		},
+	}
+
+	for _, target := range targets {
+		endpoint := &v1.Endpoint{
+			DNSName:          hostname,
+			RecordType:       "A",
+			Targets:          []string{target},
+			RecordTTL:        60,
+			ProviderSpecific: providerSpecific,
+			SetIdentifier:    target,
+		}
+		endpoints = append(endpoints, endpoint)
+	}
+
+	return endpoints, nil
+}
+
+func (c *Controller) targetsFromIngressStatus(ctx context.Context, status networkingv1.IngressStatus) ([]string, error) {
+	var targets []string
+
+	for _, lb := range status.LoadBalancer.Ingress {
+		if lb.IP != "" {
+			targets = append(targets, lb.IP)
+		}
+		if lb.Hostname != "" {
+			ips, err := c.hostResolver.LookupIPAddr(ctx, lb.Hostname)
+			if err != nil {
+				return nil, err
+			}
+			for _, ip := range ips {
+				targets = append(targets, ip.IP.String())
+			}
+		}
+	}
+	return targets, nil
 }
 
 func (c *Controller) reconcileLeaf(ctx context.Context, rootName string, ingress *networkingv1.Ingress) error {
@@ -395,58 +501,6 @@ func (c *Controller) reconcileLeaf(ctx context.Context, rootName string, ingress
 	}
 
 	return nil
-}
-
-// TODO may want to move this to its own package in the future
-func (c *Controller) getDNSRecord(ctx context.Context, hostname string, ingress *networkingv1.Ingress) (*v1.DNSRecord, error) {
-	var targets []string
-	for _, lbs := range ingress.Status.LoadBalancer.Ingress {
-		if lbs.Hostname != "" {
-			// TODO: once we are adding tests abstract to interface
-			ips, err := c.hostResolver.LookupIPAddr(ctx, lbs.Hostname)
-			if err != nil {
-				return nil, err
-			}
-			for _, ip := range ips {
-				targets = append(targets, ip.IP.String())
-			}
-		}
-		if lbs.IP != "" {
-			targets = append(targets, lbs.IP)
-		}
-	}
-
-	record := &v1.DNSRecord{
-		TypeMeta: metav1.TypeMeta{
-			APIVersion: v1.SchemeGroupVersion.String(),
-			Kind:       "DNSRecord",
-		},
-		ObjectMeta: metav1.ObjectMeta{
-			ClusterName: ingress.ClusterName,
-			Namespace:   ingress.Namespace,
-			Name:        ingress.Name,
-		},
-		Spec: v1.DNSRecordSpec{
-			DNSName:    hostname,
-			RecordType: "A",
-			Targets:    targets,
-			RecordTTL:  60,
-		},
-	}
-
-	// Sets the Ingress as the owner reference
-	record.SetOwnerReferences([]metav1.OwnerReference{
-		{
-			APIVersion:         networkingv1.SchemeGroupVersion.String(),
-			Kind:               "Ingress",
-			Name:               ingress.Name,
-			UID:                ingress.UID,
-			Controller:         pointer.Bool(true),
-			BlockOwnerDeletion: pointer.Bool(true),
-		},
-	})
-
-	return record, nil
 }
 
 func (c *Controller) desiredLeaves(ctx context.Context, root *networkingv1.Ingress) ([]*networkingv1.Ingress, error) {
