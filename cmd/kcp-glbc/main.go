@@ -263,16 +263,20 @@ func main() {
 		})
 		controllers = append(controllers, ingressController)
 
-		dnsRecordController, err := dns.NewController(&dns.ControllerConfig{
-			ControllerConfig: &reconciler.ControllerConfig{
-				NameSuffix: name,
-			},
-			DnsRecordClient:       kcpKuadrantClient,
-			SharedInformerFactory: kcpKuadrantInformerFactory,
-			DNSProvider:           options.DNSProvider,
-		})
-		exitOnError(err, "Failed to create DNSRecord controller")
-		controllers = append(controllers, dnsRecordController)
+		// Temporarily disable the DNSRecord Controller. We will need to
+		// reenable it again, removing the logic that is now handled
+		// by external-dns:
+		//
+		// dnsRecordController, err := dns.NewController(&dns.ControllerConfig{
+		// 	ControllerConfig: &reconciler.ControllerConfig{
+		// 		NameSuffix: name,
+		// 	},
+		// 	DnsRecordClient:       kcpKuadrantClient,
+		// 	SharedInformerFactory: kcpKuadrantInformerFactory,
+		// 	DNSProvider:           options.DNSProvider,
+		// })
+		// exitOnError(err, "Failed to create DNSRecord controller")
+		// controllers = append(controllers, dnsRecordController)
 
 		domainVerificationController, err := domainverification.NewController(&domainverification.ControllerConfig{
 			ControllerConfig: &reconciler.ControllerConfig{

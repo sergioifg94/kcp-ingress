@@ -80,7 +80,7 @@ KCP_SYNCER_IMAGE="ghcr.io/kcp-dev/kcp/syncer:${KCP_VERSION}"
 : ${GLBC_DEPLOYMENTS_DIR=${KCP_GLBC_DIR}/config/deploy}
 : ${KUSTOMIZATION_DIR=${GLBC_DEPLOYMENTS_DIR}/local}
 : ${SYNC_TARGETS_DIR:=${GLBC_DEPLOYMENTS_DIR}/sync-targets}
-: ${GLBC_DEPLOY_COMPONENTS:="cert-manager"}
+: ${GLBC_DEPLOY_COMPONENTS:="cert-manager,external-dns"}
 
 SED=sed
 if [[ "${OSTYPE}" =~ ^darwin.* ]]; then

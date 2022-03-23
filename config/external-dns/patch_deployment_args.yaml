@@ -1,0 +1,21 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: external-dns
+spec:
+  template:
+    spec:
+      containers:
+        - name: external-dns
+          args:
+            - --provider=aws
+            - --aws-zone-type=public
+            - --source=crd
+            - --log-level=debug
+            - --crd-source-apiversion=kuadrant.dev/v1
+            - --crd-source-kind=DNSRecord
+            - --policy=sync
+            - --registry=txt
+            - --txt-prefix=kcp-glbc-
+
+#external-dns options pkg/apis/externaldns/types.go

@@ -125,6 +125,22 @@ deploy_cert_manager() {
   #kubectl -n cert-manager wait --timeout=300s --for=condition=Available deployments --all
 }
 
+deploy_external_dns() {
+  echo "Deploying external-dns"
+
+  kubectl create --save-config ns external-dns --dry-run=client -o yaml | kubectl apply -f -
+	kubectl -n external-dns create secret generic external-dns-aws-credentials --from-literal=aws_access_key_id=${AWS_ACCESS_KEY_ID} --from-literal=aws_secret_access_key=${AWS_SECRET_ACCESS_KEY} | true
+  ${KUBECTL_KCP_BIN} ws '~'
+  cp ${KUBECONFIG} ${KUBECONFIG}-tmp
+  kubectl config use-context workspace.kcp.dev/previous
+  kubectl -n external-dns create secret generic external-dns-kubeconfig --from-file=kubeconfig=${KUBECONFIG}-tmp
+  rm ${KUBECONFIG}-tmp
+	${HELM_BIN} repo add bitnami https://charts.bitnami.com/bitnami
+	${HELM_BIN} upgrade external-dns bitnami/external-dns --create-namespace -i -n external-dns -f ./config/external-dns/external-dns-values.yaml --set txtOwnerId=external-dns --set zoneIdFilters[0]=${AWS_DNS_PUBLIC_ZONE_ID} --set aws.credentials.secretKey=${AWS_SECRET_ACCESS_KEY} --set aws.credentials.accessKey=${AWS_ACCESS_KEY_ID} --set crd.apiversion=kuadrant.dev/v1 --set crd.kind=DNSRecord --set image.pullPolicy=Never --set extraVolumes[0].name=kubeconfig --set extraVolumes[0].secret.secretName=external-dns-kubeconfig --set extraVolumeMounts[0].mountPath=/var/run/secrets/kubernetes.io/kcp-kubeconfig --set extraVolumeMounts[0].readOnly=true --set extraVolumeMounts[0].name=kubeconfig --set extraArgs.kubeconfig=/var/run/secrets/kubernetes.io/kcp-kubeconfig/kubeconfig
+  # When advancedscheduling is enabled the status check on deployments never works
+	# kubectl -n external-dns wait --timeout=300s --for=condition=Available deployments --all
+}
+
 deploy_glbc() {
   echo "Creating GLBC namespace"
   create_ns ${GLBC_NAMESPACE}
@@ -245,6 +261,10 @@ kubectl apply view-last-applied apibinding glbc -o yaml > ${APIEXPORT_DIR}/glbc/
 ## Deploy components
 if [[ $DEPLOY_COMPONENTS =~ "cert-manager" ]]; then
   deploy_cert_manager
+fi
+
+if [[ $DEPLOY_COMPONENTS =~ "external-dns" ]]; then
+  deploy_external_dns
 fi
 
 if [[ $DEPLOY_COMPONENTS =~ "glbc" ]]; then
