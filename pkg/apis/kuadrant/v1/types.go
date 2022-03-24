@@ -29,6 +29,14 @@ func (e *Endpoint) GetProviderSpecificProperty(key string) (ProviderSpecificProp
 	return ProviderSpecificProperty{}, false
 }
 
+// SetID returns an id that should be unique across a set of endpoints
+func (e *Endpoint) SetID() string {
+	if e.SetIdentifier != "" {
+		return e.SetIdentifier
+	}
+	return e.DNSName
+}
+
 // ProviderSpecificProperty holds the name and value of a configuration which is specific to individual DNS providers
 type ProviderSpecificProperty struct {
 	Name  string `json:"name,omitempty"`
@@ -121,6 +129,14 @@ type DNSZoneStatus struct {
 	// If publishing the record fails, the "Failed" condition will be set with a
 	// reason and message describing the cause of the failure.
 	Conditions []DNSZoneCondition `json:"conditions,omitempty"`
+	// endpoints are the last endpoints that were successfully published to the provider
+	//
+	// Provides a simple mechanism to store the current provider records in order to
+	// delete any that are no longer present in DNSRecordSpec.Endpoints
+	//
+	// Note: This will not be required if/when we switch to using external-dns since when
+	// running with a "sync" policy it will clean up unused records automatically.
+	Endpoints []*Endpoint `json:"endpoints,omitempty"`
 }
 
 var (

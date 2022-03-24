@@ -45,7 +45,7 @@ func (c *Controller) reconcile(ctx context.Context, dnsRecord *v1.DNSRecord) err
 	}
 
 	statuses := c.publishRecordToZones(c.dnsZones, dnsRecord)
-	if !dnsZoneStatusSlicesEqual(statuses, dnsRecord.Status.Zones) {
+	if !dnsZoneStatusSlicesEqual(statuses, dnsRecord.Status.Zones) || dnsRecord.Status.ObservedGeneration != dnsRecord.Generation {
 		dnsRecord.Status.Zones = statuses
 		dnsRecord.Status.ObservedGeneration = dnsRecord.Generation
 		_, err := c.dnsRecordClient.Cluster(dnsRecord.ClusterName).KuadrantV1().DNSRecords(dnsRecord.Namespace).UpdateStatus(ctx, dnsRecord, metav1.UpdateOptions{})
@@ -106,6 +106,7 @@ func (c *Controller) publishRecordToZones(zones []v1.DNSZone, record *v1.DNSReco
 		statuses = append(statuses, v1.DNSZoneStatus{
 			DNSZone:    zone,
 			Conditions: []v1.DNSZoneCondition{condition},
+			Endpoints:  record.Spec.Endpoints,
 		})
 	}
 	return mergeStatuses(zones, record.Status.DeepCopy().Zones, statuses)
@@ -164,6 +165,7 @@ func mergeStatuses(zones []v1.DNSZone, statuses, updates []v1.DNSZoneStatus) []v
 			if cmp.Equal(status.DNSZone, update.DNSZone) {
 				add = false
 				statuses[j].Conditions = mergeConditions(status.Conditions, update.Conditions)
+				statuses[j].Endpoints = update.Endpoints
 			}
 		}
 		if add {

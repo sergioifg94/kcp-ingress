@@ -330,15 +330,6 @@ func (c *Controller) delayDeleteLeaf(ctx context.Context, leaf *networkingv1.Ing
 	return nil
 }
 
-func (c *Controller) currentDNSRecords(ctx context.Context, ingress *networkingv1.Ingress) ([]v1.DNSRecord, error) {
-	list, err := c.dnsRecordClient.Cluster(ingress.ClusterName).KuadrantV1().DNSRecords(ingress.Namespace).
-		List(ctx, metav1.ListOptions{LabelSelector: fmt.Sprintf("%s=%s", resourceLabel, ingressResourceLabelValue(ingress))})
-	if err != nil {
-		return nil, err
-	}
-	return list.Items, nil
-}
-
 func (c *Controller) dnsRecordFromIngress(ctx context.Context, ingress *networkingv1.Ingress) (*v1.DNSRecord, error) {
 	endpoints, err := c.endpointsFromIngress(ctx, ingress)
 	if err != nil {
