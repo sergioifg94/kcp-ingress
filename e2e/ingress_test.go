@@ -82,6 +82,12 @@ func TestIngress(t *testing.T) {
 	// Retrieve the root Ingress
 	ingress := GetIngress(test, namespace, name)
 
+	// Check the host value has being replaced with the generated host
+	test.Eventually(ingress).Should(And(
+		WithTransform(Annotations, HaveKey(kuadrantcluster.ANNOTATION_HCG_CUSTOM_HOST_REPLACED)),
+		WithTransform(Hosts, ConsistOf(ingress.Annotations[kuadrantcluster.ANNOTATION_HCG_HOST])),
+	))
+
 	// Check a DNSRecord for the root Ingress is created with the expected Spec
 	test.Eventually(DNSRecord(test, namespace, name)).Should(PointTo(MatchFields(IgnoreExtras, Fields{
 		"Spec": MatchFields(IgnoreExtras,
@@ -182,6 +188,7 @@ func TestIngress(t *testing.T) {
 func ingressConfiguration(namespace, name string) *networkingv1apply.IngressApplyConfiguration {
 	return networkingv1apply.Ingress(name, namespace).WithSpec(
 		networkingv1apply.IngressSpec().WithRules(networkingv1apply.IngressRule().
+			WithHost("test.gblb.com").
 			WithHTTP(networkingv1apply.HTTPIngressRuleValue().
 				WithPaths(networkingv1apply.HTTPIngressPath().
 					WithPath("/").

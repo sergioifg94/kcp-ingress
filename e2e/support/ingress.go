@@ -38,3 +38,11 @@ func Ingresses(t Test, namespace *corev1.Namespace, labelSelector string) func(g
 func LoadBalancerIngresses(ingress *networkingv1.Ingress) []corev1.LoadBalancerIngress {
 	return ingress.Status.LoadBalancer.Ingress
 }
+
+func Hosts(ingress *networkingv1.Ingress) []string {
+	hosts := []string{}
+	for _, rule := range ingress.Spec.Rules {
+		hosts = append(hosts, rule.Host)
+	}
+	return hosts
+}
