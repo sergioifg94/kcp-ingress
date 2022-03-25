@@ -42,7 +42,7 @@ func (c *Controller) reconcileRoot(ctx context.Context, ingress *networkingv1.In
 		if err != nil {
 			return err
 		}
-		currentLeaves, err := c.lister.List(sel)
+		currentLeaves, err := c.lister.Ingresses(ingress.Namespace).List(sel)
 		if err != nil {
 			return err
 		}
@@ -108,7 +108,7 @@ func (c *Controller) reconcileRoot(ctx context.Context, ingress *networkingv1.In
 	if err != nil {
 		return err
 	}
-	currentLeaves, err := c.lister.List(sel)
+	currentLeaves, err := c.lister.Ingresses(ingress.Namespace).List(sel)
 	if err != nil {
 		return err
 	}
@@ -320,7 +320,7 @@ func (c *Controller) reconcileLeaf(ctx context.Context, rootName string, ingress
 	if err != nil {
 		return err
 	}
-	others, err := c.lister.List(sel)
+	others, err := c.lister.Ingresses(ingress.Namespace).List(sel)
 	if err != nil {
 		return err
 	}

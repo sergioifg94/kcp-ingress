@@ -180,7 +180,7 @@ func (c *Controller) deploymentsFromService(obj interface{}) {
 }
 
 func (c *Controller) getReferencedDeployments(service *corev1.Service) ([]*appsv1.Deployment, error) {
-	deployments, err := c.deploymentLister.List(labels.Everything())
+	deployments, err := c.deploymentLister.Deployments(service.Namespace).List(labels.Everything())
 	if err != nil {
 		return nil, err
 	}

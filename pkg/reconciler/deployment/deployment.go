@@ -170,7 +170,7 @@ func IsShadowDeployment(deployment *appsv1.Deployment) bool {
 func (c *Controller) findRootServices(deployment *appsv1.Deployment) ([]*corev1.Service, error) {
 	var retServices []*corev1.Service
 
-	services, err := c.serviceLister.List(labels.Everything())
+	services, err := c.serviceLister.Services(deployment.Namespace).List(labels.Everything())
 	if err != nil {
 		return nil, err
 	}
@@ -191,7 +191,7 @@ func (c *Controller) findCurrentShadows(root *appsv1.Deployment) ([]*appsv1.Depl
 	// Get the current deployment shadows
 	sel := labels.SelectorFromSet(labels.Set{ownedByLabel: root.Name})
 	klog.Infof("looking for services with label: %v", fmt.Sprintf("%s=%s", ownedByLabel, root.Name))
-	return c.deploymentLister.List(sel)
+	return c.deploymentLister.Deployments(root.Namespace).List(sel)
 }
 
 func undesiredShadowDeployments(current, desired []*appsv1.Deployment) []*appsv1.Deployment {
