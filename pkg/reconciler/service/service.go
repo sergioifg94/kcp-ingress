@@ -144,7 +144,7 @@ func (c *Controller) findCurrentShadows(root *corev1.Service) ([]*corev1.Service
 		return nil, err
 	}
 	klog.Infof("looking for services with label: %v", fmt.Sprintf("%s=%s", ownedByLabel, root.Name))
-	return c.serviceLister.List(sel)
+	return c.serviceLister.Services(root.Namespace).List(sel)
 }
 
 func desiredServices(service *corev1.Service) ([]*corev1.Service, error) {
