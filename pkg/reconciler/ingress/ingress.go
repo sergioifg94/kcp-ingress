@@ -48,6 +48,12 @@ func (c *Controller) reconcileRoot(ctx context.Context, ingress *networkingv1.In
 		}
 		klog.Infof("found %v leaf ingresses", len(currentLeaves))
 		for _, leaf := range currentLeaves {
+			deleteDelay.CleanForDeletion(leaf)
+			leaf, err = c.kubeClient.Cluster(leaf.ClusterName).NetworkingV1().Ingresses(leaf.Namespace).Update(ctx, leaf, metav1.UpdateOptions{})
+			if err != nil {
+				return err
+			}
+
 			if err := c.kubeClient.Cluster(leaf.ClusterName).NetworkingV1().Ingresses(leaf.Namespace).Delete(ctx, leaf.Name, metav1.DeleteOptions{}); err != nil {
 				return err
 			}
