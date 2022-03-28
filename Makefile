@@ -8,6 +8,12 @@ IMAGE_TAG_BASE ?= quay.io/kuadrant/kcp-glbc
 IMAGE_TAG ?= latest
 IMG ?= $(IMAGE_TAG_BASE):$(IMAGE_TAG)
 
+GO_VERSION = $(shell go version | awk '{print $$3}')
+GO_GET_INSTALL = go get
+ifeq ($(GO_VERSION),go1.18)
+	GO_GET_INSTALL = go install
+endif
+
 KUBECONFIG ?= $(shell pwd)/.kcp/admin.kubeconfig
 CLUSTERS_KUBECONFIG_DIR ?= $(shell pwd)/tmp
 
@@ -121,7 +127,7 @@ TMP_DIR=$$(mktemp -d) ;\
 cd $$TMP_DIR ;\
 go mod init tmp ;\
 echo "Downloading $(2)" ;\
-GOBIN=$(PROJECT_DIR)/bin go get $(2) ;\
+GOBIN=$(PROJECT_DIR)/bin $(GO_GET_INSTALL) $(2) ;\
 rm -rf $$TMP_DIR ;\
 }
 endef
