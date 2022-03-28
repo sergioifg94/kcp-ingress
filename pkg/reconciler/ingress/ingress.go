@@ -2,7 +2,9 @@ package ingress
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
+	"strings"
 
 	"github.com/rs/xid"
 
@@ -13,7 +15,6 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/labels"
 	"k8s.io/apimachinery/pkg/types"
-	"k8s.io/apimachinery/pkg/util/json"
 	"k8s.io/client-go/tools/cache"
 	"k8s.io/klog/v2"
 	"k8s.io/utils/pointer"
@@ -288,30 +289,39 @@ func (c *Controller) ensureDNS(ctx context.Context, ingress *networkingv1.Ingres
 			}
 		}
 
-		record, err := c.dnsRecordFromIngress(ctx, ingress)
-		if err != nil {
-			return err
-		}
-		_, err = c.dnsRecordClient.Cluster(logicalcluster.From(record)).KuadrantV1().DNSRecords(record.Namespace).Create(ctx, record, metav1.CreateOptions{})
-		if err != nil {
-			if !errors.IsAlreadyExists(err) {
+		// Attempt to retrieve the existing DNSRecord for this Ingress
+		existing, err := c.dnsRecordClient.Cluster(logicalcluster.From(ingress)).KuadrantV1().DNSRecords(ingress.Namespace).Get(ctx, ingress.Name, metav1.GetOptions{})
+		// If it doesn't exist, create it
+		if err != nil && errors.IsNotFound(err) {
+			// Create the DNSRecord object
+			record := &v1.DNSRecord{}
+			if err := c.setDnsRecordFromIngress(ctx, ingress, record); err != nil {
 				return err
 			}
-			data, err := json.Marshal(record)
+			// Create the resource in the cluster
+			_, err = c.dnsRecordClient.Cluster(logicalcluster.From(record)).KuadrantV1().DNSRecords(record.Namespace).Create(ctx, record, metav1.CreateOptions{})
 			if err != nil {
 				return err
 			}
-			_, err = c.dnsRecordClient.Cluster(logicalcluster.From(record)).KuadrantV1().DNSRecords(record.Namespace).Patch(ctx, record.Name, types.ApplyPatchType, data, metav1.PatchOptions{FieldManager: manager, Force: pointer.Bool(true)})
+		} else if err == nil {
+			// If it does exist, update it
+			if err := c.setDnsRecordFromIngress(ctx, ingress, existing); err != nil {
+				return err
+			}
+
+			data, err := json.Marshal(existing)
 			if err != nil {
 				return err
 			}
-		}
-	} else {
-		err := c.dnsRecordClient.Cluster(logicalcluster.From(ingress)).KuadrantV1().DNSRecords(ingress.Namespace).Delete(ctx, ingress.Name, metav1.DeleteOptions{})
-		if err != nil && !errors.IsNotFound(err) {
+			_, err = c.dnsRecordClient.Cluster(logicalcluster.From(existing)).KuadrantV1().DNSRecords(existing.Namespace).Patch(ctx, existing.Name, types.ApplyPatchType, data, metav1.PatchOptions{FieldManager: manager, Force: pointer.Bool(true)})
+			if err != nil {
+				return err
+			}
+		} else {
 			return err
 		}
 	}
+
 	return nil
 }
 
@@ -332,29 +342,23 @@ func (c *Controller) delayDeleteLeaf(ctx context.Context, leaf *networkingv1.Ing
 	return nil
 }
 
-func (c *Controller) dnsRecordFromIngress(ctx context.Context, ingress *networkingv1.Ingress) (*v1.DNSRecord, error) {
-	endpoints, err := c.endpointsFromIngress(ctx, ingress)
-	if err != nil {
-		return nil, err
+func (c *Controller) setDnsRecordFromIngress(ctx context.Context, ingress *networkingv1.Ingress, dnsRecord *v1.DNSRecord) error {
+	dnsRecord.TypeMeta = metav1.TypeMeta{
+		APIVersion: v1.SchemeGroupVersion.String(),
+		Kind:       "DNSRecord",
+	}
+	dnsRecord.ObjectMeta = metav1.ObjectMeta{
+		Name:        ingress.Name,
+		Namespace:   ingress.Namespace,
+		ClusterName: ingress.ClusterName,
 	}
 
-	record := &v1.DNSRecord{
-		TypeMeta: metav1.TypeMeta{
-			APIVersion: v1.SchemeGroupVersion.String(),
-			Kind:       "DNSRecord",
-		},
-		ObjectMeta: metav1.ObjectMeta{
-			ClusterName: ingress.ClusterName,
-			Namespace:   ingress.Namespace,
-			Name:        ingress.Name,
-		},
-		Spec: v1.DNSRecordSpec{
-			Endpoints: endpoints,
-		},
-	}
+	metadata.CopyAnnotationsPredicate(ingress, dnsRecord, metadata.KeyPredicate(func(key string) bool {
+		return strings.HasPrefix(key, cluster.ANNOTATION_HEALTH_CHECK_PREFIX)
+	}))
 
 	// Sets the Ingress as the owner reference
-	record.SetOwnerReferences([]metav1.OwnerReference{
+	dnsRecord.SetOwnerReferences([]metav1.OwnerReference{
 		{
 			APIVersion:         networkingv1.SchemeGroupVersion.String(),
 			Kind:               "Ingress",
@@ -364,39 +368,55 @@ func (c *Controller) dnsRecordFromIngress(ctx context.Context, ingress *networki
 			BlockOwnerDeletion: pointer.Bool(true),
 		},
 	})
-	return record, nil
+
+	return c.setEndpointsFromIngress(ctx, ingress, dnsRecord)
 }
 
-func (c *Controller) endpointsFromIngress(ctx context.Context, ingress *networkingv1.Ingress) ([]*v1.Endpoint, error) {
-	var endpoints []*v1.Endpoint
-
+func (c *Controller) setEndpointsFromIngress(ctx context.Context, ingress *networkingv1.Ingress, dnsRecord *v1.DNSRecord) error {
 	targets, err := c.targetsFromIngressStatus(ctx, ingress.Status)
 	if err != nil {
-		return nil, err
+		return err
 	}
 
 	hostname := ingress.Annotations[cluster.ANNOTATION_HCG_HOST]
 
-	providerSpecific := v1.ProviderSpecific{
-		{
-			Name:  aws.ProviderSpecificWeight,
-			Value: "100",
-		},
-	}
-
-	for _, target := range targets {
-		endpoint := &v1.Endpoint{
-			DNSName:          hostname,
-			RecordType:       "A",
-			Targets:          []string{target},
-			RecordTTL:        60,
-			ProviderSpecific: providerSpecific,
-			SetIdentifier:    target,
+	// Build a map[Address]Endpoint with the current endpoints to assist
+	// finding endpoints that match the targets
+	currentEndpoints := make(map[string]*v1.Endpoint, len(dnsRecord.Spec.Endpoints))
+	for _, endpoint := range dnsRecord.Spec.Endpoints {
+		address, ok := endpoint.GetAddress()
+		if !ok {
+			continue
 		}
-		endpoints = append(endpoints, endpoint)
+
+		currentEndpoints[address] = endpoint
 	}
 
-	return endpoints, nil
+	newEndpoints := make([]*v1.Endpoint, len(targets))
+
+	for i, target := range targets {
+		var endpoint *v1.Endpoint
+		ok := false
+
+		// If the endpoint for this target does not exist, add a new one
+		if endpoint, ok = currentEndpoints[target]; !ok {
+			endpoint = &v1.Endpoint{
+				SetIdentifier: target,
+			}
+		}
+
+		newEndpoints[i] = endpoint
+
+		// Update the endpoint fields
+		endpoint.DNSName = hostname
+		endpoint.RecordType = "A"
+		endpoint.Targets = []string{target}
+		endpoint.RecordTTL = 60
+		endpoint.SetProviderSpecific(aws.ProviderSpecificWeight, "100")
+	}
+
+	dnsRecord.Spec.Endpoints = newEndpoints
+	return nil
 }
 
 func (c *Controller) targetsFromIngressStatus(ctx context.Context, status networkingv1.IngressStatus) ([]string, error) {

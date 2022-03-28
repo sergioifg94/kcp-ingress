@@ -34,11 +34,16 @@ func (c *Controller) reconcile(ctx context.Context, dnsRecord *v1.DNSRecord) err
 
 	// If the DNS record was deleted, clean up and return.
 	if dnsRecord.DeletionTimestamp != nil && !dnsRecord.DeletionTimestamp.IsZero() {
+		if err := c.reconcileHealthCheckDeletion(ctx, dnsRecord); err != nil {
+			return err
+		}
+
 		klog.Infof("deleting dns record %v", dnsRecord)
 		if err := c.deleteRecord(dnsRecord); err != nil {
 			klog.Error(err, "failed to delete dnsrecord; will retry", "dnsrecord", dnsRecord)
 			return err
 		}
+
 		return nil
 	}
 
@@ -54,6 +59,11 @@ func (c *Controller) reconcile(ctx context.Context, dnsRecord *v1.DNSRecord) err
 		if err != nil {
 			return err
 		}
+	}
+
+	if err := c.ReconcileHealthChecks(ctx, dnsRecord); err != nil {
+		klog.Errorf("Failed to reconcile health check for DNSRecord %s: %v", dnsRecord.Name, err)
+		return err
 	}
 
 	return nil
