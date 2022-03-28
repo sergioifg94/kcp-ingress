@@ -14,6 +14,9 @@ ifeq ($(GO_VERSION),go1.18)
 	GO_GET_INSTALL = go install
 endif
 
+KUBECONFIG ?= $(shell pwd)/.kcp/admin.kubeconfig
+CLUSTERS_KUBECONFIG_DIR ?= $(shell pwd)/tmp
+
 .PHONY: all
 all: build
 
@@ -64,11 +67,12 @@ test: generate ## Run tests.
 	#ToDo Implement `test` target
 
 e2e: build
+	KUBECONFIG="$(KUBECONFIG)" CLUSTERS_KUBECONFIG_DIR="$(CLUSTERS_KUBECONFIG_DIR)" \
 	go test -timeout 60m -v ./e2e -tags=e2e
 
 ##@ CI
 
-#Note, these targets are expected to run in a clean CI enviornment.
+#Note, these targets are expected to run in a clean CI environment.
 
 .PHONY: verify-generate
 verify-generate: generate ## Verify generate update.
