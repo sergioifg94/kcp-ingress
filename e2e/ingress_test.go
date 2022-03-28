@@ -75,18 +75,16 @@ func TestIngress(t *testing.T) {
 
 	// Wait until the root Ingress is reconciled with the load balancer Ingresses
 	test.Eventually(Ingress(test, namespace, name)).WithTimeout(TestTimeoutMedium).Should(And(
-		WithTransform(Annotations, HaveKey(kuadrantcluster.ANNOTATION_HCG_HOST)),
+		WithTransform(Annotations, And(
+			HaveKey(kuadrantcluster.ANNOTATION_HCG_HOST),
+			HaveKey(kuadrantcluster.ANNOTATION_HCG_CUSTOM_HOST_REPLACED)),
+		),
 		WithTransform(LoadBalancerIngresses, HaveLen(1)),
+		Satisfy(HostsEqualsToGeneratedHost),
 	))
 
 	// Retrieve the root Ingress
 	ingress := GetIngress(test, namespace, name)
-
-	// Check the host value has being replaced with the generated host
-	test.Eventually(ingress).Should(And(
-		WithTransform(Annotations, HaveKey(kuadrantcluster.ANNOTATION_HCG_CUSTOM_HOST_REPLACED)),
-		WithTransform(Hosts, ConsistOf(ingress.Annotations[kuadrantcluster.ANNOTATION_HCG_HOST])),
-	))
 
 	// Check a DNSRecord for the root Ingress is created with the expected Spec
 	test.Eventually(DNSRecord(test, namespace, name)).Should(PointTo(MatchFields(IgnoreExtras, Fields{

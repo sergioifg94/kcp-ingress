@@ -6,6 +6,7 @@ package support
 import (
 	"github.com/onsi/gomega"
 
+	kuadrantcluster "github.com/kuadrant/kcp-glbc/pkg/cluster"
 	corev1 "k8s.io/api/core/v1"
 	networkingv1 "k8s.io/api/networking/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -39,10 +40,13 @@ func LoadBalancerIngresses(ingress *networkingv1.Ingress) []corev1.LoadBalancerI
 	return ingress.Status.LoadBalancer.Ingress
 }
 
-func Hosts(ingress *networkingv1.Ingress) []string {
-	hosts := []string{}
+// checkes ingress hosts are the same as the generated hosts
+func HostsEqualsToGeneratedHost(ingress *networkingv1.Ingress) bool {
+	equals := true
 	for _, rule := range ingress.Spec.Rules {
-		hosts = append(hosts, rule.Host)
+		if rule.Host != Annotations(ingress)[kuadrantcluster.ANNOTATION_HCG_HOST] {
+			equals = false
+		}
 	}
-	return hosts
+	return equals
 }
