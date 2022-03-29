@@ -1,5 +1,7 @@
 # KCP Global Load Balancer
 
+![build status badge](https://github.com/kuadrant/kcp-glbc/actions/workflows/ci.yaml/badge.svg)
+
 PoC related to <https://github.com/kcp-dev/kcp/issues/75>
 
 ## Getting Started
@@ -20,7 +22,7 @@ This script will:
 Once the script is done, open a new terminal, and from the root of the project, you should start the ingress controller:
 
 ```bash
-./bin/ingress-controller -kubeconfig .kcp/admin.kubeconfig
+./bin/ingress-controller -kubeconfig .kcp/admin.kubeconfig  -glbc-kubeconfig ./tmp/kcp-cluster-glbc-control.kubeconfig
 ```
 
 Now you can create a new ingress resource from the root of the project:
