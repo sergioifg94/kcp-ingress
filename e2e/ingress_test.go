@@ -75,8 +75,12 @@ func TestIngress(t *testing.T) {
 
 	// Wait until the root Ingress is reconciled with the load balancer Ingresses
 	test.Eventually(Ingress(test, namespace, name)).WithTimeout(TestTimeoutMedium).Should(And(
-		WithTransform(Annotations, HaveKey(kuadrantcluster.ANNOTATION_HCG_HOST)),
+		WithTransform(Annotations, And(
+			HaveKey(kuadrantcluster.ANNOTATION_HCG_HOST),
+			HaveKey(kuadrantcluster.ANNOTATION_HCG_CUSTOM_HOST_REPLACED)),
+		),
 		WithTransform(LoadBalancerIngresses, HaveLen(1)),
+		Satisfy(HostsEqualsToGeneratedHost),
 	))
 
 	// Retrieve the root Ingress
@@ -201,6 +205,7 @@ func TestIngress(t *testing.T) {
 func ingressConfiguration(namespace, name string) *networkingv1apply.IngressApplyConfiguration {
 	return networkingv1apply.Ingress(name, namespace).WithSpec(
 		networkingv1apply.IngressSpec().WithRules(networkingv1apply.IngressRule().
+			WithHost("test.gblb.com").
 			WithHTTP(networkingv1apply.HTTPIngressRuleValue().
 				WithPaths(networkingv1apply.HTTPIngressPath().
 					WithPath("/").
