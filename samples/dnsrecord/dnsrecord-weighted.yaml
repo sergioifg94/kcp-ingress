@@ -1,0 +1,28 @@
+apiVersion: kuadrant.dev/v1
+kind: DNSRecord
+metadata:
+  name: dnsrecord-weighted.mn.hcpapps.net
+spec:
+  endpoints:
+    - dnsName: dnsrecord-weighted.mn.hcpapps.net
+      recordTTL: 60
+      recordType: A
+      setIdentifier: 52.215.108.61
+      providerSpecific:
+        - name: "aws/weight"
+          value: "100"
+      labels:
+        id: 52.215.108.61
+      targets:
+        - 52.215.108.61
+    - dnsName: dnsrecord-weighted.mn.hcpapps.net
+      recordTTL: 60
+      recordType: A
+      setIdentifier: 52.30.101.221
+      providerSpecific:
+        - name: "aws/weight"
+          value: "100"
+      labels:
+        id: 52.30.101.221
+      targets:
+        - 52.30.101.221

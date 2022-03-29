@@ -36,35 +36,51 @@ spec:
             description: spec is the specification of the desired behavior of the
               dnsRecord.
             properties:
-              dnsName:
-                description: dnsName is the hostname of the DNS record
-                minLength: 1
-                type: string
-              recordTTL:
-                description: recordTTL is the record TTL in seconds. If zero, the
-                  default is 30. RecordTTL will not be used in AWS regions Alias targets,
-                  but will be used in CNAME targets, per AWS API contract.
-                format: int64
-                minimum: 0
-                type: integer
-              recordType:
-                description: recordType is the DNS record type. For example, "A" or
-                  "CNAME".
-                enum:
-                - CNAME
-                - A
-                type: string
-              targets:
-                description: targets are record targets.
+              endpoints:
                 items:
-                  type: string
-                minItems: 1
+                  description: Endpoint is a high-level way of a connection between
+                    a service and an IP
+                  properties:
+                    dnsName:
+                      description: The hostname of the DNS record
+                      type: string
+                    labels:
+                      additionalProperties:
+                        type: string
+                      description: Labels stores labels defined for the Endpoint
+                      type: object
+                    providerSpecific:
+                      description: ProviderSpecific stores provider specific config
+                      items:
+                        description: ProviderSpecificProperty holds the name and value
+                          of a configuration which is specific to individual DNS providers
+                        properties:
+                          name:
+                            type: string
+                          value:
+                            type: string
+                        type: object
+                      type: array
+                    recordTTL:
+                      description: TTL for the record
+                      format: int64
+                      type: integer
+                    recordType:
+                      description: RecordType type of record, e.g. CNAME, A, SRV,
+                        TXT etc
+                      type: string
+                    setIdentifier:
+                      description: Identifier to distinguish multiple records with
+                        the same name and type (e.g. Route53 records with routing
+                        policies other than 'simple')
+                      type: string
+                    targets:
+                      description: The targets the DNS record points to
+                      items:
+                        type: string
+                      type: array
+                  type: object
                 type: array
-            required:
-            - dnsName
-            - recordTTL
-            - recordType
-            - targets
             type: object
           status:
             description: status is the most recently observed status of the dnsRecord.
@@ -131,6 +147,60 @@ spec:
                             fetch a zone using `Tags` as tag-filters, \n [1]: https://docs.aws.amazon.com/cli/latest/reference/resourcegroupstaggingapi/get-resources.html#options"
                           type: object
                       type: object
+                    endpoints:
+                      description: "endpoints are the last endpoints that were successfully
+                        published to the provider \n Provides a simple mechanism to
+                        store the current provider records in order to delete any
+                        that are no longer present in DNSRecordSpec.Endpoints \n Note:
+                        This will not be required if/when we switch to using external-dns
+                        since when running with a \"sync\" policy it will clean up
+                        unused records automatically."
+                      items:
+                        description: Endpoint is a high-level way of a connection
+                          between a service and an IP
+                        properties:
+                          dnsName:
+                            description: The hostname of the DNS record
+                            type: string
+                          labels:
+                            additionalProperties:
+                              type: string
+                            description: Labels stores labels defined for the Endpoint
+                            type: object
+                          providerSpecific:
+                            description: ProviderSpecific stores provider specific
+                              config
+                            items:
+                              description: ProviderSpecificProperty holds the name
+                                and value of a configuration which is specific to
+                                individual DNS providers
+                              properties:
+                                name:
+                                  type: string
+                                value:
+                                  type: string
+                              type: object
+                            type: array
+                          recordTTL:
+                            description: TTL for the record
+                            format: int64
+                            type: integer
+                          recordType:
+                            description: RecordType type of record, e.g. CNAME, A,
+                              SRV, TXT etc
+                            type: string
+                          setIdentifier:
+                            description: Identifier to distinguish multiple records
+                              with the same name and type (e.g. Route53 records with
+                              routing policies other than 'simple')
+                            type: string
+                          targets:
+                            description: The targets the DNS record points to
+                            items:
+                              type: string
+                            type: array
+                        type: object
+                      type: array
                   required:
                   - dnsZone
                   type: object

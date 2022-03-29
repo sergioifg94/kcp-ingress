@@ -5,7 +5,6 @@ package support
 
 import (
 	"github.com/onsi/gomega"
-
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 
@@ -22,4 +21,8 @@ func DNSRecord(t Test, namespace *corev1.Namespace, name string) func(g gomega.G
 		g.Expect(err).NotTo(gomega.HaveOccurred())
 		return dnsRecord
 	}
+}
+
+func DNSRecordEndpoints(record *kuadrantv1.DNSRecord) []*kuadrantv1.Endpoint {
+	return record.Spec.Endpoints
 }

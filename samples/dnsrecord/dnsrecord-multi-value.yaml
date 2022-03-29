@@ -1,0 +1,28 @@
+apiVersion: kuadrant.dev/v1
+kind: DNSRecord
+metadata:
+  name: dnsrecord-multi-value.mn.hcpapps.net
+spec:
+  endpoints:
+    - dnsName: dnsrecord-multi-value.mn.hcpapps.net
+      recordTTL: 60
+      recordType: A
+      setIdentifier: 52.215.108.61
+      providerSpecific:
+        - name: "aws/multi-value-answer"
+          value: "true"
+      labels:
+        id: 52.215.108.61
+      targets:
+        - 52.215.108.61
+    - dnsName: dnsrecord-multi-value.mn.hcpapps.net
+      recordTTL: 60
+      recordType: A
+      setIdentifier: 52.30.101.221
+      providerSpecific:
+        - name: "aws/multi-value-answer"
+          value: "true"
+      labels:
+        id: 52.30.101.221
+      targets:
+        - 52.30.101.221

@@ -1,0 +1,12 @@
+apiVersion: kuadrant.dev/v1
+kind: DNSRecord
+metadata:
+  name: dnsrecord-simple.mn.hcpapps.net
+spec:
+  endpoints:
+    - dnsName: dnsrecord-simple.mn.hcpapps.net
+      recordTTL: 60
+      recordType: A
+      targets:
+        - 52.215.108.61
+        - 52.30.101.221

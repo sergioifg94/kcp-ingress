@@ -1,0 +1,36 @@
+apiVersion: kuadrant.dev/v1
+kind: DNSRecord
+metadata:
+  name: dnsrecord-weighted-health.mn.hcpapps.net
+spec:
+  endpoints:
+    - dnsName: dnsrecord-weighted-health.mn.hcpapps.net
+      recordTTL: 60
+      recordType: A
+      setIdentifier: 52.215.108.61
+      providerSpecific:
+        - name: "aws/weight"
+          value: "100"
+        - name: "aws/evaluate-target-health"
+          value: "true"
+        - name: "aws/health-check-id"
+          value: "5d6c8932-620c-41ea-9c91-8780d8b62455"
+      labels:
+        id: 52.215.108.61
+      targets:
+        - 52.215.108.61
+    - dnsName: dnsrecord-weighted-health.mn.hcpapps.net
+      recordTTL: 60
+      recordType: A
+      setIdentifier: 52.30.101.221
+      providerSpecific:
+        - name: "aws/weight"
+          value: "100"
+        - name: "aws/evaluate-target-health"
+          value: "true"
+        - name: "aws/health-check-id"
+          value: "5d6c8932-620c-41ea-9c91-8780d8b62455"
+      labels:
+        id: 52.30.101.221
+      targets:
+        - 52.30.101.221

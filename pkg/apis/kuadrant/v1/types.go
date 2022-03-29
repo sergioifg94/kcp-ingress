@@ -19,32 +19,66 @@ type DNSRecord struct {
 	Status DNSRecordStatus `json:"status,omitempty"`
 }
 
+// GetProviderSpecificProperty returns a ProviderSpecificProperty if the property exists.
+func (e *Endpoint) GetProviderSpecificProperty(key string) (ProviderSpecificProperty, bool) {
+	for _, providerSpecific := range e.ProviderSpecific {
+		if providerSpecific.Name == key {
+			return providerSpecific, true
+		}
+	}
+	return ProviderSpecificProperty{}, false
+}
+
+// SetID returns an id that should be unique across a set of endpoints
+func (e *Endpoint) SetID() string {
+	if e.SetIdentifier != "" {
+		return e.SetIdentifier
+	}
+	return e.DNSName
+}
+
+// ProviderSpecificProperty holds the name and value of a configuration which is specific to individual DNS providers
+type ProviderSpecificProperty struct {
+	Name  string `json:"name,omitempty"`
+	Value string `json:"value,omitempty"`
+}
+
+// Targets is a representation of a list of targets for an endpoint.
+type Targets []string
+
+// TTL is a structure defining the TTL of a DNS record
+type TTL int64
+
+// Labels store metadata related to the endpoint
+// it is then stored in a persistent storage via serialization
+type Labels map[string]string
+
+// ProviderSpecific holds configuration which is specific to individual DNS providers
+type ProviderSpecific []ProviderSpecificProperty
+
+// Endpoint is a high-level way of a connection between a service and an IP
+type Endpoint struct {
+	// The hostname of the DNS record
+	DNSName string `json:"dnsName,omitempty"`
+	// The targets the DNS record points to
+	Targets Targets `json:"targets,omitempty"`
+	// RecordType type of record, e.g. CNAME, A, SRV, TXT etc
+	RecordType string `json:"recordType,omitempty"`
+	// Identifier to distinguish multiple records with the same name and type (e.g. Route53 records with routing policies other than 'simple')
+	SetIdentifier string `json:"setIdentifier,omitempty"`
+	// TTL for the record
+	RecordTTL TTL `json:"recordTTL,omitempty"`
+	// Labels stores labels defined for the Endpoint
+	// +optional
+	Labels Labels `json:"labels,omitempty"`
+	// ProviderSpecific stores provider specific config
+	// +optional
+	ProviderSpecific ProviderSpecific `json:"providerSpecific,omitempty"`
+}
+
 // DNSRecordSpec contains the details of a DNS record.
 type DNSRecordSpec struct {
-	// dnsName is the hostname of the DNS record
-	//
-	// +kubebuilder:validation:Required
-	// +kubebuilder:validation:MinLength=1
-	// +required
-	DNSName string `json:"dnsName"`
-	// targets are record targets.
-	//
-	// +kubebuilder:validation:Required
-	// +kubebuilder:validation:MinItems=1
-	// +required
-	Targets []string `json:"targets"`
-	// recordType is the DNS record type. For example, "A" or "CNAME".
-	// +kubebuilder:validation:Required
-	// +required
-	RecordType DNSRecordType `json:"recordType"`
-	// recordTTL is the record TTL in seconds. If zero, the default is 30.
-	// RecordTTL will not be used in AWS regions Alias targets, but
-	// will be used in CNAME targets, per AWS API contract.
-	//
-	// +kubebuilder:validation:Required
-	// +kubebuilder:validation:Minimum=0
-	// +required
-	RecordTTL int64 `json:"recordTTL"`
+	Endpoints []*Endpoint `json:"endpoints,omitempty"`
 }
 
 // DNSRecordStatus is the most recently observed status of each record.
@@ -95,6 +129,14 @@ type DNSZoneStatus struct {
 	// If publishing the record fails, the "Failed" condition will be set with a
 	// reason and message describing the cause of the failure.
 	Conditions []DNSZoneCondition `json:"conditions,omitempty"`
+	// endpoints are the last endpoints that were successfully published to the provider
+	//
+	// Provides a simple mechanism to store the current provider records in order to
+	// delete any that are no longer present in DNSRecordSpec.Endpoints
+	//
+	// Note: This will not be required if/when we switch to using external-dns since when
+	// running with a "sync" policy it will clean up unused records automatically.
+	Endpoints []*Endpoint `json:"endpoints,omitempty"`
 }
 
 var (
