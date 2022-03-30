@@ -64,7 +64,7 @@ lint: ## Run golangci-lint against code.
 
 .PHONY: test
 test: generate ## Run tests.
-	#ToDo Implement `test` target
+	go test -v ./... -coverprofile=cover.out
 
 e2e: build
 	KUBECONFIG="$(KUBECONFIG)" CLUSTERS_KUBECONFIG_DIR="$(CLUSTERS_KUBECONFIG_DIR)" \
@@ -90,27 +90,43 @@ docker-build: ## Build docker image.
 
 ##@ Deployment
 
-KCP_KUBECONFIG=.kcp/admin.kubeconfig
-GLBC_KUBECONFIG=./tmp/kcp-cluster-glbc-control.kubeconfig.internal
-deploy-secrets:
-	kubectl create ns kcp-glbc | true
-	kubectl -n kcp-glbc create secret generic kcp-kubeconfig --from-file=kubeconfig=$(KCP_KUBECONFIG) | true
-	kubectl -n kcp-glbc create secret generic glbc-kubeconfig --from-file=kubeconfig=$(GLBC_KUBECONFIG) | true
-	kubectl -n kcp-glbc create secret generic aws-credentials --from-literal=AWS_ACCESS_KEY_ID=${AWS_ACCESS_KEY_ID} --from-literal=AWS_SECRET_ACCESS_KEY=${AWS_SECRET_ACCESS_KEY} | true
-	kubectl -n kcp-glbc create configmap glbc-config --from-literal=AWS_DNS_PUBLIC_ZONE_ID=${AWS_DNS_PUBLIC_ZONE_ID} --from-literal=HCG_LE_EMAIL=${HCG_LE_EMAIL} | true
-
 install: generate-crd kustomize ## Install CRDs into the K8s cluster specified in ~/.kube/config.
 	$(KUSTOMIZE) build config/crd | kubectl apply -f -
 
 uninstall: generate-crd kustomize ## Uninstall CRDs from the K8s cluster specified in ~/.kube/config.
 	$(KUSTOMIZE) build config/crd | kubectl delete -f -
 
-deploy: generate-crd kustomize deploy-secrets ## Deploy controller to the K8s cluster specified in ~/.kube/config.
+deploy: generate-crd kustomize deploy-glbc-config ## Deploy controller to the K8s cluster specified in ~/.kube/config.
 	cd config/manager && $(KUSTOMIZE) edit set image controller=${IMG}
 	$(KUSTOMIZE) build config/default | kubectl apply -f -
 
 undeploy: ## Undeploy controller from the K8s cluster specified in ~/.kube/config.
 	$(KUSTOMIZE) build config/default | kubectl delete -f -
+
+KCP_KUBECONFIG ?= .kcp/admin.kubeconfig
+GLBC_KUBECONFIG ?= ./tmp/kcp-cluster-glbc-control.kubeconfig.internal
+HCG_LE_EMAIL ?= kuadrant-dev@redhat.com
+GLBC_TLS_PROVIDED ?= true
+GLBC_TLS_PROVIDER ?= le-staging
+GLBC_ENABLE_CUSTOM_HOSTS ?= false
+GLBC_DOMAIN ?= dev.hcpapps.net
+GLBC_DNS_PROVIDER ?= aws
+AWS_DNS_PUBLIC_ZONE_ID ?= Z08652651232L9P84LRSB
+deploy-glbc-config: ## Deploy glbc secrets and config to K8s cluster specified in ~/.kube/config.
+	kubectl create ns kcp-glbc | true
+	kubectl -n kcp-glbc create secret generic kcp-kubeconfig --from-file=kubeconfig=$(KCP_KUBECONFIG) | true
+	kubectl -n kcp-glbc create secret generic glbc-kubeconfig --from-file=kubeconfig=$(GLBC_KUBECONFIG) | true
+	kubectl -n kcp-glbc create secret generic aws-credentials \
+			--from-literal=AWS_ACCESS_KEY_ID=${AWS_ACCESS_KEY_ID} \
+			--from-literal=AWS_SECRET_ACCESS_KEY=${AWS_SECRET_ACCESS_KEY} | true
+	kubectl -n kcp-glbc create configmap glbc-config \
+			--from-literal=GLBC_TLS_PROVIDED=$(GLBC_TLS_PROVIDED) \
+			--from-literal=GLBC_TLS_PROVIDER=$(GLBC_TLS_PROVIDER) \
+			--from-literal=GLBC_DOMAIN=$(GLBC_DOMAIN) \
+			--from-literal=GLBC_ENABLE_CUSTOM_HOSTS=$(GLBC_ENABLE_CUSTOM_HOSTS) \
+			--from-literal=GLBC_DNS_PROVIDER=$(GLBC_DNS_PROVIDER) \
+			--from-literal=AWS_DNS_PUBLIC_ZONE_ID=$(AWS_DNS_PUBLIC_ZONE_ID) \
+			--from-literal=HCG_LE_EMAIL=$(HCG_LE_EMAIL) | true
 
 .PHONY: local-setup
 local-setup: clean build kind kcp ## Setup kcp locally using kind.

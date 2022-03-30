@@ -32,10 +32,6 @@ spec:
           args:
             - --kubeconfig=/tmp/kcp/kubeconfig
             - --glbc-kubeconfig=/tmp/glbc/kubeconfig
-            - --dns-provider=aws
-            - --glbc-tls-provided
-            - --glbc-tls-provider=le-staging
-            - --domain=hcpapps.net
           image: controller:latest
           name: manager
           securityContext:
