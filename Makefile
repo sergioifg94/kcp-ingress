@@ -40,7 +40,7 @@ generate-deepcopy: controller-gen
 	cd pkg/apis/kuadrant && $(CONTROLLER_GEN) paths="./..." object
 
 generate-crd: controller-gen
-	cd pkg/apis/kuadrant && $(CONTROLLER_GEN) crd paths=./... output:crd:artifacts:config=../../../config/crd output:crd:dir=../../../config/crd crd:crdVersions=v1 && rm -rf ./config
+	cd pkg/apis/kuadrant && $(CONTROLLER_GEN) crd paths=./... output:crd:artifacts:config=../../../config/crd output:crd:dir=../../../config/crd/bases crd:crdVersions=v1 && rm -rf ./config
 
 generate-client:
 	./scripts/gen_client.sh
@@ -90,6 +90,28 @@ docker-build: ## Build docker image.
 
 ##@ Deployment
 
+KCP_KUBECONFIG=.kcp/admin.kubeconfig
+GLBC_KUBECONFIG=./tmp/kcp-cluster-glbc-control.kubeconfig.internal
+deploy-secrets:
+	kubectl create ns kcp-glbc | true
+	kubectl -n kcp-glbc create secret generic kcp-kubeconfig --from-file=kubeconfig=$(KCP_KUBECONFIG) | true
+	kubectl -n kcp-glbc create secret generic glbc-kubeconfig --from-file=kubeconfig=$(GLBC_KUBECONFIG) | true
+	kubectl -n kcp-glbc create secret generic aws-credentials --from-literal=AWS_ACCESS_KEY_ID=${AWS_ACCESS_KEY_ID} --from-literal=AWS_SECRET_ACCESS_KEY=${AWS_SECRET_ACCESS_KEY} | true
+	kubectl -n kcp-glbc create configmap glbc-config --from-literal=AWS_DNS_PUBLIC_ZONE_ID=${AWS_DNS_PUBLIC_ZONE_ID} --from-literal=HCG_LE_EMAIL=${HCG_LE_EMAIL} | true
+
+install: generate-crd kustomize ## Install CRDs into the K8s cluster specified in ~/.kube/config.
+	$(KUSTOMIZE) build config/crd | kubectl apply -f -
+
+uninstall: generate-crd kustomize ## Uninstall CRDs from the K8s cluster specified in ~/.kube/config.
+	$(KUSTOMIZE) build config/crd | kubectl delete -f -
+
+deploy: generate-crd kustomize deploy-secrets ## Deploy controller to the K8s cluster specified in ~/.kube/config.
+	cd config/manager && $(KUSTOMIZE) edit set image controller=${IMG}
+	$(KUSTOMIZE) build config/default | kubectl apply -f -
+
+undeploy: ## Undeploy controller from the K8s cluster specified in ~/.kube/config.
+	$(KUSTOMIZE) build config/default | kubectl delete -f -
+
 .PHONY: local-setup
 local-setup: clean build kind kcp ## Setup kcp locally using kind.
 	./utils/local-setup.sh -c ${NUM_CLUSTERS}
@@ -117,6 +139,10 @@ controller-gen: ## Download controller-gen locally if necessary.
 KIND = $(shell pwd)/bin/kind
 kind: ## Download kind locally if necessary.
 	$(call go-get-tool,$(KIND),sigs.k8s.io/kind@v0.11.1)
+
+KUSTOMIZE = $(shell pwd)/bin/kustomize
+kustomize: ## Download kustomize locally if necessary.
+	$(call go-get-tool,$(KUSTOMIZE),sigs.k8s.io/kustomize/kustomize/v3@v3.8.7)
 
 # go-get-tool will 'go get' any package $2 and install it to $1.
 PROJECT_DIR := $(shell dirname $(abspath $(lastword $(MAKEFILE_LIST))))
