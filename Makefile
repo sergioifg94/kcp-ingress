@@ -23,7 +23,7 @@ help: ## Display this help.
 ##@ Development
 
 .PHONY: clean
-clean: ## Clean up temporary files.
+clean: clean-ld-kubeconfig ## Clean up temporary files.
 	-rm -rf ./.kcp
 	-rm -f ./bin/*
 	-rm -rf ./tmp
@@ -98,39 +98,52 @@ uninstall: generate-crd kustomize ## Uninstall CRDs from the K8s cluster specifi
 	$(KUSTOMIZE) build config/crd | kubectl delete -f -
 
 .PHONY: deploy
-deploy: generate-crd kustomize deploy-glbc-config ## Deploy controller to the K8s cluster specified in ~/.kube/config.
+deploy: generate-crd kustomize generate-ld-config ## Deploy controller to the K8s cluster specified in ~/.kube/config.
 	cd config/manager && $(KUSTOMIZE) edit set image controller=${IMG}
-	$(KUSTOMIZE) build config/default | kubectl apply -f -
+	$(KUSTOMIZE) build config/deploy/local | kubectl apply -f -
 
 .PHONY: undeploy
 undeploy: ## Undeploy controller from the K8s cluster specified in ~/.kube/config.
-	$(KUSTOMIZE) build config/default | kubectl delete -f -
+	$(KUSTOMIZE) build config/deploy/local | kubectl delete -f -
 
-KCP_KUBECONFIG ?= .kcp/admin.kubeconfig
-GLBC_KUBECONFIG ?= ./tmp/kcp-cluster-glbc-control.kubeconfig.internal
-HCG_LE_EMAIL ?= kuadrant-dev@redhat.com
-GLBC_TLS_PROVIDED ?= true
-GLBC_TLS_PROVIDER ?= le-staging
-GLBC_ENABLE_CUSTOM_HOSTS ?= false
-GLBC_DOMAIN ?= dev.hcpapps.net
-GLBC_DNS_PROVIDER ?= aws
-AWS_DNS_PUBLIC_ZONE_ID ?= Z08652651232L9P84LRSB
-.PHONY: deploy-glbc-config
-deploy-glbc-config: ## Deploy glbc secrets and config to K8s cluster specified in ~/.kube/config.
-	kubectl create ns kcp-glbc | true
-	kubectl -n kcp-glbc create secret generic kcp-kubeconfig --from-file=kubeconfig=$(KCP_KUBECONFIG) | true
-	kubectl -n kcp-glbc create secret generic glbc-kubeconfig --from-file=kubeconfig=$(GLBC_KUBECONFIG) | true
-	kubectl -n kcp-glbc create secret generic aws-credentials \
-			--from-literal=AWS_ACCESS_KEY_ID=${AWS_ACCESS_KEY_ID} \
-			--from-literal=AWS_SECRET_ACCESS_KEY=${AWS_SECRET_ACCESS_KEY} | true
-	kubectl -n kcp-glbc create configmap glbc-config \
-			--from-literal=GLBC_TLS_PROVIDED=$(GLBC_TLS_PROVIDED) \
-			--from-literal=GLBC_TLS_PROVIDER=$(GLBC_TLS_PROVIDER) \
-			--from-literal=GLBC_DOMAIN=$(GLBC_DOMAIN) \
-			--from-literal=GLBC_ENABLE_CUSTOM_HOSTS=$(GLBC_ENABLE_CUSTOM_HOSTS) \
-			--from-literal=GLBC_DNS_PROVIDER=$(GLBC_DNS_PROVIDER) \
-			--from-literal=AWS_DNS_PUBLIC_ZONE_ID=$(AWS_DNS_PUBLIC_ZONE_ID) \
-			--from-literal=HCG_LE_EMAIL=$(HCG_LE_EMAIL) | true
+## Local Deployment
+LD_DIR=config/deploy/local
+LD_AWS_CREDS_ENV=$(LD_DIR)/aws-credentials.env
+LD_CONTROLLER_CONFIG_ENV=$(LD_DIR)/controller-config.env
+LD_GLBC_KUBECONFIG=$(LD_DIR)/glbc.kubeconfig
+LD_KCP_KUBECONFIG=$(LD_DIR)/kcp.kubeconfig
+
+$(LD_AWS_CREDS_ENV):
+	envsubst \
+        < $(LD_AWS_CREDS_ENV).template \
+        > $(LD_AWS_CREDS_ENV)
+
+$(LD_CONTROLLER_CONFIG_ENV):
+	envsubst \
+		< $(LD_CONTROLLER_CONFIG_ENV).template \
+		> $(LD_CONTROLLER_CONFIG_ENV)
+
+$(LD_GLBC_KUBECONFIG):
+	cp ./tmp/kcp-cluster-glbc-control.kubeconfig.internal $(LD_GLBC_KUBECONFIG)
+
+$(LD_KCP_KUBECONFIG):
+	cp .kcp/admin.kubeconfig $(LD_KCP_KUBECONFIG)
+
+.PHONY: generate-ld-config
+generate-ld-config: $(LD_AWS_CREDS_ENV) $(LD_CONTROLLER_CONFIG_ENV) $(LD_GLBC_KUBECONFIG) $(LD_KCP_KUBECONFIG) ## Generate local deployment files.
+
+.PHONY: clean-ld-env
+clean-ld-env:
+	-rm -f $(LD_AWS_CREDS_ENV)
+	-rm -f $(LD_CONTROLLER_CONFIG_ENV)
+
+.PHONY: clean-ld-kubeconfig
+clean-ld-kubeconfig:
+	-rm -f $(LD_GLBC_KUBECONFIG)
+	-rm -f $(LD_KCP_KUBECONFIG)
+
+.PHONY: clean-ld-config
+clean-ld-config: clean-ld-env clean-ld-kubeconfig ## Remove local deployment files.
 
 .PHONY: local-setup
 local-setup: clean build kind kcp ## Setup kcp locally using kind.

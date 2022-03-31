@@ -10,3 +10,13 @@ images:
 - name: controller
   newName: quay.io/kuadrant/kcp-glbc
   newTag: latest
+
+configMapGenerator:
+- envs:
+  - controller-config.env
+  name: controller-config
+
+secretGenerator:
+- name: kcp-kubeconfig
+- name: glbc-kubeconfig
+- name: aws-credentials

@@ -41,7 +41,7 @@ spec:
                 name: aws-credentials
                 optional: true
             - configMapRef:
-                name: glbc-config
+                name: controller-config
                 optional: true
           resources:
             limits:
@@ -67,8 +67,4 @@ spec:
         - name: glbc-kubeconfig
           secret:
             secretName: glbc-kubeconfig
-            optional: false
-        - name: glbc-config
-          secret:
-            secretName: glbc-config
             optional: false
