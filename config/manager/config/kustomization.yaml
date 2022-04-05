@@ -1,0 +1,13 @@
+
+generatorOptions:
+  disableNameSuffixHash: true
+
+configMapGenerator:
+- name: controller-config
+  envs:
+  - controller-config.env
+
+secretGenerator:
+- name: kcp-kubeconfig
+- name: glbc-kubeconfig
+- name: aws-credentials
