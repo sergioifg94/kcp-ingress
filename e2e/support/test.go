@@ -13,8 +13,8 @@ import (
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 
-	clusterv1alpha1 "github.com/kcp-dev/kcp/pkg/apis/cluster/v1alpha1"
 	tenancyv1alpha1 "github.com/kcp-dev/kcp/pkg/apis/tenancy/v1alpha1"
+	workloadv1alpha1 "github.com/kcp-dev/kcp/pkg/apis/workload/v1alpha1"
 )
 
 type Test interface {
@@ -24,9 +24,9 @@ type Test interface {
 
 	gomega.Gomega
 
-	NewTestWorkspace() *tenancyv1alpha1.Workspace
+	NewTestWorkspace() *tenancyv1alpha1.ClusterWorkspace
 	NewTestNamespace(...Option) *corev1.Namespace
-	NewWorkloadCluster(name string, options ...Option) *clusterv1alpha1.Cluster
+	NewWorkloadCluster(name string, options ...Option) *workloadv1alpha1.WorkloadCluster
 }
 
 type Option interface {
@@ -75,7 +75,7 @@ func (t *T) Client() Client {
 	return t.client
 }
 
-func (t *T) NewTestWorkspace() *tenancyv1alpha1.Workspace {
+func (t *T) NewTestWorkspace() *tenancyv1alpha1.ClusterWorkspace {
 	workspace := createTestWorkspace(t)
 	t.T().Cleanup(func() {
 		deleteTestWorkspace(t, workspace)
@@ -95,6 +95,6 @@ func (t *T) NewTestNamespace(options ...Option) *corev1.Namespace {
 	return namespace
 }
 
-func (t *T) NewWorkloadCluster(name string, options ...Option) *clusterv1alpha1.Cluster {
+func (t *T) NewWorkloadCluster(name string, options ...Option) *workloadv1alpha1.WorkloadCluster {
 	return newWorkloadCluster(t, name, options...)
 }

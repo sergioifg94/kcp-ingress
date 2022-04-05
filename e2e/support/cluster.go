@@ -14,10 +14,13 @@ import (
 
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 
-	clusterv1alpha1 "github.com/kcp-dev/kcp/pkg/apis/cluster/v1alpha1"
+	kcp "github.com/kcp-dev/kcp/pkg/reconciler/workload/namespace"
+
+	"github.com/kcp-dev/apimachinery/pkg/logicalcluster"
+	workloadv1alpha1 "github.com/kcp-dev/kcp/pkg/apis/workload/v1alpha1"
 )
 
-const ClusterLabel = "kcp.dev/cluster"
+const ClusterLabel = kcp.ClusterLabel
 
 var WithKubeConfigByName = &withKubeConfigByName{}
 
@@ -37,8 +40,8 @@ func (o *withKubeConfigByName) applyTo(object metav1.Object) error {
 }
 
 func (o *withKubeConfigByID) applyTo(object metav1.Object) error {
-	var cluster *clusterv1alpha1.Cluster
-	if c, ok := object.(*clusterv1alpha1.Cluster); !ok {
+	var cluster *workloadv1alpha1.WorkloadCluster
+	if c, ok := object.(*workloadv1alpha1.WorkloadCluster); !ok {
 		return fmt.Errorf("KubeConfig option can only be applied to Cluster resources")
 	} else {
 		cluster = c
@@ -58,11 +61,11 @@ func (o *withKubeConfigByID) applyTo(object metav1.Object) error {
 	return nil
 }
 
-func newWorkloadCluster(t Test, name string, options ...Option) *clusterv1alpha1.Cluster {
-	cluster := &clusterv1alpha1.Cluster{
+func newWorkloadCluster(t Test, name string, options ...Option) *workloadv1alpha1.WorkloadCluster {
+	cluster := &workloadv1alpha1.WorkloadCluster{
 		TypeMeta: metav1.TypeMeta{
-			APIVersion: clusterv1alpha1.SchemeGroupVersion.String(),
-			Kind:       "Cluster",
+			APIVersion: workloadv1alpha1.SchemeGroupVersion.String(),
+			Kind:       "WorkloadCluster",
 		},
 		ObjectMeta: metav1.ObjectMeta{
 			// FIXME: workaround for https://github.com/kcp-dev/kcp/issues/730
@@ -75,15 +78,15 @@ func newWorkloadCluster(t Test, name string, options ...Option) *clusterv1alpha1
 		t.Expect(option.applyTo(cluster)).To(gomega.Succeed())
 	}
 
-	cluster, err := t.Client().Kcp().Cluster(cluster.ClusterName).ClusterV1alpha1().Clusters().Create(t.Ctx(), cluster, metav1.CreateOptions{})
+	cluster, err := t.Client().Kcp().Cluster(logicalcluster.From(cluster)).WorkloadV1alpha1().WorkloadClusters().Create(t.Ctx(), cluster, metav1.CreateOptions{})
 	t.Expect(err).NotTo(gomega.HaveOccurred())
 
 	return cluster
 }
 
-func WorkloadCluster(t Test, workspace, name string) func(g gomega.Gomega) *clusterv1alpha1.Cluster {
-	return func(g gomega.Gomega) *clusterv1alpha1.Cluster {
-		c, err := t.Client().Kcp().Cluster(workspace).ClusterV1alpha1().Clusters().Get(t.Ctx(), name, metav1.GetOptions{})
+func WorkloadCluster(t Test, workspace, name string) func(g gomega.Gomega) *workloadv1alpha1.WorkloadCluster {
+	return func(g gomega.Gomega) *workloadv1alpha1.WorkloadCluster {
+		c, err := t.Client().Kcp().Cluster(logicalcluster.New(workspace)).WorkloadV1alpha1().WorkloadClusters().Get(t.Ctx(), name, metav1.GetOptions{})
 		g.Expect(err).NotTo(gomega.HaveOccurred())
 		return c
 	}

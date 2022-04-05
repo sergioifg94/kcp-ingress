@@ -11,6 +11,9 @@ import (
 	"k8s.io/client-go/tools/cache"
 	"k8s.io/klog/v2"
 
+	"github.com/kcp-dev/apimachinery/pkg/logicalcluster"
+	kcp "github.com/kcp-dev/kcp/pkg/reconciler/workload/namespace"
+
 	"github.com/kuadrant/kcp-glbc/pkg/util/deleteDelay"
 	"github.com/kuadrant/kcp-glbc/pkg/util/metadata"
 )
@@ -19,7 +22,6 @@ const (
 	PlacementAnnotationName = "kcp.dev/placement"
 
 	// PBrookes TODO deduplicate these somewhere
-	clusterLabel = "kcp.dev/cluster"
 	ownedByLabel = "kcp.dev/owned-by"
 
 	shadowCleanupFinalizer = "kcp.dev/shadow-cleanup"
@@ -69,11 +71,11 @@ func (c *Controller) ReconcileRootService(ctx context.Context, service *corev1.S
 			shadow.ResourceVersion = existingShadow.ResourceVersion
 			shadow.UID = existingShadow.UID
 
-			if _, err := c.coreClient.Cluster(shadow.ClusterName).CoreV1().Services(shadow.Namespace).Update(ctx, shadow, metav1.UpdateOptions{}); err != nil {
+			if _, err := c.coreClient.Cluster(logicalcluster.From(shadow)).CoreV1().Services(shadow.Namespace).Update(ctx, shadow, metav1.UpdateOptions{}); err != nil {
 				return err
 			}
 		} else {
-			if _, err := c.coreClient.Cluster(shadow.ClusterName).CoreV1().Services(shadow.Namespace).Create(ctx, shadow, metav1.CreateOptions{}); err != nil {
+			if _, err := c.coreClient.Cluster(logicalcluster.From(shadow)).CoreV1().Services(shadow.Namespace).Create(ctx, shadow, metav1.CreateOptions{}); err != nil {
 				return err
 			}
 		}
@@ -94,11 +96,11 @@ func (c *Controller) ReconcileRootService(ctx context.Context, service *corev1.S
 			return err
 		}
 		undesired = obj.(*corev1.Service)
-		undesired, err := c.coreClient.Cluster(undesired.ClusterName).CoreV1().Services(undesired.Namespace).Update(ctx, undesired, metav1.UpdateOptions{})
+		undesired, err := c.coreClient.Cluster(logicalcluster.From(undesired)).CoreV1().Services(undesired.Namespace).Update(ctx, undesired, metav1.UpdateOptions{})
 		if err != nil {
 			return err
 		}
-		err = c.coreClient.Cluster(undesired.ClusterName).CoreV1().Services(undesired.Namespace).Delete(ctx, undesired.Name, metav1.DeleteOptions{})
+		err = c.coreClient.Cluster(logicalcluster.From(undesired)).CoreV1().Services(undesired.Namespace).Delete(ctx, undesired.Name, metav1.DeleteOptions{})
 		if err != nil {
 			return err
 		}
@@ -118,11 +120,11 @@ func (c *Controller) reconcileRootDelete(ctx context.Context, service *corev1.Se
 	for _, undesired := range current {
 		klog.Infof("Deleting service shadow %q for expired root: %q", undesired.Name, service.Name)
 		deleteDelay.CleanForDeletion(undesired)
-		undesired, err = c.coreClient.Cluster(undesired.ClusterName).CoreV1().Services(undesired.Namespace).Update(ctx, undesired, metav1.UpdateOptions{})
+		undesired, err = c.coreClient.Cluster(logicalcluster.From(undesired)).CoreV1().Services(undesired.Namespace).Update(ctx, undesired, metav1.UpdateOptions{})
 		if err != nil {
 			return err
 		}
-		if err := c.coreClient.Cluster(undesired.ClusterName).CoreV1().Services(undesired.Namespace).Delete(ctx, undesired.Name, metav1.DeleteOptions{}); err != nil {
+		if err := c.coreClient.Cluster(logicalcluster.From(undesired)).CoreV1().Services(undesired.Namespace).Delete(ctx, undesired.Name, metav1.DeleteOptions{}); err != nil {
 			return err
 		}
 	}
@@ -172,7 +174,7 @@ func desiredServices(service *corev1.Service) ([]*corev1.Service, error) {
 		if desired.Labels == nil {
 			desired.Labels = map[string]string{}
 		}
-		desired.Labels[clusterLabel] = loc
+		desired.Labels[kcp.ClusterLabel] = loc
 		desired.Labels[ownedByLabel] = service.Name
 
 		desiredServices = append(desiredServices, desired)

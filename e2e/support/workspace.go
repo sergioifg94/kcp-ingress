@@ -11,33 +11,29 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime/schema"
 
+	"github.com/kcp-dev/apimachinery/pkg/logicalcluster"
+
 	tenancyv1alpha1 "github.com/kcp-dev/kcp/pkg/apis/tenancy/v1alpha1"
-	tenancyhelper "github.com/kcp-dev/kcp/pkg/apis/tenancy/v1alpha1/helper"
 )
 
-func InWorkspace(workspace *tenancyv1alpha1.Workspace) Option {
+func InWorkspace(workspace *tenancyv1alpha1.ClusterWorkspace) Option {
 	return &inWorkspace{workspace}
 }
 
 type inWorkspace struct {
-	workspace *tenancyv1alpha1.Workspace
+	workspace *tenancyv1alpha1.ClusterWorkspace
 }
 
 func (o *inWorkspace) applyTo(object metav1.Object) error {
-	clusterName, err := tenancyhelper.EncodeLogicalClusterName(o.workspace)
-	if err != nil {
-		return err
-	}
+	clusterName := logicalcluster.From(o.workspace).Join(o.workspace.Name).String()
 	object.SetClusterName(clusterName)
 	return nil
 }
 
-func HasImportedAPIs(t Test, workspace *tenancyv1alpha1.Workspace, GVKs ...schema.GroupVersionKind) func(g gomega.Gomega) bool {
+func HasImportedAPIs(t Test, workspace *tenancyv1alpha1.ClusterWorkspace, GVKs ...schema.GroupVersionKind) func(g gomega.Gomega) bool {
 	return func(g gomega.Gomega) bool {
-		// Get the encoded logical cluster name for the workspace
-		logicalCluster, err := tenancyhelper.EncodeLogicalClusterName(workspace)
-		t.Expect(err).NotTo(gomega.HaveOccurred())
-
+		// Get the logical cluster for the workspace
+		logicalCluster := logicalcluster.From(workspace).Join(workspace.Name)
 		discovery := t.Client().Core().Cluster(logicalCluster).Discovery()
 
 	GVKs:
@@ -61,18 +57,18 @@ func HasImportedAPIs(t Test, workspace *tenancyv1alpha1.Workspace, GVKs ...schem
 	}
 }
 
-func Workspace(t Test, name string) func() *tenancyv1alpha1.Workspace {
-	return func() *tenancyv1alpha1.Workspace {
-		c, err := t.Client().Kcp().Cluster(AdminWorkspace).TenancyV1alpha1().Workspaces().Get(t.Ctx(), name, metav1.GetOptions{})
+func Workspace(t Test, name string) func() *tenancyv1alpha1.ClusterWorkspace {
+	return func() *tenancyv1alpha1.ClusterWorkspace {
+		c, err := t.Client().Kcp().Cluster(RootCluster).TenancyV1alpha1().ClusterWorkspaces().Get(t.Ctx(), name, metav1.GetOptions{})
 		t.Expect(err).NotTo(gomega.HaveOccurred())
 		return c
 	}
 }
 
-func createTestWorkspace(t Test) *tenancyv1alpha1.Workspace {
+func createTestWorkspace(t Test) *tenancyv1alpha1.ClusterWorkspace {
 	name := "test-" + uuid.New().String()
 
-	workspace := &tenancyv1alpha1.Workspace{
+	workspace := &tenancyv1alpha1.ClusterWorkspace{
 		TypeMeta: metav1.TypeMeta{
 			APIVersion: tenancyv1alpha1.SchemeGroupVersion.String(),
 			Kind:       "Workspace",
@@ -80,12 +76,10 @@ func createTestWorkspace(t Test) *tenancyv1alpha1.Workspace {
 		ObjectMeta: metav1.ObjectMeta{
 			Name: name,
 		},
-		Spec: tenancyv1alpha1.WorkspaceSpec{
-			InheritFrom: AdminWorkspace,
-		},
+		Spec: tenancyv1alpha1.ClusterWorkspaceSpec{},
 	}
 
-	workspace, err := t.Client().Kcp().Cluster(AdminWorkspace).TenancyV1alpha1().Workspaces().Create(t.Ctx(), workspace, metav1.CreateOptions{})
+	workspace, err := t.Client().Kcp().Cluster(RootCluster).TenancyV1alpha1().ClusterWorkspaces().Create(t.Ctx(), workspace, metav1.CreateOptions{})
 	if err != nil {
 		t.Expect(err).NotTo(gomega.HaveOccurred())
 	}
@@ -93,9 +87,9 @@ func createTestWorkspace(t Test) *tenancyv1alpha1.Workspace {
 	return workspace
 }
 
-func deleteTestWorkspace(t Test, workspace *tenancyv1alpha1.Workspace) {
+func deleteTestWorkspace(t Test, workspace *tenancyv1alpha1.ClusterWorkspace) {
 	propagationPolicy := metav1.DeletePropagationBackground
-	err := t.Client().Kcp().Cluster(workspace.ClusterName).TenancyV1alpha1().Workspaces().Delete(t.Ctx(), workspace.Name, metav1.DeleteOptions{
+	err := t.Client().Kcp().Cluster(logicalcluster.From(workspace)).TenancyV1alpha1().ClusterWorkspaces().Delete(t.Ctx(), workspace.Name, metav1.DeleteOptions{
 		PropagationPolicy: &propagationPolicy,
 	})
 	t.Expect(err).NotTo(gomega.HaveOccurred())

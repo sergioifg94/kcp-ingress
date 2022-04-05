@@ -154,9 +154,9 @@ echo "Exporting KUBECONFIG=.kcp/admin.kubeconfig"
 export KUBECONFIG=.kcp/admin.kubeconfig
 
 echo "Creating workspace shard"
-kubectl create namespace default
-kubectl create secret generic kubeconfig --from-file=kubeconfig="${KUBECONFIG}"
-kubectl apply -f ./utils/kcp-contrib/workspace-shard.yaml
+#kubectl create namespace default
+#kubectl create secret generic kubeconfig --from-file=kubeconfig="${KUBECONFIG}"
+#kubectl apply -f ./utils/kcp-contrib/workspace-shard.yaml
 
 echo "Registering kind k8s clusters into KCP"
 kubectl apply -f ./tmp/
@@ -170,7 +170,7 @@ echo ""
 echo "The kind k8s clusters have been registered, and KCP is running, now you should run the kcp-ingress"
 echo "example: "
 echo ""
-echo "       ./bin/ingress-controller -kubeconfig .kcp/admin.kubeconfig -context admin -glbc-kubeconfig ${TEMP_DIR}/${KCP_GLBC_KUBECONFIG}"
+echo "       ./bin/ingress-controller -kubeconfig .kcp/admin.kubeconfig -context system:admin -glbc-kubeconfig ${TEMP_DIR}/${KCP_GLBC_KUBECONFIG}"
 echo ""
 echo "Don't forget to export the proper KUBECONFIG to create objects against KCP:"
 echo "export KUBECONFIG=${PWD}/.kcp/admin.kubeconfig"

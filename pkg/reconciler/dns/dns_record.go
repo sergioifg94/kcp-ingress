@@ -13,6 +13,8 @@ import (
 	utilerrors "k8s.io/apimachinery/pkg/util/errors"
 	"k8s.io/klog/v2"
 
+	"github.com/kcp-dev/apimachinery/pkg/logicalcluster"
+
 	v1 "github.com/kuadrant/kcp-glbc/pkg/apis/kuadrant/v1"
 	"github.com/kuadrant/kcp-glbc/pkg/util/slice"
 )
@@ -48,7 +50,7 @@ func (c *Controller) reconcile(ctx context.Context, dnsRecord *v1.DNSRecord) err
 	if !dnsZoneStatusSlicesEqual(statuses, dnsRecord.Status.Zones) || dnsRecord.Status.ObservedGeneration != dnsRecord.Generation {
 		dnsRecord.Status.Zones = statuses
 		dnsRecord.Status.ObservedGeneration = dnsRecord.Generation
-		_, err := c.dnsRecordClient.Cluster(dnsRecord.ClusterName).KuadrantV1().DNSRecords(dnsRecord.Namespace).UpdateStatus(ctx, dnsRecord, metav1.UpdateOptions{})
+		_, err := c.dnsRecordClient.Cluster(logicalcluster.From(dnsRecord)).KuadrantV1().DNSRecords(dnsRecord.Namespace).UpdateStatus(ctx, dnsRecord, metav1.UpdateOptions{})
 		if err != nil {
 			return err
 		}

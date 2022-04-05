@@ -52,7 +52,7 @@ func (w *HostsWatcher) StartWatching(ctx context.Context, obj interface{}, host 
 
 // StopWatching stops tracking changes in the addresses associated to obj
 func (w *HostsWatcher) StopWatching(obj interface{}) {
-	records := []recordWatcher{}
+	var records []recordWatcher
 	for _, recordWatcher := range w.Records {
 		if recordWatcher.Key == obj {
 			recordWatcher.Stop()
