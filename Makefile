@@ -8,12 +8,6 @@ IMAGE_TAG_BASE ?= quay.io/kuadrant/kcp-glbc
 IMAGE_TAG ?= latest
 IMG ?= $(IMAGE_TAG_BASE):$(IMAGE_TAG)
 
-GO_VERSION = $(shell go version | awk '{print $$3}')
-GO_GET_INSTALL = go get
-ifeq ($(GO_VERSION),go1.18)
-	GO_GET_INSTALL = go install
-endif
-
 KUBECONFIG ?= $(shell pwd)/.kcp/admin.kubeconfig
 CLUSTERS_KUBECONFIG_DIR ?= $(shell pwd)/tmp
 
@@ -29,26 +23,30 @@ help: ## Display this help.
 ##@ Development
 
 .PHONY: clean
-clean: ## Clean up temporary files.
+clean: clean-ld-kubeconfig ## Clean up temporary files.
 	-rm -rf ./.kcp
 	-rm -f ./bin/*
 	-rm -rf ./tmp
 
+.PHONY: generate
 generate: generate-deepcopy generate-crd generate-client ## Generate code containing DeepCopy method implementations, CustomResourceDefinition objects and Clients.
 
+.PHONY: generate-deepcopy
 generate-deepcopy: controller-gen
 	cd pkg/apis/kuadrant && $(CONTROLLER_GEN) paths="./..." object
 
+.PHONY: generate-deepcopy
 generate-crd: controller-gen
-	cd pkg/apis/kuadrant && $(CONTROLLER_GEN) crd paths=./... output:crd:artifacts:config=../../../config/crd output:crd:dir=../../../config/crd crd:crdVersions=v1 && rm -rf ./config
+	cd pkg/apis/kuadrant && $(CONTROLLER_GEN) crd paths=./... output:crd:artifacts:config=../../../config/crd output:crd:dir=../../../config/crd/bases crd:crdVersions=v1 && rm -rf ./config
 
+.PHONY: generate-client
 generate-client:
 	./scripts/gen_client.sh
 
+.PHONY: vendor
 vendor: ## Vendor the dependencies.
 	go mod tidy
 	go mod vendor
-.PHONY: vendor
 
 .PHONY: fmt
 fmt: ## Run go fmt against code.
@@ -58,14 +56,15 @@ fmt: ## Run go fmt against code.
 vet: ## Run go vet against code.
 	go vet ./...
 
+.PHONY: lint
 lint: ## Run golangci-lint against code.
 	golangci-lint run ./...
-.PHONY: lint
 
 .PHONY: test
 test: generate ## Run tests.
-	#ToDo Implement `test` target
+	go test -v ./... -coverprofile=cover.out
 
+.PHONY: e2e
 e2e: build
 	KUBECONFIG="$(KUBECONFIG)" CLUSTERS_KUBECONFIG_DIR="$(CLUSTERS_KUBECONFIG_DIR)" \
 	go test -timeout 60m -v ./e2e -tags=e2e
@@ -80,9 +79,9 @@ verify-generate: generate ## Verify generate update.
 
 ##@ Build
 
+.PHONY: build
 build: ## Build the project.
 	go build -o bin ./cmd/...
-.PHONY: build
 
 .PHONY: docker-build
 docker-build: ## Build docker image.
@@ -90,44 +89,113 @@ docker-build: ## Build docker image.
 
 ##@ Deployment
 
+.PHONY: install
+install: generate-crd kustomize ## Install CRDs into the K8s cluster specified in ~/.kube/config.
+	$(KUSTOMIZE) build config/crd | kubectl apply -f -
+
+.PHONY: uninstall
+uninstall: generate-crd kustomize ## Uninstall CRDs from the K8s cluster specified in ~/.kube/config.
+	$(KUSTOMIZE) build config/crd | kubectl delete -f -
+
+.PHONY: deploy
+deploy: generate-crd kustomize generate-ld-config ## Deploy controller to the K8s cluster specified in ~/.kube/config.
+	cd config/manager && $(KUSTOMIZE) edit set image controller=${IMG}
+	$(KUSTOMIZE) build config/deploy/local | kubectl apply -f -
+
+.PHONY: undeploy
+undeploy: ## Undeploy controller from the K8s cluster specified in ~/.kube/config.
+	$(KUSTOMIZE) build config/deploy/local | kubectl delete -f -
+
+## Local Deployment
+LD_DIR=config/deploy/local
+LD_AWS_CREDS_ENV=$(LD_DIR)/aws-credentials.env
+LD_CONTROLLER_CONFIG_ENV=$(LD_DIR)/controller-config.env
+LD_GLBC_KUBECONFIG=$(LD_DIR)/glbc.kubeconfig
+LD_KCP_KUBECONFIG=$(LD_DIR)/kcp.kubeconfig
+
+$(LD_AWS_CREDS_ENV):
+	envsubst \
+        < $(LD_AWS_CREDS_ENV).template \
+        > $(LD_AWS_CREDS_ENV)
+
+$(LD_CONTROLLER_CONFIG_ENV):
+	envsubst \
+		< $(LD_CONTROLLER_CONFIG_ENV).template \
+		> $(LD_CONTROLLER_CONFIG_ENV)
+
+$(LD_GLBC_KUBECONFIG):
+	cp ./tmp/kcp-cluster-glbc-control.kubeconfig.internal $(LD_GLBC_KUBECONFIG)
+
+$(LD_KCP_KUBECONFIG):
+	cp .kcp/admin.kubeconfig $(LD_KCP_KUBECONFIG)
+
+.PHONY: generate-ld-config
+generate-ld-config: $(LD_AWS_CREDS_ENV) $(LD_CONTROLLER_CONFIG_ENV) $(LD_GLBC_KUBECONFIG) $(LD_KCP_KUBECONFIG) ## Generate local deployment files.
+
+.PHONY: clean-ld-env
+clean-ld-env:
+	-rm -f $(LD_AWS_CREDS_ENV)
+	-rm -f $(LD_CONTROLLER_CONFIG_ENV)
+
+.PHONY: clean-ld-kubeconfig
+clean-ld-kubeconfig:
+	-rm -f $(LD_GLBC_KUBECONFIG)
+	-rm -f $(LD_KCP_KUBECONFIG)
+
+.PHONY: clean-ld-config
+clean-ld-config: clean-ld-env clean-ld-kubeconfig ## Remove local deployment files.
+
 .PHONY: local-setup
 local-setup: clean build kind kcp ## Setup kcp locally using kind.
 	./utils/local-setup.sh -c ${NUM_CLUSTERS}
 
-KCP = $(shell pwd)/bin/kcp
-kcp: ## Download kcp locally.
+##@ Build Dependencies
+
+## Location to install dependencies to
+LOCALBIN ?= $(shell pwd)/bin
+$(LOCALBIN): ## Ensure that the directory exists
+	mkdir -p $(LOCALBIN)
+
+## Tool Binaries
+KCP ?= $(LOCALBIN)/kcp
+KUSTOMIZE ?= $(LOCALBIN)/kustomize
+CONTROLLER_GEN ?= $(LOCALBIN)/controller-gen
+KIND ?= $(LOCALBIN)/kind
+
+## Tool Versions
+KUSTOMIZE_VERSION ?= v3.8.7
+CONTROLLER_TOOLS_VERSION ?= v0.8.0
+KIND_VERSION ?= v0.11.1
+
+.PHONY: kcp
+kcp: $(KCP) ## Download kcp locally if necessary.
+$(KCP):
 	rm -rf ./tmp/kcp
 	git clone --depth=1 --branch ${KCP_BRANCH} https://github.com/kuadrant/kcp ./tmp/kcp
 	cd ./tmp/kcp && make
-	cp ./tmp/kcp/bin/cluster-controller $(shell pwd)/bin
-	cp ./tmp/kcp/bin/compat $(shell pwd)/bin
-	cp ./tmp/kcp/bin/crd-puller $(shell pwd)/bin
-	cp ./tmp/kcp/bin/deployment-splitter $(shell pwd)/bin
-	cp ./tmp/kcp/bin/kcp $(shell pwd)/bin
-	cp ./tmp/kcp/bin/kubectl-kcp $(shell pwd)/bin
-	cp ./tmp/kcp/bin/shard-proxy $(shell pwd)/bin
-	cp ./tmp/kcp/bin/syncer $(shell pwd)/bin
-	cp ./tmp/kcp/bin/virtual-workspaces $(shell pwd)/bin
+	cp ./tmp/kcp/bin/cluster-controller $(LOCALBIN)
+	cp ./tmp/kcp/bin/compat $(LOCALBIN)
+	cp ./tmp/kcp/bin/crd-puller $(LOCALBIN)
+	cp ./tmp/kcp/bin/deployment-splitter $(LOCALBIN)
+	cp ./tmp/kcp/bin/kcp $(LOCALBIN)
+	cp ./tmp/kcp/bin/kubectl-kcp $(LOCALBIN)
+	cp ./tmp/kcp/bin/shard-proxy $(LOCALBIN)
+	cp ./tmp/kcp/bin/syncer $(LOCALBIN)
+	cp ./tmp/kcp/bin/virtual-workspaces $(LOCALBIN)
 	rm -rf ./tmp/kcp
 
-CONTROLLER_GEN = $(shell pwd)/bin/controller-gen
-controller-gen: ## Download controller-gen locally if necessary.
-	$(call go-get-tool,$(CONTROLLER_GEN),sigs.k8s.io/controller-tools/cmd/controller-gen@v0.8.0)
+.PHONY: controller-gen
+controller-gen: $(CONTROLLER_GEN) ## Download controller-gen locally if necessary.
+$(CONTROLLER_GEN):
+	GOBIN=$(LOCALBIN) go install sigs.k8s.io/controller-tools/cmd/controller-gen@$(CONTROLLER_TOOLS_VERSION)
 
-KIND = $(shell pwd)/bin/kind
-kind: ## Download kind locally if necessary.
-	$(call go-get-tool,$(KIND),sigs.k8s.io/kind@v0.11.1)
+.PHONY: kind
+kind: $(KIND) ## Download kind locally if necessary.
+$(KIND):
+	GOBIN=$(LOCALBIN) go install sigs.k8s.io/kind@$(KIND_VERSION)
 
-# go-get-tool will 'go get' any package $2 and install it to $1.
-PROJECT_DIR := $(shell dirname $(abspath $(lastword $(MAKEFILE_LIST))))
-define go-get-tool
-@[ -f $(1) ] || { \
-set -e ;\
-TMP_DIR=$$(mktemp -d) ;\
-cd $$TMP_DIR ;\
-go mod init tmp ;\
-echo "Downloading $(2)" ;\
-GOBIN=$(PROJECT_DIR)/bin $(GO_GET_INSTALL) $(2) ;\
-rm -rf $$TMP_DIR ;\
-}
-endef
+KUSTOMIZE_INSTALL_SCRIPT ?= "https://raw.githubusercontent.com/kubernetes-sigs/kustomize/master/hack/install_kustomize.sh"
+.PHONY: kustomize
+kustomize: $(KUSTOMIZE) ## Download kustomize locally if necessary.
+$(KUSTOMIZE):
+	curl -s $(KUSTOMIZE_INSTALL_SCRIPT) | bash -s -- $(subst v,,$(KUSTOMIZE_VERSION)) $(LOCALBIN)

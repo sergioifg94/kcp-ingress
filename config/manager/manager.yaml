@@ -1,0 +1,70 @@
+apiVersion: v1
+kind: Namespace
+metadata:
+  labels:
+    control-plane: controller-manager
+  name: system
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: controller-manager
+  namespace: system
+  labels:
+    control-plane: controller-manager
+spec:
+  selector:
+    matchLabels:
+      control-plane: controller-manager
+  replicas: 1
+  template:
+    metadata:
+      annotations:
+        kubectl.kubernetes.io/default-container: manager
+      labels:
+        control-plane: controller-manager
+    spec:
+      securityContext:
+        runAsNonRoot: true
+      containers:
+        - command:
+            - /ingress-controller
+          args:
+            - --kubeconfig=/tmp/kcp/kubeconfig
+            - --glbc-kubeconfig=/tmp/glbc/kubeconfig
+          image: controller:latest
+          name: manager
+          securityContext:
+            allowPrivilegeEscalation: false
+          envFrom:
+            - secretRef:
+                name: aws-credentials
+                optional: true
+            - configMapRef:
+                name: controller-config
+                optional: true
+          resources:
+            limits:
+              cpu: 500m
+              memory: 128Mi
+            requests:
+              cpu: 10m
+              memory: 64Mi
+          volumeMounts:
+            - name: kcp-kubeconfig
+              mountPath: "/tmp/kcp"
+              readOnly: true
+            - name: glbc-kubeconfig
+              mountPath: "/tmp/glbc"
+              readOnly: true
+      serviceAccountName: controller-manager
+      terminationGracePeriodSeconds: 10
+      volumes:
+        - name: kcp-kubeconfig
+          secret:
+            secretName: kcp-kubeconfig
+            optional: false
+        - name: glbc-kubeconfig
+          secret:
+            secretName: glbc-kubeconfig
+            optional: false

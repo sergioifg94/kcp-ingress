@@ -22,6 +22,7 @@ import (
 	tlsreconciler "github.com/kuadrant/kcp-glbc/pkg/reconciler/tls"
 	"github.com/kuadrant/kcp-glbc/pkg/tls"
 	"github.com/kuadrant/kcp-glbc/pkg/tls/certmanager"
+	"github.com/kuadrant/kcp-glbc/pkg/util/os"
 )
 
 const (
@@ -31,15 +32,15 @@ const (
 
 var kubeconfig = flag.String("kubeconfig", "", "Path to kubeconfig")
 var glbcKubeconfig = flag.String("glbc-kubeconfig", "", "Path to GLBC kubeconfig")
-var tlsProviderEnabled = flag.Bool("glbc-tls-provided", false, "when set to true glbc will generate LE certs for hosts it creates")
-var tlsProvider = flag.String("glbc-tls-provider", "le-staging", "decides which provider to use. Current allowed values -glbc-tls-provider=le-staging -glbc-tls-provider=le-production ")
-var region = flag.String("region", "eu-central-1", "the region we should target with AWS clients")
-var kubecontext = flag.String("context", "", "Context to use in the Kubeconfig file, instead of the current context")
+var tlsProviderEnabled = flag.Bool("glbc-tls-provided", os.GetEnvBool("GLBC_TLS_PROVIDED", false), "when set to true glbc will generate LE certs for hosts it creates")
+var tlsProvider = flag.String("glbc-tls-provider", os.GetEnvString("GLBC_TLS_PROVIDER", "le-staging"), "decides which provider to use. Current allowed values -glbc-tls-provider=le-staging -glbc-tls-provider=le-production ")
+var region = flag.String("region", os.GetEnvString("AWS_REGION", "eu-central-1"), "the region we should target with AWS clients")
+var kubecontext = flag.String("context", os.GetEnvString("GLBC_KUBE_CONTEXT", ""), "Context to use in the Kubeconfig file, instead of the current context")
 
-var domain = flag.String("domain", "hcpapps.net", "The domain to use to expose ingresses")
-var enableCustomHosts = flag.Bool("enable-custom-hosts", false, "Flag to enable hosts to be custom")
+var domain = flag.String("domain", os.GetEnvString("GLBC_DOMAIN", "hcpapps.net"), "The domain to use to expose ingresses")
+var enableCustomHosts = flag.Bool("enable-custom-hosts", os.GetEnvBool("GLBC_ENABLE_CUSTOM_HOSTS", false), "Flag to enable hosts to be custom")
 
-var dnsProvider = flag.String("dns-provider", "aws", "The DNS provider being used [aws, fake]")
+var dnsProvider = flag.String("dns-provider", os.GetEnvString("GLBC_DNS_PROVIDER", "aws"), "The DNS provider being used [aws, fake]")
 
 func main() {
 	klog.InitFlags(nil)

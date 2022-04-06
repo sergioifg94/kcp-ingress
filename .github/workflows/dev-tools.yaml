@@ -1,0 +1,34 @@
+name: Dev Tools
+
+on:
+  push:
+    branches: ["main"]
+    paths:
+      - 'scripts/**'
+      - 'Makefile'
+  pull_request:
+    branches: ["main"]
+    paths:
+      - 'scripts/**'
+      - 'Makefile'
+
+jobs:
+
+  dev-tools:
+    name: dev-tools
+    strategy:
+      matrix:
+        go-version: [ 1.17.x, 1.18.x]
+        platform: [ ubuntu-20.04, macos-11 ]
+    runs-on: ${{ matrix.platform }}
+    steps:
+      - uses: actions/checkout@v2
+      - uses: actions/setup-go@v2
+        with:
+          go-version: ${{ matrix.go-version }}
+      - run: make controller-gen
+      - run: make kcp
+      - run: make kind
+      # Hitting GH rate limit issues, leaving it out for now.
+      #- run: make kustomize
+      - run: make generate

@@ -35,7 +35,7 @@ jobs:
           ls -lart
           echo "Initial status:"
           df -h
-          
+
           echo "Cleaning up resources:"
           sudo swapoff -a
           sudo rm -f /swapfile
@@ -45,7 +45,7 @@ jobs:
           sudo rm -rf "/usr/local/share/boost"
           sudo rm -rf "$AGENT_TOOLSDIRECTORY"
           docker rmi $(docker image ls -aq)
-          
+
           echo "Final status:"
           df -h
       - name: Set Go
@@ -77,11 +77,11 @@ jobs:
           echo "GLBC cluster:"
           kubectl --context kind-glbc cluster-info
           kubectl --context kind-glbc describe nodes
-          
+
           echo "Cluster 1:"
           kubectl --context kind-kcp-cluster-1 cluster-info
           kubectl --context kind-kcp-cluster-1 describe nodes
-          
+
           echo "Cluster 2:"
           kubectl --context kind-kcp-cluster-2 cluster-info
           kubectl --context kind-kcp-cluster-2 describe nodes
@@ -89,67 +89,67 @@ jobs:
         run: |
           echo "Building GLBC"
           make build
-          
+
           echo "Building KCP"
           make kcp
-          
+
           TEMP_DIR="$(pwd)/tmp"
-          
+
           CLUSTERS_KUBECONFIG_DIR="${TEMP_DIR}"
           mkdir -p "${CLUSTERS_KUBECONFIG_DIR}"
           echo "CLUSTERS_KUBECONFIG_DIR=${CLUSTERS_KUBECONFIG_DIR}" >> $GITHUB_ENV
           echo "Creating Cluster manifests in directory ${CLUSTERS_KUBECONFIG_DIR}"
           kind get kubeconfig --name=kcp-cluster-1 > "${CLUSTERS_KUBECONFIG_DIR}"/kcp-cluster-1.kubeconfig
           kind get kubeconfig --name=kcp-cluster-2 > "${CLUSTERS_KUBECONFIG_DIR}"/kcp-cluster-2.kubeconfig
-          
+
           echo "Deploying Ingress controller to KinD clusters"
           VERSION=$(curl https://raw.githubusercontent.com/kubernetes/ingress-nginx/master/stable.txt)
-          
+
           kubectl config use-context kind-kcp-cluster-1
           curl https://raw.githubusercontent.com/kubernetes/ingress-nginx/"${VERSION}"/deploy/static/provider/kind/deploy.yaml | sed "s/--publish-status-address=localhost/--report-node-internal-ip-address/g" | kubectl apply -f -
           kubectl annotate ingressclass nginx "ingressclass.kubernetes.io/is-default-class=true"
-          
+
           kubectl config use-context kind-kcp-cluster-2
           curl https://raw.githubusercontent.com/kubernetes/ingress-nginx/"${VERSION}"/deploy/static/provider/kind/deploy.yaml | sed "s/--publish-status-address=localhost/--report-node-internal-ip-address/g" | kubectl apply -f -
           kubectl annotate ingressclass nginx "ingressclass.kubernetes.io/is-default-class=true"
-          
+
           KCP_LOG_FILE="${TEMP_DIR}"/kcp.log
           echo "KCP_LOG_FILE=${KCP_LOG_FILE}" >> $GITHUB_ENV
           echo "Starting KCP, sending logs to ${KCP_LOG_FILE}"
           ./bin/kcp start --push-mode --discovery-poll-interval 3s --run-controllers --resources-to-sync=secrets,deployments,services,ingresses.networking.k8s.io --auto-publish-apis > ${KCP_LOG_FILE} 2>&1 &
           KCP_PID=$!
           echo "KCP_PID=${KCP_PID}" >> $GITHUB_ENV
-          
+
           echo "Waiting 15 seconds..."
           sleep 15
-          
+
           if ! ps -p ${KCP_PID}; then
             echo "KCP failed to start, see ${KCP_LOG_FILE} for info."
             exit 1
           fi
-          
+
           export KUBECONFIG="$(pwd)"/.kcp/admin.kubeconfig
           echo "Exporting KUBECONFIG=${KUBECONFIG}"
           echo "KUBECONFIG=${KUBECONFIG}" >> $GITHUB_ENV
-          
+
           echo "Creating workspace shard"
           kubectl create namespace default
           kubectl create secret generic kubeconfig --from-file=kubeconfig="${KUBECONFIG}"
           kubectl apply -f ./utils/kcp-contrib/workspace-shard.yaml
-          
+
           echo "Registering GLBC APIs"
-          kubectl apply -f ./config/crd
-          
+          make install
+
           GLBC_LOG_FILE="${TEMP_DIR}"/glbc.log
           echo "GLBC_LOG_FILE=${GLBC_LOG_FILE}" >> $GITHUB_ENV
           echo "Starting GLBC, sending logs to ${GLBC_LOG_FILE}"
           ./bin/ingress-controller -kubeconfig .kcp/admin.kubeconfig -context admin -glbc-kubeconfig "${HOME}"/.kube/config -dns-provider fake > ${GLBC_LOG_FILE} 2>&1 &
           GLBC_PID=$!
           echo "GLBC_PID=${GLBC_PID}" >> $GITHUB_ENV
-          
+
           echo "Waiting 15 seconds..."
           sleep 15
-          
+
           if ! ps -p ${GLBC_PID}; then
             echo "GLBC failed to start, see ${GLBC_LOG_FILE} for info."
             exit 1
@@ -158,7 +158,7 @@ jobs:
         run: |
           export KUBECONFIG=${{ env.KUBECONFIG }}
           export CLUSTERS_KUBECONFIG_DIR=${{ env.CLUSTERS_KUBECONFIG_DIR }}
-          
+
           # Then run e2e tests
           make e2e
       - name: Shutdown GLBC
@@ -166,7 +166,7 @@ jobs:
         run: |
           echo "Kill GLBC process"
           kill ${{ env.GLBC_PID }}
-          
+
           echo "Printing GLBC logs"
           cat ${{ env.GLBC_LOG_FILE }}
       - name: Shutdown KCP
@@ -174,6 +174,6 @@ jobs:
         run: |
           echo "Kill KCP process"
           kill ${{ env.KCP_PID }}
-          
+
           echo "Printing KCP logs"
           cat ${{ env.KCP_LOG_FILE }}

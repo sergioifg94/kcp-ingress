@@ -64,6 +64,7 @@ mkdir -p ${TEMP_DIR}
 createGLBCCluster() {
   ${KIND_BIN} create cluster --name ${KCP_GLBC_CLUSTER_NAME}
   ${KIND_BIN} get kubeconfig --name=${KCP_GLBC_CLUSTER_NAME} > ${TEMP_DIR}/${KCP_GLBC_KUBECONFIG}
+  ${KIND_BIN} get kubeconfig --internal --name=${KCP_GLBC_CLUSTER_NAME} > ${TEMP_DIR}/${KCP_GLBC_KUBECONFIG}.internal
 
   echo "Deploying cert manager to kind glbc cluster"
   kubectl --context kind-${KCP_GLBC_CLUSTER_NAME} apply -f https://github.com/cert-manager/cert-manager/releases/download/v1.7.1/cert-manager.yaml
@@ -97,6 +98,7 @@ nodes:
 EOF
 
   ${KIND_BIN} get kubeconfig --name=${cluster} > ${TEMP_DIR}/${cluster}.kubeconfig
+  ${KIND_BIN} get kubeconfig --internal --name=${cluster} > ${TEMP_DIR}/${cluster}.kubeconfig.internal
 
   echo "Creating Cluster objects for the kind cluster."
   ${KIND_BIN} get kubeconfig --name=${cluster} | sed -e 's/^/    /' | cat utils/kcp-contrib/cluster.yaml - | sed -e "s/name: local/name: ${cluster}/" > ${TEMP_DIR}/${cluster}.yaml
@@ -160,7 +162,7 @@ echo "Registering kind k8s clusters into KCP"
 kubectl apply -f ./tmp/
 
 echo "Registering HCG APIs"
-kubectl apply -f ./config/crd
+kubectl apply -f ./config/crd/bases
 
 echo ""
 echo "KCP PID          : ${KCP_PID}"
