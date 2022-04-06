@@ -41,9 +41,15 @@ func TestIngress(t *testing.T) {
 	workspace := test.NewTestWorkspace()
 
 	// Import the GLBC APIs
-	_, err := test.Client().Kcp().Cluster(logicalcluster.From(workspace).Join(workspace.Name)).ApisV1alpha1().APIBindings().
-		Create(test.Ctx(), APIBinding(), metav1.CreateOptions{})
-	test.Expect(err).NotTo(HaveOccurred())
+	binding := test.NewGLBCAPIBinding(InWorkspace(workspace))
+
+	// Wait until the APIBinding is actually in bound phase
+	test.Eventually(APIBinding(test, binding.ClusterName, binding.Name)).
+		Should(WithTransform(APIBindingPhase, Equal(apisv1alpha1.APIBindingPhaseBound)))
+
+	// And check the APIs are imported into the workspace
+	test.Expect(HasImportedAPIs(test, workspace, kuadrantv1.SchemeGroupVersion.WithKind("DNSRecord"))(test)).
+		Should(BeTrue())
 
 	// Register workload cluster 1 into the test workspace
 	cluster1 := test.NewWorkloadCluster("kcp-cluster-1", WithKubeConfigByName, InWorkspace(workspace))
@@ -67,7 +73,7 @@ func TestIngress(t *testing.T) {
 	name := "echo"
 
 	// Create the root Deployment
-	_, err = test.Client().Core().Cluster(logicalcluster.From(namespace)).AppsV1().Deployments(namespace.Name).
+	_, err := test.Client().Core().Cluster(logicalcluster.From(namespace)).AppsV1().Deployments(namespace.Name).
 		Apply(test.Ctx(), deploymentConfiguration(namespace.Name, name), applyOptions)
 	test.Expect(err).NotTo(HaveOccurred())
 
@@ -208,26 +214,6 @@ func TestIngress(t *testing.T) {
 
 	// And check all the remaining shadow resources are deleted immediately
 	test.Eventually(getShadowResources(test, namespace, ClusterLabel), 15*time.Second).Should(BeEmpty())
-}
-
-func APIBinding() *apisv1alpha1.APIBinding {
-	return &apisv1alpha1.APIBinding{
-		TypeMeta: metav1.TypeMeta{
-			APIVersion: apisv1alpha1.SchemeGroupVersion.String(),
-			Kind:       "APIBinding",
-		},
-		ObjectMeta: metav1.ObjectMeta{
-			Name: "glbc",
-		},
-		Spec: apisv1alpha1.APIBindingSpec{
-			Reference: apisv1alpha1.ExportReference{
-				Workspace: &apisv1alpha1.WorkspaceExportReference{
-					WorkspaceName: "kcp-glbc",
-					ExportName:    "glbc",
-				},
-			},
-		},
-	}
 }
 
 func ingressConfiguration(namespace, name string) *networkingv1apply.IngressApplyConfiguration {

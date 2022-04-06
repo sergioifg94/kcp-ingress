@@ -61,7 +61,7 @@ func (o *withKubeConfigByID) applyTo(object metav1.Object) error {
 	return nil
 }
 
-func newWorkloadCluster(t Test, name string, options ...Option) *workloadv1alpha1.WorkloadCluster {
+func createWorkloadCluster(t Test, name string, options ...Option) *workloadv1alpha1.WorkloadCluster {
 	cluster := &workloadv1alpha1.WorkloadCluster{
 		TypeMeta: metav1.TypeMeta{
 			APIVersion: workloadv1alpha1.SchemeGroupVersion.String(),
