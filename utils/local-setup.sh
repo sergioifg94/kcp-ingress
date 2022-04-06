@@ -47,6 +47,7 @@ GOROOT=$(go env GOROOT)
 export GOROOT
 export KIND_BIN="./bin/kind"
 export KCP_BIN="./bin/kcp"
+export KUBECTL_KCP_BIN="./bin/kubectl-kcp"
 TEMP_DIR="./tmp"
 KCP_LOG_FILE="${TEMP_DIR}"/kcp.log
 
@@ -153,16 +154,16 @@ fi
 echo "Exporting KUBECONFIG=.kcp/admin.kubeconfig"
 export KUBECONFIG=.kcp/admin.kubeconfig
 
-echo "Creating workspace shard"
-#kubectl create namespace default
-#kubectl create secret generic kubeconfig --from-file=kubeconfig="${KUBECONFIG}"
-#kubectl apply -f ./utils/kcp-contrib/workspace-shard.yaml
-
-echo "Registering kind k8s clusters into KCP"
-kubectl apply -f ./tmp/
+echo "Creating HCG Workspace"
+${KUBECTL_KCP_BIN} workspace create kcp-glbc --enter
 
 echo "Registering HCG APIs"
 kubectl apply -f ./config/crd/bases
+kubectl apply -f ./utils/kcp-contrib/apiresourceschema.yaml
+kubectl apply -f ./utils/kcp-contrib/apiexport.yaml
+
+echo "Registering kind k8s clusters into KCP"
+kubectl apply $(find ./tmp/kcp-cluster-*.yaml | awk ' { print " -f " $1 } ')
 
 echo ""
 echo "KCP PID          : ${KCP_PID}"

@@ -1,0 +1,8 @@
+---
+apiVersion: apis.kcp.dev/v1alpha1
+kind: APIExport
+metadata:
+  name: glbc
+spec:
+    latestResourceSchemas:
+    - latest.dnsrecords.kuadrant.dev
