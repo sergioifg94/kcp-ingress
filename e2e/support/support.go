@@ -20,7 +20,7 @@ const (
 	workloadClusterKubeConfigDir = "CLUSTERS_KUBECONFIG_DIR"
 )
 
-var RootCluster = tenancyv1alpha1.RootCluster
+var TestOrganization = tenancyv1alpha1.RootCluster.Join("default")
 
 func init() {
 	// Gomega settings

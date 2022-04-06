@@ -132,8 +132,12 @@ jobs:
           echo "Exporting KUBECONFIG=${KUBECONFIG}"
           echo "KUBECONFIG=${KUBECONFIG}" >> $GITHUB_ENV
 
-          echo "Registering GLBC APIs"
-          make install
+          echo "Creating HCG Workspace"
+          ./bin/kubectl-kcp workspace create kcp-glbc --enter
+
+          echo "Export GLBC APIs"
+          kubectl apply -f ./utils/kcp-contrib/apiresourceschema.yaml
+          kubectl apply -f ./utils/kcp-contrib/apiexport.yaml
 
           GLBC_LOG_FILE="${TEMP_DIR}"/glbc.log
           echo "GLBC_LOG_FILE=${GLBC_LOG_FILE}" >> $GITHUB_ENV

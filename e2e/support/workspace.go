@@ -58,7 +58,7 @@ func HasImportedAPIs(t Test, workspace *tenancyv1alpha1.ClusterWorkspace, GVKs .
 
 func Workspace(t Test, name string) func() *tenancyv1alpha1.ClusterWorkspace {
 	return func() *tenancyv1alpha1.ClusterWorkspace {
-		c, err := t.Client().Kcp().Cluster(RootCluster).TenancyV1alpha1().ClusterWorkspaces().Get(t.Ctx(), name, metav1.GetOptions{})
+		c, err := t.Client().Kcp().Cluster(TestOrganization).TenancyV1alpha1().ClusterWorkspaces().Get(t.Ctx(), name, metav1.GetOptions{})
 		t.Expect(err).NotTo(gomega.HaveOccurred())
 		return c
 	}
@@ -80,7 +80,7 @@ func createTestWorkspace(t Test) *tenancyv1alpha1.ClusterWorkspace {
 		Spec: tenancyv1alpha1.ClusterWorkspaceSpec{},
 	}
 
-	workspace, err := t.Client().Kcp().Cluster(RootCluster).TenancyV1alpha1().ClusterWorkspaces().Create(t.Ctx(), workspace, metav1.CreateOptions{})
+	workspace, err := t.Client().Kcp().Cluster(TestOrganization).TenancyV1alpha1().ClusterWorkspaces().Create(t.Ctx(), workspace, metav1.CreateOptions{})
 	if err != nil {
 		t.Expect(err).NotTo(gomega.HaveOccurred())
 	}

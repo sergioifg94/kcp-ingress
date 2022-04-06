@@ -21,6 +21,7 @@ import (
 	networkingv1apply "k8s.io/client-go/applyconfigurations/networking/v1"
 
 	"github.com/kcp-dev/apimachinery/pkg/logicalcluster"
+	apisv1alpha1 "github.com/kcp-dev/kcp/pkg/apis/apis/v1alpha1"
 	workloadv1alpha1 "github.com/kcp-dev/kcp/pkg/apis/workload/v1alpha1"
 	kcp "github.com/kcp-dev/kcp/pkg/reconciler/workload/namespace"
 
@@ -38,6 +39,11 @@ func TestIngress(t *testing.T) {
 
 	// Create the test workspace
 	workspace := test.NewTestWorkspace()
+
+	// Import the GLBC APIs
+	_, err := test.Client().Kcp().Cluster(logicalcluster.From(workspace).Join(workspace.Name)).ApisV1alpha1().APIBindings().
+		Create(test.Ctx(), APIBinding(), metav1.CreateOptions{})
+	test.Expect(err).NotTo(HaveOccurred())
 
 	// Register workload cluster 1 into the test workspace
 	cluster1 := test.NewWorkloadCluster("kcp-cluster-1", WithKubeConfigByName, InWorkspace(workspace))
@@ -61,7 +67,7 @@ func TestIngress(t *testing.T) {
 	name := "echo"
 
 	// Create the root Deployment
-	_, err := test.Client().Core().Cluster(logicalcluster.From(namespace)).AppsV1().Deployments(namespace.Name).
+	_, err = test.Client().Core().Cluster(logicalcluster.From(namespace)).AppsV1().Deployments(namespace.Name).
 		Apply(test.Ctx(), deploymentConfiguration(namespace.Name, name), applyOptions)
 	test.Expect(err).NotTo(HaveOccurred())
 
@@ -202,6 +208,26 @@ func TestIngress(t *testing.T) {
 
 	// And check all the remaining shadow resources are deleted immediately
 	test.Eventually(getShadowResources(test, namespace, ClusterLabel), 15*time.Second).Should(BeEmpty())
+}
+
+func APIBinding() *apisv1alpha1.APIBinding {
+	return &apisv1alpha1.APIBinding{
+		TypeMeta: metav1.TypeMeta{
+			APIVersion: apisv1alpha1.SchemeGroupVersion.String(),
+			Kind:       "APIBinding",
+		},
+		ObjectMeta: metav1.ObjectMeta{
+			Name: "glbc",
+		},
+		Spec: apisv1alpha1.APIBindingSpec{
+			Reference: apisv1alpha1.ExportReference{
+				Workspace: &apisv1alpha1.WorkspaceExportReference{
+					WorkspaceName: "kcp-glbc",
+					ExportName:    "glbc",
+				},
+			},
+		},
+	}
 }
 
 func ingressConfiguration(namespace, name string) *networkingv1apply.IngressApplyConfiguration {
