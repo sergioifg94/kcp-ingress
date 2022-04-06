@@ -2,7 +2,7 @@
 SHELL := /usr/bin/env bash
 
 NUM_CLUSTERS := 2
-KCP_BRANCH := main
+KCP_BRANCH := v0.3.0-beta.1
 
 IMAGE_TAG_BASE ?= quay.io/kuadrant/kcp-glbc
 IMAGE_TAG ?= latest
