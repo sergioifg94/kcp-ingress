@@ -37,7 +37,7 @@ var glbcKubeconfig = flag.String("glbc-kubeconfig", "", "Path to GLBC kubeconfig
 var tlsProviderEnabled = flag.Bool("glbc-tls-provided", os.GetEnvBool("GLBC_TLS_PROVIDED", false), "when set to true glbc will generate LE certs for hosts it creates")
 var tlsProvider = flag.String("glbc-tls-provider", os.GetEnvString("GLBC_TLS_PROVIDER", "le-staging"), "decides which provider to use. Current allowed values -glbc-tls-provider=le-staging -glbc-tls-provider=le-production ")
 var region = flag.String("region", os.GetEnvString("AWS_REGION", "eu-central-1"), "the region we should target with AWS clients")
-var kubecontext = flag.String("context", os.GetEnvString("GLBC_KUBE_CONTEXT", ""), "Context to use in the Kubeconfig file, instead of the current context")
+var kubecontext = flag.String("context", os.GetEnvString("GLBC_KCP_CONTEXT", ""), "Context to use in the Kubeconfig file, instead of the current context")
 
 var domain = flag.String("domain", os.GetEnvString("GLBC_DOMAIN", "hcpapps.net"), "The domain to use to expose ingresses")
 var enableCustomHosts = flag.Bool("enable-custom-hosts", os.GetEnvBool("GLBC_ENABLE_CUSTOM_HOSTS", false), "Flag to enable hosts to be custom")
