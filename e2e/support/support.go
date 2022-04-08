@@ -9,7 +9,7 @@ import (
 	"github.com/onsi/gomega"
 	"github.com/onsi/gomega/format"
 
-	tenancyhelper "github.com/kcp-dev/kcp/pkg/apis/tenancy/v1alpha1/helper"
+	tenancyv1alpha1 "github.com/kcp-dev/kcp/pkg/apis/tenancy/v1alpha1"
 )
 
 const (
@@ -17,10 +17,10 @@ const (
 	TestTimeoutMedium = 5 * time.Minute
 	TestTimeoutLong   = 10 * time.Minute
 
-	AdminWorkspace = tenancyhelper.OrganizationCluster
-
 	workloadClusterKubeConfigDir = "CLUSTERS_KUBECONFIG_DIR"
 )
+
+var TestOrganization = tenancyv1alpha1.RootCluster.Join("default")
 
 func init() {
 	// Gomega settings

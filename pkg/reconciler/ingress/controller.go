@@ -5,6 +5,7 @@ import (
 	"sync"
 	"time"
 
+	tenancyv1alpha1 "github.com/kcp-dev/kcp/pkg/apis/tenancy/v1alpha1"
 	corev1 "k8s.io/api/core/v1"
 	networkingv1 "k8s.io/api/networking/v1"
 	"k8s.io/apimachinery/pkg/api/equality"
@@ -17,6 +18,8 @@ import (
 	"k8s.io/client-go/tools/cache"
 	"k8s.io/client-go/util/workqueue"
 	"k8s.io/klog/v2"
+
+	"github.com/kcp-dev/apimachinery/pkg/logicalcluster"
 
 	kuadrantv1 "github.com/kuadrant/kcp-glbc/pkg/client/kuadrant/clientset/versioned"
 	"github.com/kuadrant/kcp-glbc/pkg/net"
@@ -34,7 +37,7 @@ func NewController(config *ControllerConfig) *Controller {
 	hostResolver := config.HostResolver
 	switch impl := hostResolver.(type) {
 	case *net.ConfigMapHostResolver:
-		impl.Client = config.KubeClient.Cluster("admin")
+		impl.Client = config.KubeClient.Cluster(tenancyv1alpha1.RootCluster)
 	}
 	hostResolver = net.NewSafeHostResolver(hostResolver)
 
@@ -196,7 +199,7 @@ func (c *Controller) process(ctx context.Context, key string) error {
 
 	// If the object being reconciled changed as a result, update it.
 	if !equality.Semantic.DeepEqual(previous, current) {
-		_, err := c.kubeClient.Cluster(current.ClusterName).NetworkingV1().Ingresses(current.Namespace).Update(ctx, current, metav1.UpdateOptions{})
+		_, err := c.kubeClient.Cluster(logicalcluster.From(current)).NetworkingV1().Ingresses(current.Namespace).Update(ctx, current, metav1.UpdateOptions{})
 		return err
 	}
 

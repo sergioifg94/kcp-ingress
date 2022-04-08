@@ -2,11 +2,14 @@ package service
 
 import (
 	"context"
+	"time"
+
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/client-go/informers"
 	"k8s.io/client-go/kubernetes"
 	corev1listers "k8s.io/client-go/listers/core/v1"
-	"time"
+
+	"github.com/kcp-dev/apimachinery/pkg/logicalcluster"
 
 	"k8s.io/apimachinery/pkg/api/equality"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -142,7 +145,7 @@ func (c *Controller) process(ctx context.Context, key string) error {
 
 	// If the object being reconciled changed as a result, update it.
 	if !equality.Semantic.DeepEqual(previous, current) {
-		_, err := c.coreClient.Cluster(current.ClusterName).CoreV1().Services(current.Namespace).Update(ctx, current, metav1.UpdateOptions{})
+		_, err := c.coreClient.Cluster(logicalcluster.From(current)).CoreV1().Services(current.Namespace).Update(ctx, current, metav1.UpdateOptions{})
 		return err
 	}
 

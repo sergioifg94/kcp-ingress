@@ -28,8 +28,8 @@ type context struct {
 
 type ObjectMapper interface {
 	Name() string
-	NameSpace() string
-	WorkSpace() string
+	Namespace() string
+	Workspace() string
 	Host() string
 	Labels() map[string]string
 	Annotations() map[string]string
@@ -101,11 +101,11 @@ func (kc *context) Host() string {
 	return kc.host
 }
 
-func (kc *context) NameSpace() string {
+func (kc *context) Namespace() string {
 	return kc.nameSpace
 }
 
-func (kc *context) WorkSpace() string {
+func (kc *context) Workspace() string {
 	return kc.workspace
 }
 
@@ -157,7 +157,7 @@ func (cr *context) Annotations() map[string]string {
 }
 
 func (cr *controlContext) Name() string {
-	return fmt.Sprintf("%s-%s-%s", cr.WorkSpace(), cr.NameSpace(), cr.name)
+	return fmt.Sprintf("%s-%s-%s", cr.Workspace(), cr.Namespace(), cr.name)
 }
 
 func (cr *controlContext) Host() string {

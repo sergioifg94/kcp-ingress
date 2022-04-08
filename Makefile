@@ -2,7 +2,7 @@
 SHELL := /usr/bin/env bash
 
 NUM_CLUSTERS := 2
-KCP_BRANCH := release-prototype-2
+KCP_BRANCH := v0.3.0-beta.1
 
 IMAGE_TAG_BASE ?= quay.io/kuadrant/kcp-glbc
 IMAGE_TAG ?= latest
@@ -146,7 +146,7 @@ clean-ld-kubeconfig:
 clean-ld-config: clean-ld-env clean-ld-kubeconfig ## Remove local deployment files.
 
 .PHONY: local-setup
-local-setup: clean build kind kcp ## Setup kcp locally using kind.
+local-setup: clean kind kcp build ## Setup kcp locally using kind.
 	./utils/local-setup.sh -c ${NUM_CLUSTERS}
 
 ##@ Build Dependencies
@@ -171,17 +171,9 @@ KIND_VERSION ?= v0.11.1
 kcp: $(KCP) ## Download kcp locally if necessary.
 $(KCP):
 	rm -rf ./tmp/kcp
-	git clone --depth=1 --branch ${KCP_BRANCH} https://github.com/kuadrant/kcp ./tmp/kcp
+	git clone --depth=1 --branch ${KCP_BRANCH} https://github.com/kcp-dev/kcp ./tmp/kcp
 	cd ./tmp/kcp && make
-	cp ./tmp/kcp/bin/cluster-controller $(LOCALBIN)
-	cp ./tmp/kcp/bin/compat $(LOCALBIN)
-	cp ./tmp/kcp/bin/crd-puller $(LOCALBIN)
-	cp ./tmp/kcp/bin/deployment-splitter $(LOCALBIN)
-	cp ./tmp/kcp/bin/kcp $(LOCALBIN)
-	cp ./tmp/kcp/bin/kubectl-kcp $(LOCALBIN)
-	cp ./tmp/kcp/bin/shard-proxy $(LOCALBIN)
-	cp ./tmp/kcp/bin/syncer $(LOCALBIN)
-	cp ./tmp/kcp/bin/virtual-workspaces $(LOCALBIN)
+	cp ./tmp/kcp/bin/* $(LOCALBIN)
 	rm -rf ./tmp/kcp
 
 .PHONY: controller-gen

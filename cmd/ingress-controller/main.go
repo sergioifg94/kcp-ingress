@@ -4,9 +4,6 @@ import (
 	"flag"
 	"time"
 
-	"github.com/kuadrant/kcp-glbc/pkg/reconciler/deployment"
-	"github.com/kuadrant/kcp-glbc/pkg/reconciler/service"
-
 	genericapiserver "k8s.io/apiserver/pkg/server"
 	"k8s.io/client-go/informers"
 	"k8s.io/client-go/kubernetes"
@@ -14,11 +11,16 @@ import (
 	"k8s.io/klog/v2"
 
 	certmanclient "github.com/jetstack/cert-manager/pkg/client/clientset/versioned/typed/certmanager/v1"
+
+	"github.com/kcp-dev/apimachinery/pkg/logicalcluster"
+
 	kuadrantv1 "github.com/kuadrant/kcp-glbc/pkg/client/kuadrant/clientset/versioned"
 	"github.com/kuadrant/kcp-glbc/pkg/client/kuadrant/informers/externalversions"
 	"github.com/kuadrant/kcp-glbc/pkg/net"
+	"github.com/kuadrant/kcp-glbc/pkg/reconciler/deployment"
 	"github.com/kuadrant/kcp-glbc/pkg/reconciler/dns"
 	"github.com/kuadrant/kcp-glbc/pkg/reconciler/ingress"
+	"github.com/kuadrant/kcp-glbc/pkg/reconciler/service"
 	tlsreconciler "github.com/kuadrant/kcp-glbc/pkg/reconciler/tls"
 	"github.com/kuadrant/kcp-glbc/pkg/tls"
 	"github.com/kuadrant/kcp-glbc/pkg/tls/certmanager"
@@ -71,13 +73,13 @@ func main() {
 	if err != nil {
 		klog.Fatal(err)
 	}
-	kubeInformerFactory := informers.NewSharedInformerFactory(kubeClient.Cluster("*"), resyncPeriod)
+	kubeInformerFactory := informers.NewSharedInformerFactory(kubeClient.Cluster(logicalcluster.Wildcard), resyncPeriod)
 
 	dnsRecordClient, err := kuadrantv1.NewClusterForConfig(r)
 	if err != nil {
 		klog.Fatal(err)
 	}
-	kuadrantInformerFactory := externalversions.NewSharedInformerFactory(dnsRecordClient.Cluster("*"), resyncPeriod)
+	kuadrantInformerFactory := externalversions.NewSharedInformerFactory(dnsRecordClient.Cluster(logicalcluster.Wildcard), resyncPeriod)
 
 	// glbcTypedClient targets the control cluster (this is the cluster where glbc is deployed). This is not a KCP cluster.
 	glbcTypedClient, err := kubernetes.NewForConfig(gr)

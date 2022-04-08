@@ -11,6 +11,9 @@ import (
 	"k8s.io/client-go/tools/cache"
 	"k8s.io/klog/v2"
 
+	"github.com/kcp-dev/apimachinery/pkg/logicalcluster"
+	kcp "github.com/kcp-dev/kcp/pkg/reconciler/workload/namespace"
+
 	"github.com/kuadrant/kcp-glbc/pkg/reconciler/service"
 	"github.com/kuadrant/kcp-glbc/pkg/util/deleteDelay"
 	"github.com/kuadrant/kcp-glbc/pkg/util/metadata"
@@ -20,7 +23,6 @@ const (
 	PlacementAnnotationName = "kcp.dev/placement"
 
 	// PBrookes TODO deduplicate these somewhere
-	clusterLabel = "kcp.dev/cluster"
 	ownedByLabel = "kcp.dev/owned-by"
 
 	shadowCleanupFinalizer = "kcp.dev/shadow-cleanup"
@@ -71,11 +73,11 @@ func (c *Controller) reconcileRoot(ctx context.Context, deployment *appsv1.Deplo
 				shadow.ResourceVersion = existingShadow.ResourceVersion
 				shadow.UID = existingShadow.UID
 
-				if _, err := c.coreClient.Cluster(shadow.ClusterName).AppsV1().Deployments(shadow.Namespace).Update(ctx, shadow, metav1.UpdateOptions{}); err != nil {
+				if _, err := c.coreClient.Cluster(logicalcluster.From(shadow)).AppsV1().Deployments(shadow.Namespace).Update(ctx, shadow, metav1.UpdateOptions{}); err != nil {
 					return err
 				}
 			} else {
-				if _, err := c.coreClient.Cluster(shadow.ClusterName).AppsV1().Deployments(shadow.Namespace).Create(ctx, shadow, metav1.CreateOptions{}); err != nil {
+				if _, err := c.coreClient.Cluster(logicalcluster.From(shadow)).AppsV1().Deployments(shadow.Namespace).Create(ctx, shadow, metav1.CreateOptions{}); err != nil {
 					return err
 				}
 			}
@@ -95,11 +97,11 @@ func (c *Controller) reconcileRoot(ctx context.Context, deployment *appsv1.Deplo
 				return err
 			}
 			undesired = obj.(*appsv1.Deployment)
-			undesired, err := c.coreClient.Cluster(undesired.ClusterName).AppsV1().Deployments(undesired.Namespace).Update(ctx, undesired, metav1.UpdateOptions{})
+			undesired, err := c.coreClient.Cluster(logicalcluster.From(undesired)).AppsV1().Deployments(undesired.Namespace).Update(ctx, undesired, metav1.UpdateOptions{})
 			if err != nil {
 				return err
 			}
-			err = c.coreClient.Cluster(undesired.ClusterName).AppsV1().Deployments(undesired.Namespace).Delete(ctx, undesired.Name, metav1.DeleteOptions{})
+			err = c.coreClient.Cluster(logicalcluster.From(undesired)).AppsV1().Deployments(undesired.Namespace).Delete(ctx, undesired.Name, metav1.DeleteOptions{})
 			if err != nil {
 				return err
 			}
@@ -118,11 +120,11 @@ func (c *Controller) reconcileRootDelete(ctx context.Context, deployment *appsv1
 	for _, undesired := range shadows {
 		klog.Infof("Deleting deployment shadow %q for expired root: %q", undesired.Name, deployment.Name)
 		deleteDelay.CleanForDeletion(undesired)
-		undesired, err = c.coreClient.Cluster(undesired.ClusterName).AppsV1().Deployments(undesired.Namespace).Update(ctx, undesired, metav1.UpdateOptions{})
+		undesired, err = c.coreClient.Cluster(logicalcluster.From(undesired)).AppsV1().Deployments(undesired.Namespace).Update(ctx, undesired, metav1.UpdateOptions{})
 		if err != nil {
 			return err
 		}
-		if err := c.coreClient.Cluster(undesired.ClusterName).AppsV1().Deployments(undesired.Namespace).Delete(ctx, undesired.Name, metav1.DeleteOptions{}); err != nil {
+		if err := c.coreClient.Cluster(logicalcluster.From(undesired)).AppsV1().Deployments(undesired.Namespace).Delete(ctx, undesired.Name, metav1.DeleteOptions{}); err != nil {
 			return err
 		}
 	}
@@ -160,7 +162,7 @@ func generateShadowDeployments(locations []string, rootDeployment *appsv1.Deploy
 		if desired.Labels == nil {
 			desired.Labels = map[string]string{}
 		}
-		desired.Labels[clusterLabel] = location
+		desired.Labels[kcp.ClusterLabel] = location
 		desired.Labels[ownedByLabel] = rootDeployment.Name
 
 		retShadows = append(retShadows, desired)
@@ -169,7 +171,7 @@ func generateShadowDeployments(locations []string, rootDeployment *appsv1.Deploy
 }
 
 func IsShadowDeployment(deployment *appsv1.Deployment) bool {
-	_, ok := deployment.Labels[clusterLabel]
+	_, ok := deployment.Labels[kcp.ClusterLabel]
 	return ok
 }
 

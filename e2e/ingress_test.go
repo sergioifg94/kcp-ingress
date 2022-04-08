@@ -20,7 +20,10 @@ import (
 	v1apply "k8s.io/client-go/applyconfigurations/meta/v1"
 	networkingv1apply "k8s.io/client-go/applyconfigurations/networking/v1"
 
-	clusterv1alpha1 "github.com/kcp-dev/kcp/pkg/apis/cluster/v1alpha1"
+	"github.com/kcp-dev/apimachinery/pkg/logicalcluster"
+	apisv1alpha1 "github.com/kcp-dev/kcp/pkg/apis/apis/v1alpha1"
+	workloadv1alpha1 "github.com/kcp-dev/kcp/pkg/apis/workload/v1alpha1"
+	kcp "github.com/kcp-dev/kcp/pkg/reconciler/workload/namespace"
 
 	. "github.com/kuadrant/kcp-glbc/e2e/support"
 	kuadrantv1 "github.com/kuadrant/kcp-glbc/pkg/apis/kuadrant/v1"
@@ -37,12 +40,23 @@ func TestIngress(t *testing.T) {
 	// Create the test workspace
 	workspace := test.NewTestWorkspace()
 
+	// Import the GLBC APIs
+	binding := test.NewGLBCAPIBinding(InWorkspace(workspace))
+
+	// Wait until the APIBinding is actually in bound phase
+	test.Eventually(APIBinding(test, binding.ClusterName, binding.Name)).
+		Should(WithTransform(APIBindingPhase, Equal(apisv1alpha1.APIBindingPhaseBound)))
+
+	// And check the APIs are imported into the workspace
+	test.Expect(HasImportedAPIs(test, workspace, kuadrantv1.SchemeGroupVersion.WithKind("DNSRecord"))(test)).
+		Should(BeTrue())
+
 	// Register workload cluster 1 into the test workspace
 	cluster1 := test.NewWorkloadCluster("kcp-cluster-1", WithKubeConfigByName, InWorkspace(workspace))
 
 	// Wait until cluster 1 is ready
 	test.Eventually(WorkloadCluster(test, cluster1.ClusterName, cluster1.Name)).Should(WithTransform(
-		ConditionStatus(clusterv1alpha1.ClusterReadyCondition),
+		ConditionStatus(workloadv1alpha1.WorkloadClusterReadyCondition),
 		Equal(corev1.ConditionTrue),
 	))
 
@@ -54,22 +68,22 @@ func TestIngress(t *testing.T) {
 	)).Should(BeTrue())
 
 	// Create a namespace with automatic scheduling disabled
-	namespace := test.NewTestNamespace(InWorkspace(workspace), WithLabel("experimental.scheduling.kcp.dev/disabled", ""))
+	namespace := test.NewTestNamespace(InWorkspace(workspace), WithLabel(kcp.SchedulingDisabledLabel, ""))
 
 	name := "echo"
 
 	// Create the root Deployment
-	_, err := test.Client().Core().Cluster(namespace.ClusterName).AppsV1().Deployments(namespace.Name).
+	_, err := test.Client().Core().Cluster(logicalcluster.From(namespace)).AppsV1().Deployments(namespace.Name).
 		Apply(test.Ctx(), deploymentConfiguration(namespace.Name, name), applyOptions)
 	test.Expect(err).NotTo(HaveOccurred())
 
 	// Create the root Service and have it placed on cluster 1
-	_, err = test.Client().Core().Cluster(namespace.ClusterName).CoreV1().Services(namespace.Name).
+	_, err = test.Client().Core().Cluster(logicalcluster.From(namespace)).CoreV1().Services(namespace.Name).
 		Apply(test.Ctx(), serviceConfiguration(namespace.Name, name, map[string]string{service.PlacementAnnotationName: cluster1.Name}), applyOptions)
 	test.Expect(err).NotTo(HaveOccurred())
 
 	// Create the root Ingress
-	_, err = test.Client().Core().Cluster(namespace.ClusterName).NetworkingV1().Ingresses(namespace.Name).
+	_, err = test.Client().Core().Cluster(logicalcluster.From(namespace)).NetworkingV1().Ingresses(namespace.Name).
 		Apply(test.Ctx(), ingressConfiguration(namespace.Name, name), applyOptions)
 	test.Expect(err).NotTo(HaveOccurred())
 
@@ -106,12 +120,12 @@ func TestIngress(t *testing.T) {
 
 	// Wait until cluster 2 is ready
 	test.Eventually(WorkloadCluster(test, cluster2.ClusterName, cluster2.Name)).Should(WithTransform(
-		ConditionStatus(clusterv1alpha1.ClusterReadyCondition),
+		ConditionStatus(workloadv1alpha1.WorkloadClusterReadyCondition),
 		Equal(corev1.ConditionTrue),
 	))
 
 	// Update the root Service to have it placed on clusters 1 and 2
-	_, err = test.Client().Core().Cluster(namespace.ClusterName).CoreV1().Services(namespace.Name).
+	_, err = test.Client().Core().Cluster(logicalcluster.From(namespace)).CoreV1().Services(namespace.Name).
 		Apply(test.Ctx(), serviceConfiguration(namespace.Name, name, map[string]string{service.PlacementAnnotationName: cluster1.Name + "," + cluster2.Name}), applyOptions)
 	test.Expect(err).NotTo(HaveOccurred())
 
@@ -150,7 +164,7 @@ func TestIngress(t *testing.T) {
 	))
 
 	// Update the root Service to have it placed on cluster 2 only
-	_, err = test.Client().Core().Cluster(namespace.ClusterName).CoreV1().Services(namespace.Name).
+	_, err = test.Client().Core().Cluster(logicalcluster.From(namespace)).CoreV1().Services(namespace.Name).
 		Apply(test.Ctx(), serviceConfiguration(namespace.Name, name, map[string]string{service.PlacementAnnotationName: cluster2.Name}), applyOptions)
 	test.Expect(err).NotTo(HaveOccurred())
 
@@ -188,13 +202,13 @@ func TestIngress(t *testing.T) {
 	test.Eventually(getShadowResources(test, namespace, cluster1LabelSelector)).Should(BeEmpty())
 
 	// Finally, delete the root resources
-	test.Expect(test.Client().Core().Cluster(namespace.ClusterName).NetworkingV1().Ingresses(namespace.Name).
+	test.Expect(test.Client().Core().Cluster(logicalcluster.From(namespace)).NetworkingV1().Ingresses(namespace.Name).
 		Delete(test.Ctx(), name, metav1.DeleteOptions{})).
 		To(Succeed())
-	test.Expect(test.Client().Core().Cluster(namespace.ClusterName).CoreV1().Services(namespace.Name).
+	test.Expect(test.Client().Core().Cluster(logicalcluster.From(namespace)).CoreV1().Services(namespace.Name).
 		Delete(test.Ctx(), name, metav1.DeleteOptions{})).
 		To(Succeed())
-	test.Expect(test.Client().Core().Cluster(namespace.ClusterName).AppsV1().Deployments(namespace.Name).
+	test.Expect(test.Client().Core().Cluster(logicalcluster.From(namespace)).AppsV1().Deployments(namespace.Name).
 		Delete(test.Ctx(), name, metav1.DeleteOptions{})).
 		To(Succeed())
 

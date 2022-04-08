@@ -47,7 +47,7 @@ func newTestClient() (Client, error) {
 	cfg, err := clientcmd.NewNonInteractiveDeferredLoadingClientConfig(
 		clientcmd.NewDefaultClientConfigLoadingRules(),
 		&clientcmd.ConfigOverrides{
-			CurrentContext: "admin",
+			CurrentContext: "system:admin",
 		}).ClientConfig()
 	if err != nil {
 		return nil, err

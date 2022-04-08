@@ -87,11 +87,11 @@ jobs:
           kubectl --context kind-kcp-cluster-2 describe nodes
       - name: Run GLBC and KCP
         run: |
-          echo "Building GLBC"
-          make build
-
           echo "Building KCP"
           make kcp
+
+          echo "Building GLBC"
+          make build
 
           TEMP_DIR="$(pwd)/tmp"
 
@@ -132,18 +132,17 @@ jobs:
           echo "Exporting KUBECONFIG=${KUBECONFIG}"
           echo "KUBECONFIG=${KUBECONFIG}" >> $GITHUB_ENV
 
-          echo "Creating workspace shard"
-          kubectl create namespace default
-          kubectl create secret generic kubeconfig --from-file=kubeconfig="${KUBECONFIG}"
-          kubectl apply -f ./utils/kcp-contrib/workspace-shard.yaml
+          echo "Creating HCG Workspace"
+          ./bin/kubectl-kcp workspace create kcp-glbc --enter
 
-          echo "Registering GLBC APIs"
-          make install
+          echo "Export GLBC APIs"
+          kubectl apply -f ./utils/kcp-contrib/apiresourceschema.yaml
+          kubectl apply -f ./utils/kcp-contrib/apiexport.yaml
 
           GLBC_LOG_FILE="${TEMP_DIR}"/glbc.log
           echo "GLBC_LOG_FILE=${GLBC_LOG_FILE}" >> $GITHUB_ENV
           echo "Starting GLBC, sending logs to ${GLBC_LOG_FILE}"
-          ./bin/ingress-controller -kubeconfig .kcp/admin.kubeconfig -context admin -glbc-kubeconfig "${HOME}"/.kube/config -dns-provider fake > ${GLBC_LOG_FILE} 2>&1 &
+          ./bin/ingress-controller --kubeconfig .kcp/admin.kubeconfig --context system:admin --glbc-kubeconfig "${HOME}"/.kube/config --dns-provider fake > ${GLBC_LOG_FILE} 2>&1 &
           GLBC_PID=$!
           echo "GLBC_PID=${GLBC_PID}" >> $GITHUB_ENV
 

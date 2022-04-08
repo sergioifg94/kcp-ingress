@@ -3,11 +3,14 @@ package tls
 import (
 	"context"
 
-	"github.com/kuadrant/kcp-glbc/pkg/cluster"
 	v1 "k8s.io/api/core/v1"
 	k8errors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/klog/v2"
+
+	"github.com/kcp-dev/apimachinery/pkg/logicalcluster"
+
+	"github.com/kuadrant/kcp-glbc/pkg/cluster"
 )
 
 const (
@@ -75,26 +78,26 @@ func AddFinalizer(secret *v1.Secret, finalizer string) {
 
 func (c *Controller) ensureDelete(ctx context.Context, kctx cluster.ObjectMapper, secret *v1.Secret) error {
 	// delete the mirrored secret
-	if err := c.kcpClient.Cluster(kctx.WorkSpace()).CoreV1().Secrets(kctx.NameSpace()).Delete(ctx, kctx.Name(), metav1.DeleteOptions{}); err != nil && !k8errors.IsNotFound(err) {
+	if err := c.kcpClient.Cluster(logicalcluster.New(kctx.Workspace())).CoreV1().Secrets(kctx.Namespace()).Delete(ctx, kctx.Name(), metav1.DeleteOptions{}); err != nil && !k8errors.IsNotFound(err) {
 		return err
 	}
 	return nil
 }
 
 func (c *Controller) ensureMirrored(ctx context.Context, kctx cluster.ObjectMapper, secret *v1.Secret) error {
-	//create a mirrored secret
+	// create a mirrored secret
 
-	klog.Infof("mirroring %s tls secret to workspace %s namespace %s and secret %s ", kctx.Name(), kctx.WorkSpace(), kctx.NameSpace(), kctx.Name())
+	klog.Infof("mirroring %s tls secret to workspace %s namespace %s and secret %s ", kctx.Name(), kctx.Workspace(), kctx.Namespace(), kctx.Name())
 	mirror := &v1.Secret{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      kctx.Name(),
-			Namespace: kctx.NameSpace(),
+			Namespace: kctx.Namespace(),
 			Labels:    kctx.Labels(),
 		},
 		Data: secret.Data,
 		Type: secret.Type,
 	}
-	secretClient := c.kcpClient.Cluster(kctx.WorkSpace()).CoreV1().Secrets(kctx.NameSpace())
+	secretClient := c.kcpClient.Cluster(logicalcluster.New(kctx.Workspace())).CoreV1().Secrets(kctx.Namespace())
 	// using kcpClient here to target the kcp cluster
 	_, err := secretClient.Create(ctx, mirror, metav1.CreateOptions{})
 	if err != nil && !k8errors.IsAlreadyExists(err) {
@@ -112,7 +115,7 @@ func (c *Controller) ensureMirrored(ctx context.Context, kctx cluster.ObjectMapp
 		}
 	}
 	// find the ingress this secret is for and add an annotation to notify tls is ready and trigger reconcile
-	ingressClient := c.kcpClient.Cluster(kctx.WorkSpace()).NetworkingV1().Ingresses(kctx.NameSpace())
+	ingressClient := c.kcpClient.Cluster(logicalcluster.New(kctx.Workspace())).NetworkingV1().Ingresses(kctx.Namespace())
 	rootIngress, err := ingressClient.Get(ctx, kctx.OwnedBy(), metav1.GetOptions{})
 	if err != nil {
 		return err
