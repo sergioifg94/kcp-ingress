@@ -73,3 +73,4 @@ demo
 
 config/deploy/local/*.kubeconfig
 config/deploy/local/*.env
+config/deploy/_*

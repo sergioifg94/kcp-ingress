@@ -2,8 +2,9 @@ name: Build and Publish KCP GLBC Image
 
 on:
   push:
-    branches: [ '*' ]
-    tags: [ '*' ]
+    branches:
+      - main
+      - 'release-*'
 
 env:
   IMG_TAGS: ${{ github.ref_name }}
@@ -13,16 +14,22 @@ env:
 
 jobs:
   build:
+    if: github.repository_owner == 'kuadrant'
     name: Build and Publish KCP GLBC Image
     runs-on: ubuntu-20.04
-
+    outputs:
+      sha_short: ${{ steps.vars.outputs.sha_short }}
     steps:
       - uses: actions/checkout@v2
+
+      - name: Get the short sha
+        id: vars
+        run: echo "::set-output name=sha_short::$(echo ${{ github.sha }} | cut -b -7)"
 
       - name: Add short sha tag
         id: add-sha-tag
         run: |
-          echo "IMG_TAGS=$(echo ${{ github.sha }} | cut -b -7) ${{ env.IMG_TAGS }}" >> $GITHUB_ENV
+          echo "IMG_TAGS=${{ steps.vars.outputs.sha_short }} ${{ env.IMG_TAGS }}" >> $GITHUB_ENV
 
       - name: Add latest tag
         if: ${{ github.ref_name == env.MAIN_BRANCH_NAME }}
@@ -50,3 +57,26 @@ jobs:
           password: ${{ secrets.IMG_REGISTRY_TOKEN }}
       - name: Print Image URL
         run: echo "Image pushed to ${{ steps.push-to-quay.outputs.registry-paths }}"
+
+  deploy:
+    if: github.repository_owner == 'kuadrant'
+    name: Deploy KCP GLBC Image
+    environment: unstable
+    runs-on: ubuntu-20.04
+    needs: build
+    steps:
+      - uses: actions/checkout@v2
+      - name: Set up kubectl and kustomize
+        run: |-
+          mkdir -p bin/ && cd bin/
+          curl -sL "https://github.com/kubernetes-sigs/kustomize/releases/download/kustomize%2Fv4.5.4/kustomize_v4.5.4_linux_amd64.tar.gz" | tar xzf -
+          curl -sLO "https://dl.k8s.io/release/$(curl -L -s https://dl.k8s.io/release/stable.txt)/bin/linux/amd64/kubectl"
+          chmod u+x ./kubectl
+          chmod u+x ./kustomize
+      - name: Deploy image
+        id: deploy-image
+        run: |-
+          export PATH="${PATH}:$(pwd)/bin/"
+          (cd config/manager && kustomize edit set image controller=${{ env.IMG_REGISTRY_HOST }}/${{ env.IMG_REGISTRY_ORG }}/kcp-glbc:${{ needs.build.outputs.sha_short }})
+          kustomize build config/manager
+          kustomize build config/manager | kubectl --server=https://${{ secrets.CICD_KUBE_HOST }} --token=${{ secrets.CICD_KUBE_TOKEN }} -n ${{ secrets.CICD_KUBE_NS }} apply -f -

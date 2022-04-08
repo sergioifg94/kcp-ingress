@@ -1,15 +1,7 @@
-apiVersion: v1
-kind: Namespace
-metadata:
-  labels:
-    control-plane: controller-manager
-  name: system
----
 apiVersion: apps/v1
 kind: Deployment
 metadata:
-  name: controller-manager
-  namespace: system
+  name: kcp-glbc-controller-manager
   labels:
     control-plane: controller-manager
 spec:
@@ -17,6 +9,8 @@ spec:
     matchLabels:
       control-plane: controller-manager
   replicas: 1
+  strategy:
+    type: Recreate
   template:
     metadata:
       annotations:
@@ -57,7 +51,7 @@ spec:
             - name: glbc-kubeconfig
               mountPath: "/tmp/glbc"
               readOnly: true
-      serviceAccountName: controller-manager
+      serviceAccountName: kcp-glbc-controller-manager
       terminationGracePeriodSeconds: 10
       volumes:
         - name: kcp-kubeconfig
