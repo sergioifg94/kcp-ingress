@@ -33,6 +33,7 @@ const (
 )
 
 var kubeconfig = flag.String("kubeconfig", "", "Path to kubeconfig")
+var logicalClusterTarget = flag.String("logical-cluster", "*", "set the target logical cluster")
 var glbcKubeconfig = flag.String("glbc-kubeconfig", "", "Path to GLBC kubeconfig")
 var tlsProviderEnabled = flag.Bool("glbc-tls-provided", os.GetEnvBool("GLBC_TLS_PROVIDED", false), "when set to true glbc will generate LE certs for hosts it creates")
 var tlsProvider = flag.String("glbc-tls-provider", os.GetEnvString("GLBC_TLS_PROVIDER", "le-staging"), "decides which provider to use. Current allowed values -glbc-tls-provider=le-staging -glbc-tls-provider=le-production ")
@@ -73,13 +74,13 @@ func main() {
 	if err != nil {
 		klog.Fatal(err)
 	}
-	kubeInformerFactory := informers.NewSharedInformerFactory(kubeClient.Cluster(logicalcluster.Wildcard), resyncPeriod)
+	kubeInformerFactory := informers.NewSharedInformerFactory(kubeClient.Cluster(logicalcluster.New(*logicalClusterTarget)), resyncPeriod)
 
 	dnsRecordClient, err := kuadrantv1.NewClusterForConfig(r)
 	if err != nil {
 		klog.Fatal(err)
 	}
-	kuadrantInformerFactory := externalversions.NewSharedInformerFactory(dnsRecordClient.Cluster(logicalcluster.Wildcard), resyncPeriod)
+	kuadrantInformerFactory := externalversions.NewSharedInformerFactory(dnsRecordClient.Cluster(logicalcluster.New(*logicalClusterTarget)), resyncPeriod)
 
 	// glbcTypedClient targets the control cluster (this is the cluster where glbc is deployed). This is not a KCP cluster.
 	glbcTypedClient, err := kubernetes.NewForConfig(gr)
