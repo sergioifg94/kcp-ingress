@@ -16,6 +16,10 @@ const (
 	ANNOTATION_HCG_HOST                 = "kuadrant.dev/host.generated"
 	ANNOTATION_HCG_CUSTOM_HOST_REPLACED = "kuadrant.dev/custom-hosts.replaced"
 	LABEL_OWNED_BY                      = "kcp.dev/owned-by"
+
+	// Experimental
+
+	ANNOTATION_HEALTH_CHECK_PREFIX = "kuadrant.experimental/health-"
 )
 
 type context struct {

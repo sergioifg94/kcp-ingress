@@ -4,7 +4,7 @@ import (
 	"fmt"
 	"strconv"
 
-	"github.com/kuadrant/kcp-glbc/pkg/apis/kuadrant/v1"
+	v1 "github.com/kuadrant/kcp-glbc/pkg/apis/kuadrant/v1"
 	"github.com/kuadrant/kcp-glbc/pkg/dns"
 
 	"github.com/aws/aws-sdk-go/aws"
@@ -34,8 +34,9 @@ var (
 
 // Inspired by https://github.com/openshift/cluster-ingress-operator/blob/master/pkg/dns/aws/dns.go
 type Provider struct {
-	route53 *route53.Route53
-	config  Config
+	route53               *route53.Route53
+	healthCheckReconciler *Route53HealthCheckReconciler
+	config                Config
 }
 
 // Config is the necessary input to configure the manager.
@@ -111,6 +112,14 @@ func (m *Provider) Ensure(record *v1.DNSRecord, zone v1.DNSZone) error {
 
 func (m *Provider) Delete(record *v1.DNSRecord, zone v1.DNSZone) error {
 	return m.change(record, zone, deleteAction)
+}
+
+func (m *Provider) HealthCheckReconciler() dns.HealthCheckReconciler {
+	if m.healthCheckReconciler == nil {
+		m.healthCheckReconciler = NewRoute53HealthCheckReconciler(m.route53)
+	}
+
+	return m.healthCheckReconciler
 }
 
 // change will perform an action on a record.

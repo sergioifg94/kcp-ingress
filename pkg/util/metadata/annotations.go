@@ -30,3 +30,47 @@ func RemoveAnnotation(obj metav1.Object, key string) {
 		}
 	}
 }
+
+type AnnotationPredicate func(key, value string) bool
+
+func KeyPredicate(predicate func(key string) bool) AnnotationPredicate {
+	return func(key, _ string) bool {
+		return predicate(key)
+	}
+}
+
+// CopyAnnotation copies an annotation with key `key` from `fromObj` into `toObj`
+// Returns `true` if the annotation was found and copied, `false` otherwise
+func CopyAnnotation(fromObj, toObj metav1.Object, key string) bool {
+	return CopyAnnotationsPredicate(fromObj, toObj, func(eachKey, value string) bool {
+		return eachKey == key
+	})
+}
+
+// CopyAnnotationsPredicate copies any annotation from fromObj into toObj annotations
+// that fullfils the given predicate. Returns true if at least one annotation was
+// copied
+func CopyAnnotationsPredicate(fromObj, toObj metav1.Object, predicate AnnotationPredicate) bool {
+	fromObjAnnotations := fromObj.GetAnnotations()
+	if fromObjAnnotations == nil {
+		return false
+	}
+
+	toObjAnnotations := toObj.GetAnnotations()
+	if toObjAnnotations == nil {
+		toObjAnnotations = map[string]string{}
+		toObj.SetAnnotations(toObjAnnotations)
+	}
+
+	copied := false
+	for key, value := range fromObjAnnotations {
+		if !predicate(key, value) {
+			continue
+		}
+
+		toObjAnnotations[key] = value
+		copied = true
+	}
+
+	return copied
+}

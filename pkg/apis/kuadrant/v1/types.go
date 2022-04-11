@@ -179,3 +179,64 @@ type DNSRecordList struct {
 	metav1.ListMeta `json:"metadata,omitempty"`
 	Items           []DNSRecord `json:"items"`
 }
+
+func (endpoint *Endpoint) SetProviderSpecific(name, value string) {
+	var property *ProviderSpecificProperty
+
+	if endpoint.ProviderSpecific == nil {
+		endpoint.ProviderSpecific = ProviderSpecific{}
+	}
+
+	for _, pair := range endpoint.ProviderSpecific {
+		if pair.Name == name {
+			property = &pair
+		}
+	}
+
+	if property != nil {
+		property.Value = value
+		return
+	}
+
+	endpoint.ProviderSpecific = append(endpoint.ProviderSpecific, ProviderSpecificProperty{
+		Name:  name,
+		Value: value,
+	})
+}
+
+func (endpoint *Endpoint) GetProviderSpecific(name string) (string, bool) {
+	for _, property := range endpoint.ProviderSpecific {
+		if property.Name == name {
+			return property.Value, true
+		}
+	}
+
+	return "", false
+}
+
+func (endpoint *Endpoint) DeleteProviderSpecific(name string) bool {
+	if endpoint.ProviderSpecific == nil {
+		return false
+	}
+
+	deleted := false
+	providerSpecific := make(ProviderSpecific, 0, len(endpoint.ProviderSpecific))
+	for _, pair := range endpoint.ProviderSpecific {
+		if pair.Name == name {
+			deleted = true
+		} else {
+			providerSpecific = append(providerSpecific, pair)
+		}
+	}
+
+	endpoint.ProviderSpecific = providerSpecific
+	return deleted
+}
+
+func (endpoint *Endpoint) GetAddress() (string, bool) {
+	if endpoint.SetIdentifier == "" || len(endpoint.Targets) == 0 {
+		return "", false
+	}
+
+	return string(endpoint.Targets[0]), true
+}
