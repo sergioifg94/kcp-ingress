@@ -3,6 +3,7 @@ package cluster
 import (
 	"errors"
 	"fmt"
+	"strings"
 
 	"k8s.io/apimachinery/pkg/api/meta"
 	"k8s.io/apimachinery/pkg/runtime"
@@ -161,7 +162,9 @@ func (cr *context) Annotations() map[string]string {
 }
 
 func (cr *controlContext) Name() string {
-	return fmt.Sprintf("%s-%s-%s", cr.Workspace(), cr.Namespace(), cr.name)
+	//Removes chars which are invalid characters for cert manager certificate names. RFC 1123 subdomain must consist of
+	//lower case alphanumeric characters, '-' or '.', and must start and end with an alphanumeric character
+	return strings.ReplaceAll(fmt.Sprintf("%s-%s-%s", cr.Workspace(), cr.Namespace(), cr.name), ":", "")
 }
 
 func (cr *controlContext) Host() string {
