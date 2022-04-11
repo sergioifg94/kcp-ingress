@@ -130,3 +130,52 @@ Any of the described configurations can be modified after the initial creation o
 need to be restarted after each change in order for them to come into affect.
 
 `kubectl rollout restart deployment/kcp-glbc-controller-manager -n kcp-glbc`
+
+
+
+## Configuring for remote KCP
+
+If you are not using a local KCP, you will need to create a kubeconfig that allows GLBC to connect to the remote KCP instance. 
+
+To do this, use the following steps. (note you will need the KCP kube plugin which is part of the kcp repo)
+
+1) Login to KCP and select your workspace
+
+```
+kubectl kcp workspace my-workspace
+```
+
+2) Create a service account
+
+```
+kubectl create sa glbc
+```
+
+3) create a cluster role and bind it to your service account
+
+```
+kubectl create -f config/kcp/glbc-cluster-role.yaml
+
+kubectl create -f config/kcp/glbc-cluster-role-binding.yaml
+
+```
+
+4) extract the service account token
+
+```
+kubectl get secrets
+
+$(kubectl --namespace default get secret/glbc-token-<id> -o jsonpath='{.data.token}' | base64 --decode)
+```
+
+5) copy the token into a kubeconfig. An example template has been added to ```config/kcp/kcp-cube-config.yaml.template ```
+
+
+You can now run GLBC targeting the KCP instance by passing this kubeconfig file as a start up parameter
+
+```
+-kubeconfig=<path to kcp kube config>
+
+```
+
+
