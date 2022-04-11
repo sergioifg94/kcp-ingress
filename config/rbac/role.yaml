@@ -19,6 +19,7 @@ rules:
       - cert-manager.io
     resources:
       - issuers
+      - certificates
     verbs:
       - get
       - list
@@ -26,12 +27,3 @@ rules:
       - create
       - update
       - delete
-  - apiGroups:
-      - cert-manager.io
-    resources:
-      - issuers
-      - certificates
-    verbs:
-      - get
-      - list
-      - watch
