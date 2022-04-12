@@ -281,10 +281,19 @@ func (c *Controller) ensureDNS(ctx context.Context, ingress *networkingv1.Ingres
 	}
 
 	if len(ingress.Status.LoadBalancer.Ingress) > 0 {
+		var activeHosts []string
 		// Start watching for address changes in the LBs hostnames
 		for _, lbs := range ingress.Status.LoadBalancer.Ingress {
 			if lbs.Hostname != "" {
 				c.hostsWatcher.StartWatching(ctx, ingressKey(ingress), lbs.Hostname)
+				activeHosts = append(activeHosts, lbs.Hostname)
+			}
+		}
+
+		hostRecordWatchers := c.hostsWatcher.ListHostRecordWatchers(ingressKey(ingress))
+		for _, watcher := range hostRecordWatchers {
+			if !slice.ContainsString(activeHosts, watcher.Host) {
+				watcher.Stop()
 			}
 		}
 
