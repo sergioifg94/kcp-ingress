@@ -25,6 +25,16 @@ func NewHostsWatcher(resolver HostResolver, watchInterval func(ttl time.Duration
 	}
 }
 
+func (w *HostsWatcher) ListHostRecordWatchers(obj interface{}) []recordWatcher {
+	var recordWatchers []recordWatcher
+	for _, record := range w.Records {
+		if obj == record.Key {
+			recordWatchers = append(recordWatchers, record)
+		}
+	}
+	return recordWatchers
+}
+
 // StartWatching begins tracking changes in the addresses for host
 func (w *HostsWatcher) StartWatching(ctx context.Context, obj interface{}, host string) bool {
 	for _, recordWatcher := range w.Records {
