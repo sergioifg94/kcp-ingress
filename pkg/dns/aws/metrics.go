@@ -15,6 +15,8 @@ limitations under the License.
 package aws
 
 import (
+	"reflect"
+
 	"github.com/kuadrant/kcp-glbc/pkg/metrics"
 	"github.com/prometheus/client_golang/prometheus"
 )
@@ -22,8 +24,8 @@ import (
 const (
 	operationLabel       = "operation"
 	resultLabel          = "result"
-	resultSucceededLabel = "succeeded"
-	resultFailedLabel    = "failed"
+	resultLabelSucceeded = "succeeded"
+	resultLabelFailed    = "failed"
 )
 
 var (
@@ -75,6 +77,8 @@ var (
 	)
 )
 
+var operationLabelValues []string
+
 func init() {
 	// Register metrics into the global prometheus registry
 	metrics.Registry.MustRegister(
@@ -83,4 +87,17 @@ func init() {
 		route53RequestErrors,
 		route53RequestDuration,
 	)
+
+	monitoredRoute53 := reflect.PtrTo(reflect.TypeOf(InstrumentedRoute53{}))
+	for i := 0; i < monitoredRoute53.NumMethod(); i++ {
+		operationLabelValues = append(operationLabelValues, monitoredRoute53.Method(i).Name)
+	}
+
+	// Initialize metrics
+	for _, operation := range operationLabelValues {
+		route53RequestCount.WithLabelValues(operation).Set(0)
+		route53RequestTotal.WithLabelValues(operation, resultLabelSucceeded).Add(0)
+		route53RequestTotal.WithLabelValues(operation, resultLabelFailed).Add(0)
+		route53RequestErrors.WithLabelValues(operation).Add(0)
+	}
 }

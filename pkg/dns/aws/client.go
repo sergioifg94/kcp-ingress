@@ -23,7 +23,7 @@ import (
 )
 
 type InstrumentedRoute53 struct {
-	*route53.Route53
+	route53 *route53.Route53
 }
 
 func observe(operation string, f func() error) {
@@ -32,10 +32,10 @@ func observe(operation string, f func() error) {
 	defer route53RequestCount.WithLabelValues(operation).Dec()
 	err := f()
 	duration := time.Since(start).Seconds()
-	label := resultSucceededLabel
+	label := resultLabelSucceeded
 	if err != nil {
 		route53RequestErrors.WithLabelValues(operation).Inc()
-		label = resultFailedLabel
+		label = resultLabelFailed
 	}
 	route53RequestDuration.WithLabelValues(operation, label).Observe(duration)
 	route53RequestTotal.WithLabelValues(operation, label).Inc()
@@ -43,7 +43,7 @@ func observe(operation string, f func() error) {
 
 func (c *InstrumentedRoute53) ListHostedZones(input *route53.ListHostedZonesInput) (output *route53.ListHostedZonesOutput, err error) {
 	observe("ListHostedZones", func() error {
-		output, err = c.Route53.ListHostedZones(input)
+		output, err = c.route53.ListHostedZones(input)
 		return err
 	})
 	return
@@ -51,7 +51,7 @@ func (c *InstrumentedRoute53) ListHostedZones(input *route53.ListHostedZonesInpu
 
 func (c *InstrumentedRoute53) ChangeResourceRecordSets(input *route53.ChangeResourceRecordSetsInput) (output *route53.ChangeResourceRecordSetsOutput, err error) {
 	observe("ChangeResourceRecordSets", func() error {
-		output, err = c.Route53.ChangeResourceRecordSets(input)
+		output, err = c.route53.ChangeResourceRecordSets(input)
 		return err
 	})
 	return
@@ -59,7 +59,7 @@ func (c *InstrumentedRoute53) ChangeResourceRecordSets(input *route53.ChangeReso
 
 func (c *InstrumentedRoute53) CreateHealthCheck(input *route53.CreateHealthCheckInput) (output *route53.CreateHealthCheckOutput, err error) {
 	observe("CreateHealthCheck", func() error {
-		output, err = c.Route53.CreateHealthCheck(input)
+		output, err = c.route53.CreateHealthCheck(input)
 		return err
 	})
 	return
@@ -67,7 +67,7 @@ func (c *InstrumentedRoute53) CreateHealthCheck(input *route53.CreateHealthCheck
 
 func (c *InstrumentedRoute53) GetHealthCheckWithContext(ctx aws.Context, input *route53.GetHealthCheckInput, opts ...request.Option) (output *route53.GetHealthCheckOutput, err error) {
 	observe("GetHealthCheckWithContext", func() error {
-		output, err = c.Route53.GetHealthCheckWithContext(ctx, input, opts...)
+		output, err = c.route53.GetHealthCheckWithContext(ctx, input, opts...)
 		return err
 	})
 	return
@@ -75,7 +75,7 @@ func (c *InstrumentedRoute53) GetHealthCheckWithContext(ctx aws.Context, input *
 
 func (c *InstrumentedRoute53) UpdateHealthCheckWithContext(ctx aws.Context, input *route53.UpdateHealthCheckInput, opts ...request.Option) (output *route53.UpdateHealthCheckOutput, err error) {
 	observe("UpdateHealthCheckWithContext", func() error {
-		output, err = c.Route53.UpdateHealthCheckWithContext(ctx, input, opts...)
+		output, err = c.route53.UpdateHealthCheckWithContext(ctx, input, opts...)
 		return err
 	})
 	return
@@ -83,7 +83,7 @@ func (c *InstrumentedRoute53) UpdateHealthCheckWithContext(ctx aws.Context, inpu
 
 func (c *InstrumentedRoute53) DeleteHealthCheckWithContext(ctx aws.Context, input *route53.DeleteHealthCheckInput, opts ...request.Option) (output *route53.DeleteHealthCheckOutput, err error) {
 	observe("DeleteHealthCheckWithContext", func() error {
-		output, err = c.Route53.DeleteHealthCheckWithContext(ctx, input, opts...)
+		output, err = c.route53.DeleteHealthCheckWithContext(ctx, input, opts...)
 		return err
 	})
 	return
@@ -91,7 +91,7 @@ func (c *InstrumentedRoute53) DeleteHealthCheckWithContext(ctx aws.Context, inpu
 
 func (c *InstrumentedRoute53) ChangeTagsForResourceWithContext(ctx aws.Context, input *route53.ChangeTagsForResourceInput, opts ...request.Option) (output *route53.ChangeTagsForResourceOutput, err error) {
 	observe("ChangeTagsForResourceWithContext", func() error {
-		output, err = c.Route53.ChangeTagsForResourceWithContext(ctx, input, opts...)
+		output, err = c.route53.ChangeTagsForResourceWithContext(ctx, input, opts...)
 		return err
 	})
 	return
