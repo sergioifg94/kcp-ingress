@@ -123,6 +123,10 @@ func (c *Controller) reconcileRoot(ctx context.Context, ingress *networkingv1.In
 		return err
 	}
 
+	if err := c.ensurePlacement(ctx, ingress); err != nil {
+		return err
+	}
+
 	// setup certificates
 	if err := c.ensureCertificate(ctx, ingress); err != nil {
 		return err
@@ -294,7 +298,7 @@ func (c *Controller) ensureDNS(ctx context.Context, ingress *networkingv1.Ingres
 		hostRecordWatchers := c.hostsWatcher.ListHostRecordWatchers(ingressKey(ingress))
 		for _, watcher := range hostRecordWatchers {
 			if !slice.ContainsString(activeHosts, watcher.Host) {
-				watcher.Stop()
+				c.hostsWatcher.StopWatching(ingressKey(ingress))
 			}
 		}
 
@@ -612,6 +616,7 @@ func (c *Controller) getServices(ctx context.Context, ingress *networkingv1.Ingr
 			klog.Infof("getting service: %v", path.Backend.Service.Name)
 			service, err := c.kubeClient.Cluster(logicalcluster.From(ingress)).CoreV1().Services(ingress.Namespace).Get(ctx, path.Backend.Service.Name, metav1.GetOptions{})
 			if err == nil {
+				c.tracker.add(ingress, service)
 				services = append(services, service)
 			} else if !errors.IsNotFound(err) {
 				return nil, err
@@ -622,6 +627,21 @@ func (c *Controller) getServices(ctx context.Context, ingress *networkingv1.Ingr
 		}
 	}
 	return services, nil
+}
+
+func (c *Controller) ensurePlacement(ctx context.Context, ingress *networkingv1.Ingress) error {
+	svcs, err := c.getServices(ctx, ingress)
+	if err != nil {
+		return err
+	}
+	if err := c.ingressPlacer.PlaceRoutingObj(svcs, ingress); err != nil {
+		return err
+	}
+	if _, err := c.kubeClient.Cluster(logicalcluster.From(ingress)).NetworkingV1().Ingresses(ingress.Namespace).Update(ctx, ingress, metav1.UpdateOptions{}); err != nil {
+		return err
+	}
+	return nil
+
 }
 
 func (c *Controller) patchIngress(ctx context.Context, ingress *networkingv1.Ingress, data []byte) (*networkingv1.Ingress, error) {

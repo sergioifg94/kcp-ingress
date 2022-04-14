@@ -23,6 +23,7 @@ import (
 
 	kuadrantv1 "github.com/kuadrant/kcp-glbc/pkg/client/kuadrant/clientset/versioned"
 	"github.com/kuadrant/kcp-glbc/pkg/net"
+	"github.com/kuadrant/kcp-glbc/pkg/placement"
 	"github.com/kuadrant/kcp-glbc/pkg/tls"
 )
 
@@ -40,6 +41,8 @@ func NewController(config *ControllerConfig) *Controller {
 		impl.Client = config.KubeClient.Cluster(tenancyv1alpha1.RootCluster)
 	}
 	hostResolver = net.NewSafeHostResolver(hostResolver)
+	tracker := newTracker()
+	ingressPlacer := placement.NewPlacer()
 
 	c := &Controller{
 		queue:                 queue,
@@ -48,7 +51,7 @@ func NewController(config *ControllerConfig) *Controller {
 		sharedInformerFactory: config.SharedInformerFactory,
 		dnsRecordClient:       config.DnsRecordClient,
 		domain:                config.Domain,
-		tracker:               newTracker(),
+		tracker:               &tracker,
 		tlsEnabled:            config.TLSEnabled,
 		hostResolver:          hostResolver,
 		hostsWatcher: net.NewHostsWatcher(
@@ -56,6 +59,7 @@ func NewController(config *ControllerConfig) *Controller {
 			net.DefaultInterval,
 		),
 		customHostsEnabled: config.CustomHostsEnabled,
+		ingressPlacer:      ingressPlacer,
 	}
 	c.hostsWatcher.OnChange = c.synchronisedEnque()
 
@@ -99,10 +103,11 @@ type Controller struct {
 	certProvider          tls.Provider
 	domain                *string
 	tlsEnabled            bool
-	tracker               tracker
+	tracker               *tracker
 	hostResolver          net.HostResolver
 	hostsWatcher          *net.HostsWatcher
 	customHostsEnabled    *bool
+	ingressPlacer         placement.Placer
 }
 
 func (c *Controller) enqueue(obj interface{}) {
@@ -206,7 +211,7 @@ func (c *Controller) process(ctx context.Context, key string) error {
 	return err
 }
 
-// ingressesFromService enqueues all the related ingresses for a given service.
+// ingressesFromService enqueues all the related ingresses for a given service when the service is changed.
 func (c *Controller) ingressesFromService(obj interface{}) {
 	service := obj.(*corev1.Service)
 

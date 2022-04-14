@@ -44,6 +44,10 @@ func Annotations(object metav1.Object) map[string]string {
 	return object.GetAnnotations()
 }
 
+func Labels(object metav1.Object) map[string]string {
+	return object.GetLabels()
+}
+
 func ConditionStatus(conditionType conditionsapi.ConditionType) func(getter conditionsutil.Getter) corev1.ConditionStatus {
 	return func(getter conditionsutil.Getter) corev1.ConditionStatus {
 		c := conditionsutil.Get(getter, conditionType)
