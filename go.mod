@@ -12,6 +12,7 @@ require (
 	github.com/miekg/dns v1.1.34
 	github.com/onsi/gomega v1.17.0
 	github.com/rs/xid v1.3.0
+	github.com/zmb3/gogetdoc v0.0.0-20190228002656-b37376c5da6a // indirect
 	k8s.io/api v0.23.1
 	k8s.io/apimachinery v0.23.5
 	k8s.io/apiserver v0.23.1

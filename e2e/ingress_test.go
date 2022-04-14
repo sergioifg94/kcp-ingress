@@ -5,7 +5,6 @@ package e2e
 
 import (
 	"testing"
-	"time"
 
 	. "github.com/onsi/gomega"
 	. "github.com/onsi/gomega/gstruct"
@@ -28,15 +27,12 @@ import (
 	. "github.com/kuadrant/kcp-glbc/e2e/support"
 	kuadrantv1 "github.com/kuadrant/kcp-glbc/pkg/apis/kuadrant/v1"
 	kuadrantcluster "github.com/kuadrant/kcp-glbc/pkg/cluster"
-	"github.com/kuadrant/kcp-glbc/pkg/reconciler/service"
-	"github.com/kuadrant/kcp-glbc/pkg/util/deleteDelay"
 )
 
 var applyOptions = metav1.ApplyOptions{FieldManager: "kcp-glbc-e2e", Force: true}
 
 func TestIngress(t *testing.T) {
 	test := With(t)
-
 	// Create the test workspace
 	workspace := test.NewTestWorkspace()
 
@@ -67,8 +63,8 @@ func TestIngress(t *testing.T) {
 		networkingv1.SchemeGroupVersion.WithKind("Ingress"),
 	)).Should(BeTrue())
 
-	// Create a namespace with automatic scheduling disabled
-	namespace := test.NewTestNamespace(InWorkspace(workspace), WithLabel(kcp.SchedulingDisabledLabel, ""))
+	// Create a namespace
+	namespace := test.NewTestNamespace(InWorkspace(workspace))
 
 	name := "echo"
 
@@ -77,9 +73,9 @@ func TestIngress(t *testing.T) {
 		Apply(test.Ctx(), deploymentConfiguration(namespace.Name, name), applyOptions)
 	test.Expect(err).NotTo(HaveOccurred())
 
-	// Create the root Service and have it placed on cluster 1
+	// Create the root Service
 	_, err = test.Client().Core().Cluster(logicalcluster.From(namespace)).CoreV1().Services(namespace.Name).
-		Apply(test.Ctx(), serviceConfiguration(namespace.Name, name, map[string]string{service.PlacementAnnotationName: cluster1.Name}), applyOptions)
+		Apply(test.Ctx(), serviceConfiguration(namespace.Name, name, map[string]string{}), applyOptions)
 	test.Expect(err).NotTo(HaveOccurred())
 
 	// Create the root Ingress
@@ -123,55 +119,15 @@ func TestIngress(t *testing.T) {
 		ConditionStatus(workloadv1alpha1.WorkloadClusterReadyCondition),
 		Equal(corev1.ConditionTrue),
 	))
+	// update the namespace with the second cluster placement
+	_, err = test.Client().Core().Cluster(logicalcluster.From(namespace)).CoreV1().Namespaces().Apply(test.Ctx(), corev1apply.Namespace(namespace.Name).WithLabels(map[string]string{kcp.ClusterLabel: cluster2.Name}), applyOptions)
 
-	// Update the root Service to have it placed on clusters 1 and 2
-	_, err = test.Client().Core().Cluster(logicalcluster.From(namespace)).CoreV1().Services(namespace.Name).
-		Apply(test.Ctx(), serviceConfiguration(namespace.Name, name, map[string]string{service.PlacementAnnotationName: cluster1.Name + "," + cluster2.Name}), applyOptions)
 	test.Expect(err).NotTo(HaveOccurred())
-
-	// Wait until the root Ingress is reconciled with the load balancer Ingresses
-	test.Eventually(Ingress(test, namespace, name)).WithTimeout(TestTimeoutMedium).Should(And(
-		WithTransform(Annotations, HaveKey(kuadrantcluster.ANNOTATION_HCG_HOST)),
-		WithTransform(LoadBalancerIngresses, HaveLen(2)),
-	))
-
-	// Retrieve the root Ingress
-	ingress = GetIngress(test, namespace, name)
-
-	// Check a DNSRecord for the root Ingress is updated with the expected Spec
-	test.Eventually(DNSRecord(test, namespace, name)).Should(And(
-		WithTransform(DNSRecordEndpoints, HaveLen(2)),
-		WithTransform(DNSRecordEndpoints, ContainElement(PointTo(MatchFields(IgnoreExtras,
-			Fields{
-				"DNSName":          Equal(ingress.Annotations[kuadrantcluster.ANNOTATION_HCG_HOST]),
-				"Targets":          ConsistOf(ingress.Status.LoadBalancer.Ingress[0].IP),
-				"RecordType":       Equal("A"),
-				"RecordTTL":        Equal(kuadrantv1.TTL(60)),
-				"SetIdentifier":    Equal(ingress.Status.LoadBalancer.Ingress[0].IP),
-				"ProviderSpecific": ConsistOf(kuadrantv1.ProviderSpecific{{Name: "aws/weight", Value: "100"}}),
-			})),
-		)),
-		WithTransform(DNSRecordEndpoints, ContainElement(PointTo(MatchFields(IgnoreExtras,
-			Fields{
-				"DNSName":          Equal(ingress.Annotations[kuadrantcluster.ANNOTATION_HCG_HOST]),
-				"Targets":          ConsistOf(ingress.Status.LoadBalancer.Ingress[1].IP),
-				"RecordType":       Equal("A"),
-				"RecordTTL":        Equal(kuadrantv1.TTL(60)),
-				"SetIdentifier":    Equal(ingress.Status.LoadBalancer.Ingress[1].IP),
-				"ProviderSpecific": ConsistOf(kuadrantv1.ProviderSpecific{{Name: "aws/weight", Value: "100"}}),
-			})),
-		)),
-	))
-
-	// Update the root Service to have it placed on cluster 2 only
-	_, err = test.Client().Core().Cluster(logicalcluster.From(namespace)).CoreV1().Services(namespace.Name).
-		Apply(test.Ctx(), serviceConfiguration(namespace.Name, name, map[string]string{service.PlacementAnnotationName: cluster2.Name}), applyOptions)
-	test.Expect(err).NotTo(HaveOccurred())
-
 	// Wait until the root Ingress is reconciled with the load balancer Ingresses
 	test.Eventually(Ingress(test, namespace, name)).WithTimeout(TestTimeoutMedium).Should(And(
 		WithTransform(Annotations, HaveKey(kuadrantcluster.ANNOTATION_HCG_HOST)),
 		WithTransform(LoadBalancerIngresses, HaveLen(1)),
+		WithTransform(Labels, HaveKeyWithValue(kcp.ClusterLabel, cluster2.Name)),
 	))
 
 	// Retrieve the root Ingress
@@ -192,15 +148,6 @@ func TestIngress(t *testing.T) {
 		)),
 	))
 
-	gracePeriodDuration := deleteDelay.TTLDefault - 10*time.Second // take some slack
-	cluster1LabelSelector := ClusterLabel + "=" + cluster1.Name
-
-	// Check the shadow resources for cluster 1 are not deleted before the grace period expires
-	test.Consistently(getShadowResources(test, namespace, cluster1LabelSelector), gracePeriodDuration).Should(HaveLen(3))
-
-	// Then, check the shadow resources for cluster 1 are deleted, once the grace period has expired
-	test.Eventually(getShadowResources(test, namespace, cluster1LabelSelector)).Should(BeEmpty())
-
 	// Finally, delete the root resources
 	test.Expect(test.Client().Core().Cluster(logicalcluster.From(namespace)).NetworkingV1().Ingresses(namespace.Name).
 		Delete(test.Ctx(), name, metav1.DeleteOptions{})).
@@ -212,8 +159,6 @@ func TestIngress(t *testing.T) {
 		Delete(test.Ctx(), name, metav1.DeleteOptions{})).
 		To(Succeed())
 
-	// And check all the remaining shadow resources are deleted immediately
-	test.Eventually(getShadowResources(test, namespace, ClusterLabel), 15*time.Second).Should(BeEmpty())
 }
 
 func ingressConfiguration(namespace, name string) *networkingv1apply.IngressApplyConfiguration {
@@ -257,20 +202,4 @@ func serviceConfiguration(namespace, name string, annotations map[string]string)
 				WithPort(80).
 				WithTargetPort(intstr.FromString("http")).
 				WithProtocol(corev1.ProtocolTCP)))
-}
-
-func getShadowResources(test Test, namespace *corev1.Namespace, labelSelector string) func() []interface{} {
-	return func() []interface{} {
-		var resources []interface{}
-		for _, ingress := range GetIngresses(test, namespace, labelSelector) {
-			resources = append(resources, ingress)
-		}
-		for _, svc := range GetServices(test, namespace, labelSelector) {
-			resources = append(resources, svc)
-		}
-		for _, deployment := range GetDeployments(test, namespace, labelSelector) {
-			resources = append(resources, deployment)
-		}
-		return resources
-	}
 }

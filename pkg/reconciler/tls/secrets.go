@@ -25,7 +25,6 @@ func (c *Controller) reconcile(ctx context.Context, secret *v1.Secret) error {
 	// may be a better way to filter these out TODO look at label selector in the controller
 	if err != nil && cluster.IsNoContextErr(err) {
 		// ignore this secret
-		klog.Infof("ignoring control cluster secret as doesn't have kcp context annotations", secret.Name)
 		return nil
 	}
 	if err != nil {
