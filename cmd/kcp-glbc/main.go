@@ -28,7 +28,6 @@ import (
 	"github.com/kuadrant/kcp-glbc/pkg/reconciler/service"
 	tlsreconciler "github.com/kuadrant/kcp-glbc/pkg/reconciler/tls"
 	"github.com/kuadrant/kcp-glbc/pkg/tls"
-	"github.com/kuadrant/kcp-glbc/pkg/tls/certmanager"
 	"github.com/kuadrant/kcp-glbc/pkg/util/env"
 )
 
@@ -101,29 +100,30 @@ func main() {
 	if err != nil {
 		klog.Fatal(err)
 	}
-	tlsCertProvider := certmanager.CertProviderLEStaging
+	tlsCertProvider := tls.CertProviderLEStaging
 	if *tlsProvider == "le-production" {
-		tlsCertProvider = certmanager.CertProviderLEProd
+		tlsCertProvider = tls.CertProviderLEProd
 	}
 	klog.Info("using tls cert provider ", tlsCertProvider, *tlsProvider)
 
 	// certman client targets the control cluster, this is the same cluster as glbc is deployed to
 	certClient := certmanclient.NewForConfigOrDie(gr)
-	certConfig := certmanager.CertManagerConfig{
-		DNSValidator: certmanager.DNSValidatorRoute53,
+	certConfig := tls.CertManagerConfig{
+		DNSValidator: tls.DNSValidatorRoute53,
 		CertClient:   certClient,
 		CertProvider: tlsCertProvider,
 		Region:       *region,
 		K8sClient:    glbcTypedClient,
-		ValidDomans:  []string{*domain},
+		ValidDomains: []string{*domain},
 	}
 	var certProvider tls.Provider = &tls.FakeProvider{}
 	if *tlsProviderEnabled {
-		certProvider, err = certmanager.NewCertManager(certConfig)
+		certProvider, err = tls.NewCertManager(certConfig)
 		if err != nil {
 			klog.Fatal(err)
 		}
 	}
+	tlsreconciler.InitMetrics(certProvider)
 
 	// ensure Issuer Is Setup at start up time
 	// TODO consider extracting out the setup to CRD

@@ -92,9 +92,10 @@ func (c *Controller) reconcile(ctx context.Context, ingress *networkingv1.Ingres
 // ensureCertificate creates a certificate request for the root ingress into the control cluster
 func (c *Controller) ensureCertificate(ctx context.Context, rootIngress *networkingv1.Ingress) error {
 	if !c.tlsEnabled {
-		klog.Info("tls support not enabled. not creating certificates")
+		klog.Info("TLS support is not enabled, skipping certificate request")
 		return nil
 	}
+
 	controlClusterContext, err := cluster.NewControlObjectMapper(rootIngress)
 	if err != nil {
 		return err
