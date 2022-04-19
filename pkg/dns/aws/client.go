@@ -15,9 +15,11 @@ limitations under the License.
 package aws
 
 import (
+	"strconv"
 	"time"
 
 	"github.com/aws/aws-sdk-go/aws"
+	"github.com/aws/aws-sdk-go/aws/awserr"
 	"github.com/aws/aws-sdk-go/aws/request"
 	"github.com/aws/aws-sdk-go/service/route53"
 )
@@ -32,13 +34,21 @@ func observe(operation string, f func() error) {
 	defer route53RequestCount.WithLabelValues(operation).Dec()
 	err := f()
 	duration := time.Since(start).Seconds()
-	label := resultLabelSucceeded
+	code := returnCodeLabelDefault
 	if err != nil {
-		route53RequestErrors.WithLabelValues(operation).Inc()
-		label = resultLabelFailed
+		route53RequestErrors.WithLabelValues(operation, code).Inc()
+		if awsErr, ok := err.(awserr.Error); ok {
+			if reqErr, ok := err.(awserr.RequestFailure); ok {
+				// A service error occurred
+				code = strconv.Itoa(reqErr.StatusCode())
+			} else {
+				// Generic AWS Error with Code, Message, and original error (if any)
+				code = awsErr.Code()
+			}
+		}
 	}
-	route53RequestDuration.WithLabelValues(operation, label).Observe(duration)
-	route53RequestTotal.WithLabelValues(operation, label).Inc()
+	route53RequestDuration.WithLabelValues(operation, code).Observe(duration)
+	route53RequestTotal.WithLabelValues(operation, code).Inc()
 }
 
 func (c *InstrumentedRoute53) ListHostedZones(input *route53.ListHostedZonesInput) (output *route53.ListHostedZonesOutput, err error) {

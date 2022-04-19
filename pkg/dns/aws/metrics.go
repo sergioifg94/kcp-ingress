@@ -22,10 +22,10 @@ import (
 )
 
 const (
-	operationLabel       = "operation"
-	resultLabel          = "result"
-	resultLabelSucceeded = "succeeded"
-	resultLabelFailed    = "failed"
+	operationLabel  = "operation"
+	returnCodeLabel = "code"
+	// The default return code
+	returnCodeLabelDefault = ""
 )
 
 var (
@@ -46,7 +46,7 @@ var (
 			Name: "glbc_aws_route53_request_total",
 			Help: "GLBC AWS Route53 total number of requests",
 		},
-		[]string{operationLabel, resultLabel},
+		[]string{operationLabel, returnCodeLabel},
 	)
 
 	// route53RequestErrors is a prometheus counter metrics which holds the total
@@ -56,7 +56,7 @@ var (
 			Name: "glbc_aws_route53_request_errors_total",
 			Help: "GLBC AWS Route53 total number of errors",
 		},
-		[]string{operationLabel},
+		[]string{operationLabel, returnCodeLabel},
 	)
 
 	// route53RequestDuration is a prometheus metric which records the duration
@@ -73,7 +73,7 @@ var (
 				5, 6, 7, 8, 9, 10, 15, 20, 25, 30, 40, 50, 60,
 			},
 		},
-		[]string{operationLabel, resultLabel},
+		[]string{operationLabel, returnCodeLabel},
 	)
 )
 
@@ -96,8 +96,7 @@ func init() {
 	// Initialize metrics
 	for _, operation := range operationLabelValues {
 		route53RequestCount.WithLabelValues(operation).Set(0)
-		route53RequestTotal.WithLabelValues(operation, resultLabelSucceeded).Add(0)
-		route53RequestTotal.WithLabelValues(operation, resultLabelFailed).Add(0)
-		route53RequestErrors.WithLabelValues(operation).Add(0)
+		route53RequestTotal.WithLabelValues(operation, returnCodeLabelDefault).Add(0)
+		route53RequestErrors.WithLabelValues(operation, returnCodeLabelDefault).Add(0)
 	}
 }
