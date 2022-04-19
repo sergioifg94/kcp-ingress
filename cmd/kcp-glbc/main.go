@@ -38,18 +38,23 @@ const (
 )
 
 var (
+	// Control cluster client options
+	glbcKubeconfig = flag.String("glbc-kubeconfig", "", "Path to GLBC kubeconfig")
+	// KCP client options
 	kubeconfig           = flag.String("kubeconfig", "", "Path to kubeconfig")
-	logicalClusterTarget = flag.String("logical-cluster", env.GetEnvString("GLBC_LOGICAL_CLUSTER_TARGET", "*"), "set the target logical cluster")
-	glbcKubeconfig       = flag.String("glbc-kubeconfig", "", "Path to GLBC kubeconfig")
-	tlsProviderEnabled   = flag.Bool("glbc-tls-provided", env.GetEnvBool("GLBC_TLS_PROVIDED", false), "when set to true glbc will generate LE certs for hosts it creates")
-	tlsProvider          = flag.String("glbc-tls-provider", env.GetEnvString("GLBC_TLS_PROVIDER", "le-staging"), "decides which provider to use. Current allowed values -glbc-tls-provider=le-staging -glbc-tls-provider=le-production ")
-	region               = flag.String("region", env.GetEnvString("AWS_REGION", "eu-central-1"), "the region we should target with AWS clients")
 	kubecontext          = flag.String("context", env.GetEnvString("GLBC_KCP_CONTEXT", ""), "Context to use in the Kubeconfig file, instead of the current context")
-
+	logicalClusterTarget = flag.String("logical-cluster", env.GetEnvString("GLBC_LOGICAL_CLUSTER_TARGET", "*"), "set the target logical cluster")
+	// TLS certificate issuance options
+	tlsProviderEnabled = flag.Bool("glbc-tls-provided", env.GetEnvBool("GLBC_TLS_PROVIDED", false), "when set to true glbc will generate LE certs for hosts it creates")
+	tlsProvider        = flag.String("glbc-tls-provider", env.GetEnvString("GLBC_TLS_PROVIDER", "le-staging"), "decides which provider to use. Current allowed values -glbc-tls-provider=le-staging -glbc-tls-provider=le-production ")
+	// DNS management options
 	domain            = flag.String("domain", env.GetEnvString("GLBC_DOMAIN", "hcpapps.net"), "The domain to use to expose ingresses")
 	enableCustomHosts = flag.Bool("enable-custom-hosts", env.GetEnvBool("GLBC_ENABLE_CUSTOM_HOSTS", false), "Flag to enable hosts to be custom")
-
-	dnsProvider = flag.String("dns-provider", env.GetEnvString("GLBC_DNS_PROVIDER", "aws"), "The DNS provider being used [aws, fake]")
+	dnsProvider       = flag.String("dns-provider", env.GetEnvString("GLBC_DNS_PROVIDER", "aws"), "The DNS provider being used [aws, fake]")
+	// AWS Route53 options
+	region = flag.String("region", env.GetEnvString("AWS_REGION", "eu-central-1"), "the region we should target with AWS clients")
+	// Observability options
+	monitoringPort = flag.Int("monitoring-port", 8080, "The port of the metrics endpoint (can be set to \"0\" to disable the metrics serving)")
 )
 
 var controllersGroup = sync.WaitGroup{}
@@ -187,7 +192,7 @@ func main() {
 	glbcFilteredInformerFactory.WaitForCacheSync(ctx.Done())
 
 	// start listening on the metrics endpoint
-	metricsServer, err := metrics.NewServer()
+	metricsServer, err := metrics.NewServer(monitoringPort)
 	if err != nil {
 		klog.Exitf("Failed to create metrics server: %v", err)
 	}

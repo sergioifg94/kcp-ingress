@@ -16,17 +16,16 @@ package metrics
 
 import (
 	"context"
+	"fmt"
 	"net"
 	"net/http"
+	"strconv"
 	"time"
 
 	"github.com/prometheus/client_golang/prometheus/promhttp"
 
 	"k8s.io/klog/v2"
 )
-
-// DefaultBindAddress sets the default bind address for the metrics listener
-var DefaultBindAddress = ":8888"
 
 const defaultMetricsEndpoint = "/metrics"
 
@@ -35,8 +34,13 @@ type Server struct {
 	listener   net.Listener
 }
 
-func NewServer() (*Server, error) {
-	listener, err := newListener(DefaultBindAddress)
+func NewServer(port *int) (*Server, error) {
+	addr := "0"
+	if port != nil && *port != 0 {
+		addr = ":" + strconv.Itoa(*port)
+	}
+
+	listener, err := newListener(addr)
 	if err != nil {
 		return nil, err
 	}
@@ -55,15 +59,27 @@ func NewServer() (*Server, error) {
 	}, nil
 }
 
-func (s *Server) Start() error {
-	klog.InfoS("Started serving metrics", "address", s.listener.Addr())
-	if err := s.httpServer.Serve(s.listener); err != http.ErrServerClosed {
-		return err
+func (s *Server) Start() (err error) {
+	if s.listener == nil {
+		klog.InfoS("Serving metrics is disabled")
+		return
 	}
-	return nil
+	defer func() {
+		if r := recover(); r != nil {
+			err = fmt.Errorf("serving metrics failed: %v", r)
+		}
+	}()
+	klog.InfoS("Started serving metrics", "address", s.listener.Addr())
+	if e := s.httpServer.Serve(s.listener); e != http.ErrServerClosed {
+		err = e
+	}
+	return
 }
 
 func (s *Server) Shutdown() error {
+	if s.listener == nil {
+		return nil
+	}
 	klog.Info("Stopping metrics server")
 	shutdownCtx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 	defer cancel()
@@ -72,11 +88,6 @@ func (s *Server) Shutdown() error {
 
 // newListener creates a new TCP listener bound to the given address.
 func newListener(addr string) (net.Listener, error) {
-	if addr == "" {
-		// If the metrics bind address is empty, use the default one
-		addr = DefaultBindAddress
-	}
-
 	// Add a case to disable metrics altogether
 	if addr == "0" {
 		return nil, nil
