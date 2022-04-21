@@ -31,6 +31,15 @@ type Controller struct {
 	Process func(context.Context, string) error
 }
 
+func NewController(name string, queue workqueue.RateLimitingInterface) *Controller {
+	controller := &Controller{
+		Name:  name,
+		Queue: queue,
+	}
+	initMetrics(controller)
+	return controller
+}
+
 func (c *Controller) Enqueue(obj interface{}) {
 	key, err := cache.MetaNamespaceKeyFunc(obj)
 	if err != nil {
@@ -46,6 +55,8 @@ func (c *Controller) Start(ctx context.Context, numThreads int) {
 
 	klog.InfoS("Starting workers", "controller", c.Name)
 	defer klog.InfoS("Stopping workers", "controller", c.Name)
+
+	workerCount.WithLabelValues(c.Name).Set(float64(numThreads))
 
 	for i := 0; i < numThreads; i++ {
 		go wait.UntilWithContext(ctx, c.startWorker, time.Second)
@@ -67,32 +78,42 @@ func (c *Controller) processNextWorkItem(ctx context.Context) bool {
 	}
 	key := k.(string)
 
-	// No matter what, tell the queue we're done with this key, to unblock
-	// other workers.
+	// No matter what, tell the queue we're done with this key,
+	// to unblock other workers.
 	defer c.Queue.Done(key)
 
-	err := c.Process(ctx, key)
-	c.handleErr(err, key)
-	return true
-}
+	activeWorkers.WithLabelValues(c.Name).Add(1)
+	defer activeWorkers.WithLabelValues(c.Name).Add(-1)
 
-func (c *Controller) handleErr(err error, key string) {
-	// Reconcile worked, nothing else to do for this workqueue item.
+	start := time.Now()
+	defer func() {
+		reconcileTime.WithLabelValues(c.Name).Observe(time.Since(start).Seconds())
+	}()
+
+	err := c.Process(ctx, key)
+
+	// Reconcile worked, nothing else to do for this workqueue item
 	if err == nil {
 		c.Queue.Forget(key)
-		return
+		reconcileTotal.WithLabelValues(c.Name, labelSuccess).Inc()
+		return true
 	}
 
-	// Re-enqueue up to 5 times.
+	reconcileErrors.WithLabelValues(c.Name).Inc()
+	reconcileTotal.WithLabelValues(c.Name, labelError).Inc()
+
+	// Re-enqueue up to 5 times
 	num := c.Queue.NumRequeues(key)
 	if num < 5 {
 		klog.Errorf("Error reconciling key %q, retrying... (#%d): %v", key, num, err)
 		c.Queue.AddRateLimited(key)
-		return
+		return true
 	}
 
 	// Give up and report error elsewhere.
 	c.Queue.Forget(key)
 	runtime.HandleError(err)
 	klog.Infof("Dropping key %q after failed retries: %v", key, err)
+
+	return true
 }

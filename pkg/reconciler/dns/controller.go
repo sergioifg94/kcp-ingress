@@ -29,10 +29,7 @@ func NewController(config *ControllerConfig) (*Controller, error) {
 	queue := workqueue.NewRateLimitingQueue(workqueue.DefaultControllerRateLimiter())
 
 	c := &Controller{
-		Controller: reconciler.Controller{
-			Name:  controllerName,
-			Queue: queue,
-		},
+		Controller:            reconciler.NewController(controllerName, queue),
 		dnsRecordClient:       config.DnsRecordClient,
 		sharedInformerFactory: config.SharedInformerFactory,
 	}
@@ -77,7 +74,7 @@ type ControllerConfig struct {
 }
 
 type Controller struct {
-	reconciler.Controller
+	*reconciler.Controller
 	sharedInformerFactory externalversions.SharedInformerFactory
 	dnsRecordClient       kuadrantv1.ClusterInterface
 	indexer               cache.Indexer

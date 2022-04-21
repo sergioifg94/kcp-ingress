@@ -208,6 +208,39 @@ The KCP GLBC monitoring endpoint exposes the metrics listed in the following sec
 
 |===
 
+=== Controller Metrics
+
+.Controller metrics
+|===
+|Name |Type |Description |Labels
+
+| `glbc_controller_reconcile_total`
+| `CounterVec`
+| Total number of reconciliations per controller
+| `controller`, `result`
+
+| `glbc_controller_reconcile_errors_total`
+| `CounterVec`
+| Total number of reconciliation errors per controller
+| `controller`
+
+| `glbc_controller_reconcile_time_seconds`
+| `HistogramVec`
+| Length of time per reconciliation per controller
+| `controller`
+
+| `glbc_controller_max_concurrent_reconciles`
+| `GaugeVec`
+| Maximum number of concurrent reconciles per controller
+| `controller`
+
+| `glbc_controller_active_workers`
+| `GaugeVec`
+| Number of currently used workers per controller
+| `controller`
+
+|===
+
 === Go Runtime Metrics
 
 .Go Runtime metrics

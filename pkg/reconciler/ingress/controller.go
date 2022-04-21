@@ -44,10 +44,7 @@ func NewController(config *ControllerConfig) *Controller {
 	ingressPlacer := placement.NewPlacer()
 
 	c := &Controller{
-		Controller: reconciler.Controller{
-			Name:  controllerName,
-			Queue: queue,
-		},
+		Controller:            reconciler.NewController(controllerName, queue),
 		kubeClient:            config.KubeClient,
 		certProvider:          config.CertProvider,
 		sharedInformerFactory: config.SharedInformerFactory,
@@ -97,7 +94,7 @@ type ControllerConfig struct {
 }
 
 type Controller struct {
-	reconciler.Controller
+	*reconciler.Controller
 	kubeClient            kubernetes.ClusterInterface
 	sharedInformerFactory informers.SharedInformerFactory
 	dnsRecordClient       kuadrantv1.ClusterInterface

@@ -30,7 +30,7 @@ type ControllerConfig struct {
 }
 
 type Controller struct {
-	reconciler.Controller
+	*reconciler.Controller
 	glbcKubeClient        kubernetes.Interface
 	lister                secretsv1lister.SecretLister
 	indexer               cache.Indexer
@@ -41,10 +41,7 @@ type Controller struct {
 func NewController(config *ControllerConfig) (*Controller, error) {
 	queue := workqueue.NewRateLimitingQueue(workqueue.DefaultControllerRateLimiter())
 	c := &Controller{
-		Controller: reconciler.Controller{
-			Name:  controllerName,
-			Queue: queue,
-		},
+		Controller:            reconciler.NewController(controllerName, queue),
 		glbcKubeClient:        config.GlbcKubeClient,
 		kcpClient:             config.KcpClient,
 		sharedInformerFactory: config.SharedInformerFactory,

@@ -26,10 +26,7 @@ func NewController(config *ControllerConfig) (*Controller, error) {
 	queue := workqueue.NewRateLimitingQueue(workqueue.DefaultControllerRateLimiter())
 
 	c := &Controller{
-		Controller: reconciler.Controller{
-			Name:  controllerName,
-			Queue: queue,
-		},
+		Controller:            reconciler.NewController(controllerName, queue),
 		coreClient:            config.DeploymentClient,
 		sharedInformerFactory: config.SharedInformerFactory,
 	}
@@ -55,7 +52,7 @@ type ControllerConfig struct {
 }
 
 type Controller struct {
-	reconciler.Controller
+	*reconciler.Controller
 	sharedInformerFactory informers.SharedInformerFactory
 	coreClient            kubernetes.ClusterInterface
 	indexer               cache.Indexer
