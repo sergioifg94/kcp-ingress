@@ -39,7 +39,7 @@ type Controller struct {
 }
 
 func NewController(config *ControllerConfig) (*Controller, error) {
-	queue := workqueue.NewRateLimitingQueue(workqueue.DefaultControllerRateLimiter())
+	queue := workqueue.NewNamedRateLimitingQueue(workqueue.DefaultControllerRateLimiter(), controllerName)
 	c := &Controller{
 		Controller:            reconciler.NewController(controllerName, queue),
 		glbcKubeClient:        config.GlbcKubeClient,

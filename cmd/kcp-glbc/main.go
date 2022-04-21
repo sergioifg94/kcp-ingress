@@ -6,6 +6,9 @@ import (
 	"sync"
 	"time"
 
+	// Make sure our workqueue MetricsProvider is the first to register
+	_ "github.com/kuadrant/kcp-glbc/pkg/reconciler"
+
 	"golang.org/x/sync/errgroup"
 
 	genericapiserver "k8s.io/apiserver/pkg/server"

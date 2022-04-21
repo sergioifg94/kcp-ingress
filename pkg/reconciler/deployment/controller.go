@@ -23,7 +23,7 @@ const controllerName = "kcp-glbc-deployment"
 
 // NewController returns a new Controller which reconciles Deployment.
 func NewController(config *ControllerConfig) (*Controller, error) {
-	queue := workqueue.NewRateLimitingQueue(workqueue.DefaultControllerRateLimiter())
+	queue := workqueue.NewNamedRateLimitingQueue(workqueue.DefaultControllerRateLimiter(), controllerName)
 
 	c := &Controller{
 		Controller:            reconciler.NewController(controllerName, queue),

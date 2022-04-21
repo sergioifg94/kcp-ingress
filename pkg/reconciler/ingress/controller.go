@@ -32,7 +32,7 @@ const controllerName = "kcp-glbc-ingress"
 // into N virtual Ingresses labeled for each Cluster that exists at the time
 // the Ingress is created.
 func NewController(config *ControllerConfig) *Controller {
-	queue := workqueue.NewRateLimitingQueue(workqueue.DefaultControllerRateLimiter())
+	queue := workqueue.NewNamedRateLimitingQueue(workqueue.DefaultControllerRateLimiter(), controllerName)
 
 	hostResolver := config.HostResolver
 	switch impl := hostResolver.(type) {
