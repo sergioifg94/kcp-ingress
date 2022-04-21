@@ -2,13 +2,10 @@ package tls
 
 import (
 	"context"
-	"time"
 
 	v1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/equality"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	"k8s.io/apimachinery/pkg/util/runtime"
-	"k8s.io/apimachinery/pkg/util/wait"
 	"k8s.io/client-go/informers"
 	"k8s.io/client-go/kubernetes"
 	secretsv1lister "k8s.io/client-go/listers/core/v1"
@@ -16,6 +13,7 @@ import (
 	"k8s.io/client-go/util/workqueue"
 	"k8s.io/klog/v2"
 
+	"github.com/kuadrant/kcp-glbc/pkg/reconciler"
 	"github.com/kuadrant/kcp-glbc/pkg/tls"
 )
 
@@ -32,7 +30,7 @@ type ControllerConfig struct {
 }
 
 type Controller struct {
-	queue                 workqueue.RateLimitingInterface
+	reconciler.Controller
 	glbcKubeClient        kubernetes.Interface
 	lister                secretsv1lister.SecretLister
 	indexer               cache.Indexer
@@ -43,11 +41,15 @@ type Controller struct {
 func NewController(config *ControllerConfig) (*Controller, error) {
 	queue := workqueue.NewRateLimitingQueue(workqueue.DefaultControllerRateLimiter())
 	c := &Controller{
-		queue:                 queue,
+		Controller: reconciler.Controller{
+			Name:  controllerName,
+			Queue: queue,
+		},
 		glbcKubeClient:        config.GlbcKubeClient,
 		kcpClient:             config.KcpClient,
 		sharedInformerFactory: config.SharedInformerFactory,
 	}
+	c.Process = c.process
 
 	c.sharedInformerFactory.Core().V1().Secrets().Informer().AddEventHandler(cache.ResourceEventHandlerFuncs{
 		AddFunc: func(obj interface{}) {
@@ -59,17 +61,17 @@ func NewController(config *ControllerConfig) (*Controller, error) {
 				// The certificate request has successfully completed so there is one less pending request
 				tls.CertificateRequestCount.WithLabelValues(issuer).Dec()
 			}
-			c.enqueue(obj)
+			c.Enqueue(obj)
 		},
 		UpdateFunc: func(_, obj interface{}) {
-			c.enqueue(obj)
+			c.Enqueue(obj)
 		},
 		DeleteFunc: func(obj interface{}) {
 			secret := obj.(*v1.Secret)
 			if issuer, ok := secret.Annotations[tlsIssuerAnnotation]; ok {
 				tlsCertificateSecretCount.WithLabelValues(issuer).Dec()
 			}
-			c.enqueue(obj)
+			c.Enqueue(obj)
 		},
 	})
 
@@ -77,72 +79,6 @@ func NewController(config *ControllerConfig) (*Controller, error) {
 	c.lister = c.sharedInformerFactory.Core().V1().Secrets().Lister()
 
 	return c, nil
-}
-
-func (c *Controller) enqueue(obj interface{}) {
-	key, err := cache.MetaNamespaceKeyFunc(obj)
-	if err != nil {
-		runtime.HandleError(err)
-		return
-	}
-	c.queue.AddRateLimited(key)
-}
-
-func (c *Controller) Start(ctx context.Context, numThreads int) {
-	defer runtime.HandleCrash()
-	defer c.queue.ShutDown()
-
-	klog.InfoS("Starting workers", "controller", controllerName)
-	defer klog.InfoS("Stopping workers", "controller", controllerName)
-
-	for i := 0; i < numThreads; i++ {
-		go wait.UntilWithContext(ctx, c.startWorker, time.Second)
-	}
-
-	<-ctx.Done()
-}
-
-func (c *Controller) startWorker(ctx context.Context) {
-	for c.processNextWorkItem(ctx) {
-	}
-}
-
-func (c *Controller) processNextWorkItem(ctx context.Context) bool {
-	// Wait until there is a new item in the working queue
-	k, quit := c.queue.Get()
-	if quit {
-		return false
-	}
-	key := k.(string)
-
-	// No matter what, tell the queue we're done with this key, to unblock
-	// other workers.
-	defer c.queue.Done(key)
-
-	err := c.process(ctx, key)
-	c.handleErr(err, key)
-	return true
-}
-
-func (c *Controller) handleErr(err error, key string) {
-	// Reconcile worked, nothing else to do for this workqueue item.
-	if err == nil {
-		c.queue.Forget(key)
-		return
-	}
-
-	// Re-enqueue up to 5 times.
-	num := c.queue.NumRequeues(key)
-	if num < 5 {
-		klog.Errorf("Error reconciling key %q, retrying... (#%d): %v", key, num, err)
-		c.queue.AddRateLimited(key)
-		return
-	}
-
-	// Give up and report error elsewhere.
-	c.queue.Forget(key)
-	runtime.HandleError(err)
-	klog.Infof("Dropping key %q after failed retries: %v", key, err)
 }
 
 func (c *Controller) process(ctx context.Context, key string) error {
