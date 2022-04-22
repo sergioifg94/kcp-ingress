@@ -81,7 +81,7 @@ func awsSecret() v1.Secret {
 
 	data[envAwsAccessKeyID] = []byte(accessKeyID)
 	data[envAwsAccessSecret] = []byte(accessSecret)
-	data[envAwsZoneID] = []byte(os.Getenv(zoneID))
+	data[envAwsZoneID] = []byte(zoneID)
 	return v1.Secret{
 		ObjectMeta: metav1.ObjectMeta{
 			Name: awsSecretName,
