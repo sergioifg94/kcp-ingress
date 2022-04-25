@@ -11,6 +11,7 @@ import (
 	"github.com/kcp-dev/apimachinery/pkg/logicalcluster"
 
 	"github.com/kuadrant/kcp-glbc/pkg/cluster"
+	"github.com/kuadrant/kcp-glbc/pkg/tls"
 )
 
 const (
@@ -131,8 +132,15 @@ func (c *Controller) ensureMirrored(ctx context.Context, kctx cluster.ObjectMapp
 }
 
 func (c *Controller) observeCertificateIssuanceDuration(kctx cluster.ObjectMapper, secret *v1.Secret) {
-	// FIXME: refactor the certificate management so that it's possible to observe issuance errors
+	// FIXME: refactor the certificate management so that metrics reflect actual state transitions rather than client requests, and so that it's possible to observe issuance errors
+	issuer := secret.Annotations[tlsIssuerAnnotation]
+	hostname := kctx.Host()
+	// The certificate request has successfully completed
+	tlsCertificateRequestTotal.WithLabelValues(issuer, hostname, resultLabelSucceeded).Inc()
+	// The certificate request has successfully completed so there is one less pending request
+	tls.CertificateRequestCount.WithLabelValues(issuer, hostname).Dec()
+
 	tlsCertificateIssuanceDuration.
-		WithLabelValues(secret.Annotations[tlsIssuerAnnotation], kctx.Host(), resultLabelSucceeded).
+		WithLabelValues(issuer, hostname, resultLabelSucceeded).
 		Observe(secret.CreationTimestamp.Sub(kctx.CreationTimestamp().Time).Seconds())
 }

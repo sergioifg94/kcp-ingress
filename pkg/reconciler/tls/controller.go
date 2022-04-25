@@ -15,7 +15,6 @@ import (
 
 	"github.com/kuadrant/kcp-glbc/pkg/cluster"
 	"github.com/kuadrant/kcp-glbc/pkg/reconciler"
-	"github.com/kuadrant/kcp-glbc/pkg/tls"
 )
 
 const (
@@ -53,13 +52,9 @@ func NewController(config *ControllerConfig) (*Controller, error) {
 		AddFunc: func(obj interface{}) {
 			secret := obj.(*v1.Secret)
 			issuer, hasIssuer := secret.Annotations[tlsIssuerAnnotation]
-			hostname, hasHostname := secret.Annotations[cluster.LABEL_HCG_HOST]
+			hostname, hasHostname := secret.Annotations[cluster.ANNOTATION_HCG_HOST]
 			if hasIssuer && hasHostname {
 				tlsCertificateSecretCount.WithLabelValues(issuer, hostname).Inc()
-				// The certificate request has successfully completed
-				tlsCertificateRequestTotal.WithLabelValues(issuer, hostname, resultLabelSucceeded).Inc()
-				// The certificate request has successfully completed so there is one less pending request
-				tls.CertificateRequestCount.WithLabelValues(issuer, hostname).Dec()
 			}
 			c.Enqueue(obj)
 		},
@@ -69,7 +64,7 @@ func NewController(config *ControllerConfig) (*Controller, error) {
 		DeleteFunc: func(obj interface{}) {
 			secret := obj.(*v1.Secret)
 			issuer, hasIssuer := secret.Annotations[tlsIssuerAnnotation]
-			hostname, hasHostname := secret.Annotations[cluster.LABEL_HCG_HOST]
+			hostname, hasHostname := secret.Annotations[cluster.ANNOTATION_HCG_HOST]
 			if hasIssuer && hasHostname {
 				tlsCertificateSecretCount.WithLabelValues(issuer, hostname).Dec()
 			}
