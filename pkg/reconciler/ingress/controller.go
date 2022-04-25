@@ -192,12 +192,7 @@ func (c *Controller) process(ctx context.Context, key string) error {
 
 	previous := current.DeepCopy()
 
-	rootName, isLeaf := getRootName(current)
-	if isLeaf {
-		err = c.reconcileLeaf(ctx, rootName, current)
-	} else {
-		err = c.reconcileRoot(ctx, current)
-	}
+	err = c.reconcile(ctx, current)
 	if err != nil {
 		return err
 	}

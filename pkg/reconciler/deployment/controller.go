@@ -5,10 +5,8 @@ import (
 	"time"
 
 	appsv1 "k8s.io/api/apps/v1"
-	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/equality"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	"k8s.io/apimachinery/pkg/labels"
 	"k8s.io/apimachinery/pkg/util/runtime"
 	"k8s.io/apimachinery/pkg/util/wait"
 	"k8s.io/client-go/informers"
@@ -20,8 +18,6 @@ import (
 	"k8s.io/klog/v2"
 
 	"github.com/kcp-dev/apimachinery/pkg/logicalcluster"
-
-	"github.com/kuadrant/kcp-glbc/pkg/reconciler/service"
 )
 
 const controllerName = "kcp-glbc-deployment"
@@ -41,13 +37,6 @@ func NewController(config *ControllerConfig) (*Controller, error) {
 		AddFunc:    func(obj interface{}) { c.enqueue(obj) },
 		UpdateFunc: func(_, obj interface{}) { c.enqueue(obj) },
 		DeleteFunc: func(obj interface{}) { c.enqueue(obj) },
-	})
-
-	// Watch for events related to Services
-	c.sharedInformerFactory.Core().V1().Services().Informer().AddEventHandler(cache.ResourceEventHandlerFuncs{
-		AddFunc:    func(obj interface{}) { c.deploymentsFromService(obj) },
-		UpdateFunc: func(_, obj interface{}) { c.deploymentsFromService(obj) },
-		DeleteFunc: func(obj interface{}) { c.deploymentsFromService(obj) },
 	})
 
 	c.indexer = c.sharedInformerFactory.Apps().V1().Deployments().Informer().GetIndexer()
@@ -163,43 +152,4 @@ func (c *Controller) process(ctx context.Context, key string) error {
 	}
 
 	return err
-}
-
-func (c *Controller) deploymentsFromService(obj interface{}) {
-	svc := obj.(*corev1.Service)
-
-	if !service.IsRootService(svc) {
-		return
-	}
-
-	deployments, err := c.getReferencedDeployments(svc)
-	if err != nil {
-		runtime.HandleError(err)
-		return
-	}
-	for _, deployment := range deployments {
-		c.enqueue(deployment)
-	}
-}
-
-func (c *Controller) getReferencedDeployments(service *corev1.Service) ([]*appsv1.Deployment, error) {
-	deployments, err := c.deploymentLister.Deployments(service.Namespace).List(labels.Everything())
-	if err != nil {
-		return nil, err
-	}
-	deployments = findDeploymentsBySelector(labels.SelectorFromSet(service.Spec.Selector), deployments)
-	return deployments, nil
-}
-
-func findDeploymentsBySelector(selector labels.Selector, deployments []*appsv1.Deployment) []*appsv1.Deployment {
-	retDeps := make([]*appsv1.Deployment, 0, len(deployments))
-
-	for _, deployment := range deployments {
-		deploymentTemplateLabels := labels.Set(deployment.Spec.Template.Labels)
-		if selector.Matches(deploymentTemplateLabels) {
-			retDeps = append(retDeps, deployment)
-		}
-	}
-
-	return retDeps
 }
