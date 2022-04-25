@@ -136,6 +136,10 @@ func (cm *CertManager) IssuerID() string {
 	return string(cm.certProvider)
 }
 
+func (cm *CertManager) Domains() []string {
+	return cm.validDomains
+}
+
 func (cm *CertManager) issuer(ns string) *certman.Issuer {
 	ci := certman.Issuer{
 		ObjectMeta: metav1.ObjectMeta{
@@ -279,7 +283,7 @@ func (cm *CertManager) Create(ctx context.Context, cr CertificateRequest) error 
 	if err != nil {
 		return err
 	}
-	CertificateRequestCount.WithLabelValues(cm.IssuerID()).Inc()
+	CertificateRequestCount.WithLabelValues(cm.IssuerID(), cr.Host()).Inc()
 	return nil
 }
 
@@ -294,7 +298,7 @@ func (cm *CertManager) Delete(ctx context.Context, cr CertificateRequest) error 
 		}
 		// The Secret does not exist, which indicates the TLS certificate request is still pending,
 		// so we must account for decreasing the number of pending requests.
-		CertificateRequestCount.WithLabelValues(cm.IssuerID()).Dec()
+		CertificateRequestCount.WithLabelValues(cm.IssuerID(), cr.Host()).Dec()
 	}
 	return nil
 }

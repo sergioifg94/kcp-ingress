@@ -184,27 +184,27 @@ The KCP GLBC monitoring endpoint exposes the metrics listed in the following sec
 | `glbc_tls_certificate_secret_count`
 | `GaugeVec`
 | Current number of TLS certificate Secrets
-| `issuer`
+| `issuer`, `hostname`
 
 | `glbc_tls_certificate_pending_request_count`
 | `GaugeVec`
 | Current number of pending certificate requests
-| `issuer`
+| `issuer`, `hostname`
 
 | `glbc_tls_certificate_request_total`
 | `CounterVec`
 | Total number of TLS certificate requests
-| `issuer`, `result`
+| `issuer`, `hostname`, `result`
 
 | `glbc_tls_certificate_request_errors_total`
 | `CounterVec`
 | Total number of failed TLS certificate requests
-| `issuer`
+| `issuer`, `hostname`
 
 | `glbc_tls_certificate_issuance_duration_seconds`
 | `HistogramVec`
 | Duration of the TLS certificate issuance
-| `issuer`, `result`
+| `issuer`, `hostname`, `result`
 
 |===
 

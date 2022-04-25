@@ -24,6 +24,7 @@ const tlsIssuerAnnotation = "kuadrant.dev/tls-issuer"
 
 type Provider interface {
 	IssuerID() string
+	Domains() []string
 	Create(ctx context.Context, cr CertificateRequest) error
 	Delete(ctx context.Context, cr CertificateRequest) error
 	Initialize(ctx context.Context) error

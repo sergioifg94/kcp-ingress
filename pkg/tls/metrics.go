@@ -20,7 +20,10 @@ import (
 	"github.com/kuadrant/kcp-glbc/pkg/metrics"
 )
 
-const issuerLabel = "issuer"
+const (
+	issuerLabel = "issuer"
+	hostLabel   = "host"
+)
 
 var (
 	// CertificateRequestCount is a prometheus metric which holds the number of
@@ -31,7 +34,10 @@ var (
 			Name: "glbc_tls_certificate_pending_request_count",
 			Help: "GLBC TLS certificate pending request count",
 		},
-		[]string{issuerLabel},
+		[]string{
+			issuerLabel,
+			hostLabel,
+		},
 	)
 )
 
@@ -45,5 +51,7 @@ func init() {
 func InitMetrics(provider Provider) {
 	// Initialize metrics
 	issuer := provider.IssuerID()
-	CertificateRequestCount.WithLabelValues(issuer).Set(0)
+	for _, domain := range provider.Domains() {
+		CertificateRequestCount.WithLabelValues(issuer, domain).Set(0)
+	}
 }

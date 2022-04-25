@@ -24,6 +24,10 @@ func (p *FakeProvider) IssuerID() string {
 	return "fake"
 }
 
+func (p *FakeProvider) Domains() []string {
+	return nil
+}
+
 func (p *FakeProvider) Create(_ context.Context, _ CertificateRequest) error {
 	return nil
 }

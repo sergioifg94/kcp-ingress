@@ -25,6 +25,7 @@ import (
 
 const (
 	issuerLabel          = "issuer"
+	hostnameLabel        = "hostname"
 	resultLabel          = "result"
 	resultLabelSucceeded = "succeeded"
 	// FIXME: Refactor TLS certificate management to be able to monitor errors
@@ -40,7 +41,11 @@ var (
 			Name: "glbc_tls_certificate_request_total",
 			Help: "GLBC TLS certificate total number of requests",
 		},
-		[]string{issuerLabel, resultLabel},
+		[]string{
+			issuerLabel,
+			hostnameLabel,
+			resultLabel,
+		},
 	)
 
 	// tlsCertificateRequestErrors is a prometheus counter metrics which holds the total
@@ -51,7 +56,10 @@ var (
 			Help: "GLBC TLS certificate total number of request errors",
 		},
 		// TODO: check if it's possible to add an error/code label
-		[]string{issuerLabel},
+		[]string{
+			issuerLabel,
+			hostnameLabel,
+		},
 	)
 
 	// tlsCertificateIssuanceDuration is a prometheus metric which records the duration
@@ -72,7 +80,11 @@ var (
 				5 * time.Minute.Seconds(),
 			},
 		},
-		[]string{issuerLabel, resultLabel},
+		[]string{
+			issuerLabel,
+			hostnameLabel,
+			resultLabel,
+		},
 	)
 
 	// tlsCertificateSecretCount is a prometheus metric which holds the number of
@@ -82,7 +94,10 @@ var (
 			Name: "glbc_tls_certificate_secret_count",
 			Help: "GLBC TLS certificate secret count",
 		},
-		[]string{issuerLabel},
+		[]string{
+			issuerLabel,
+			hostnameLabel,
+		},
 	)
 )
 
@@ -99,10 +114,12 @@ func init() {
 func InitMetrics(provider tls.Provider) {
 	// Initialize metrics
 	issuer := provider.IssuerID()
-	tlsCertificateRequestTotal.WithLabelValues(issuer, resultLabelSucceeded).Add(0)
-	tlsCertificateRequestTotal.WithLabelValues(issuer, resultLabelFailed).Add(0)
-	tlsCertificateRequestErrors.WithLabelValues(issuer).Add(0)
-	tlsCertificateSecretCount.WithLabelValues(issuer).Set(0)
+	for _, domain := range provider.Domains() {
+		tlsCertificateRequestTotal.WithLabelValues(issuer, domain, resultLabelSucceeded).Add(0)
+		tlsCertificateRequestTotal.WithLabelValues(issuer, domain, resultLabelFailed).Add(0)
+		tlsCertificateRequestErrors.WithLabelValues(issuer, domain).Add(0)
+		tlsCertificateSecretCount.WithLabelValues(issuer, domain).Set(0)
+	}
 
 	tls.InitMetrics(provider)
 }

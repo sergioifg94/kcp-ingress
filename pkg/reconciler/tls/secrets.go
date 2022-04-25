@@ -133,6 +133,6 @@ func (c *Controller) ensureMirrored(ctx context.Context, kctx cluster.ObjectMapp
 func (c *Controller) observeCertificateIssuanceDuration(kctx cluster.ObjectMapper, secret *v1.Secret) {
 	// FIXME: refactor the certificate management so that it's possible to observe issuance errors
 	tlsCertificateIssuanceDuration.
-		WithLabelValues(secret.Annotations[tlsIssuerAnnotation], resultLabelSucceeded).
+		WithLabelValues(secret.Annotations[tlsIssuerAnnotation], kctx.Host(), resultLabelSucceeded).
 		Observe(secret.CreationTimestamp.Sub(kctx.CreationTimestamp().Time).Seconds())
 }

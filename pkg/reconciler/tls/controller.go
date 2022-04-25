@@ -13,6 +13,7 @@ import (
 	"k8s.io/client-go/util/workqueue"
 	"k8s.io/klog/v2"
 
+	"github.com/kuadrant/kcp-glbc/pkg/cluster"
 	"github.com/kuadrant/kcp-glbc/pkg/reconciler"
 	"github.com/kuadrant/kcp-glbc/pkg/tls"
 )
@@ -51,12 +52,14 @@ func NewController(config *ControllerConfig) (*Controller, error) {
 	c.sharedInformerFactory.Core().V1().Secrets().Informer().AddEventHandler(cache.ResourceEventHandlerFuncs{
 		AddFunc: func(obj interface{}) {
 			secret := obj.(*v1.Secret)
-			if issuer, ok := secret.Annotations[tlsIssuerAnnotation]; ok {
-				tlsCertificateSecretCount.WithLabelValues(issuer).Inc()
+			issuer, hasIssuer := secret.Annotations[tlsIssuerAnnotation]
+			hostname, hasHostname := secret.Annotations[cluster.LABEL_HCG_HOST]
+			if hasIssuer && hasHostname {
+				tlsCertificateSecretCount.WithLabelValues(issuer, hostname).Inc()
 				// The certificate request has successfully completed
-				tlsCertificateRequestTotal.WithLabelValues(issuer, resultLabelSucceeded).Inc()
+				tlsCertificateRequestTotal.WithLabelValues(issuer, hostname, resultLabelSucceeded).Inc()
 				// The certificate request has successfully completed so there is one less pending request
-				tls.CertificateRequestCount.WithLabelValues(issuer).Dec()
+				tls.CertificateRequestCount.WithLabelValues(issuer, hostname).Dec()
 			}
 			c.Enqueue(obj)
 		},
@@ -65,8 +68,10 @@ func NewController(config *ControllerConfig) (*Controller, error) {
 		},
 		DeleteFunc: func(obj interface{}) {
 			secret := obj.(*v1.Secret)
-			if issuer, ok := secret.Annotations[tlsIssuerAnnotation]; ok {
-				tlsCertificateSecretCount.WithLabelValues(issuer).Dec()
+			issuer, hasIssuer := secret.Annotations[tlsIssuerAnnotation]
+			hostname, hasHostname := secret.Annotations[cluster.LABEL_HCG_HOST]
+			if hasIssuer && hasHostname {
+				tlsCertificateSecretCount.WithLabelValues(issuer, hostname).Dec()
 			}
 			c.Enqueue(obj)
 		},
