@@ -50,8 +50,6 @@ func (c *Controller) reconcile(ctx context.Context, ingress *networkingv1.Ingres
 
 		return nil
 	}
-
-	klog.Infof("PHIL BOOOOY reconciling ingress: %v", ingress.Name)
 	metadata.AddFinalizer(ingress, cascadeCleanupFinalizer)
 
 	if ingress.Annotations == nil || ingress.Annotations[cluster.ANNOTATION_HCG_HOST] == "" {
