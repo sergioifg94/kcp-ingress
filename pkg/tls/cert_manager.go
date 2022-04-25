@@ -283,22 +283,30 @@ func (cm *CertManager) Create(ctx context.Context, cr CertificateRequest) error 
 	if err != nil {
 		return err
 	}
+	// TODO: Move to Certificate informer add handler
 	CertificateRequestCount.WithLabelValues(cm.IssuerID(), cr.Host()).Inc()
 	return nil
 }
 
 func (cm *CertManager) Delete(ctx context.Context, cr CertificateRequest) error {
 	// delete the certificate and delete the secrets
-	if err := cm.certClient.Certificates(cm.certificateNS).Delete(ctx, cr.Name(), metav1.DeleteOptions{}); err != nil && !k8errors.IsNotFound(err) {
-		return err
+	certNotFound := false
+	if err := cm.certClient.Certificates(cm.certificateNS).Delete(ctx, cr.Name(), metav1.DeleteOptions{}); err != nil {
+		if !k8errors.IsNotFound(err) {
+			return err
+		}
+		certNotFound = true
 	}
 	if err := cm.k8sClient.CoreV1().Secrets(cm.certificateNS).Delete(ctx, cr.Name(), metav1.DeleteOptions{}); err != nil {
 		if !k8errors.IsNotFound(err) {
 			return err
 		}
-		// The Secret does not exist, which indicates the TLS certificate request is still pending,
-		// so we must account for decreasing the number of pending requests.
-		CertificateRequestCount.WithLabelValues(cm.IssuerID(), cr.Host()).Dec()
+		if !certNotFound {
+			// The Secret does not exist, which indicates the TLS certificate request is still pending,
+			// so we must account for decreasing the number of pending requests.
+			// TODO: Move to Certificate informer delete handler
+			CertificateRequestCount.WithLabelValues(cm.IssuerID(), cr.Host()).Dec()
+		}
 	}
 	return nil
 }
