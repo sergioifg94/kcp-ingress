@@ -2,6 +2,7 @@
 SHELL := /usr/bin/env bash
 
 NUM_CLUSTERS := 2
+DO_BREW := true
 KCP_BRANCH := v0.3.0-beta.1
 
 IMAGE_TAG_BASE ?= quay.io/kuadrant/kcp-glbc
@@ -145,9 +146,14 @@ clean-ld-kubeconfig:
 .PHONY: clean-ld-config
 clean-ld-config: clean-ld-env clean-ld-kubeconfig ## Remove local deployment files.
 
+LOCAL_SETUP_FLAGS=""
+ifeq ($(DO_BREW),true)
+	LOCAL_SETUP_FLAGS="-b"
+endif
+
 .PHONY: local-setup
 local-setup: clean kind kcp build ## Setup kcp locally using kind.
-	./utils/local-setup.sh -c ${NUM_CLUSTERS}
+	./utils/local-setup.sh -c ${NUM_CLUSTERS} ${LOCAL_SETUP_FLAGS}
 
 ##@ Build Dependencies
 
