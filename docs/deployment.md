@@ -20,6 +20,22 @@ kubectl -n kcp-glbc wait --timeout=300s --for=condition=Available deployments --
 
 The configuration can be modified after the initial deployment as required, see the [configuration](#configuration) section for more details.
 
+
+## Workload Cluster
+
+When registering a workload cluster with KCP, you need to ensure KCP has permissions to sync the resources you need. To do this you need to create a service account in your workload cluster and create the required cluster role. Then bind the cluster role to the service account. You can then create a kubeconfig and add it to your workload cluster
+
+```
+# targeting your workload cluster run:
+
+kubectl create ns kcp-pcluster
+kubectl create sa kcp -n kcp-pcluster
+kubectl create -f config/kcp/kcp-syncer-role.yaml
+# note the script expects the ns to be kcp-pcluster
+./utils/workspace_cluster.sh > workload-cluster.yaml
+
+```
+
 ## Local Development
 
 The following describes how to deploy and test the GLBC running on a kind cluster created as part of the local development setup.
