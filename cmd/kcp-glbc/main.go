@@ -206,7 +206,9 @@ func main() {
 
 	start(gCtx, ingressController)
 	start(gCtx, dnsRecordController)
-	start(gCtx, tlsController)
+	if *tlsProviderEnabled {
+		start(gCtx, tlsController)
+	}
 	start(gCtx, serviceController)
 	start(gCtx, deploymentController)
 
