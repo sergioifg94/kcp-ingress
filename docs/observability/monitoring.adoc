@@ -3,18 +3,18 @@
 
 The KCP GLBC monitoring architecture relies on https://prometheus.io[Prometheus] and the eponymous operator.
 
-The https://prometheus-operator.dev[Prometheus Operator] serves to make running Prometheus on top of Kubernetes as easy as possible, while preserving Kubernetes-native configuration options.
+The https://prometheus-operator.dev[Prometheus operator] serves to make running Prometheus on top of Kubernetes as easy as possible, while preserving Kubernetes-native configuration options.
 
 [[prerequisites]]
 == Prerequisites
 
-To take full advantage of the KCP GLBC monitoring capabilities, it is recommended to have a Prometheus Operator instance, that can be configured to integrate with the KCP GLBC instance deployed on the same cluster.
+To take full advantage of the KCP GLBC monitoring capabilities, it is recommended to have a Prometheus operator instance, that can be configured to integrate with the KCP GLBC instance deployed on the same cluster.
 
 [[kubernetes]]
 === Kubernetes
 
-The easiest way to get started with the Prometheus Operator is by deploying it as part of https://github.com/prometheus-operator/kube-prometheus[kube-prometheus], which provisions an entire monitoring stack.
-You can follow the https://prometheus-operator.dev/docs/prologue/quick-start/[quickstart] from the Prometheus Operator https://prometheus-operator.dev/[documentation].
+The easiest way to get started with the Prometheus operator is by deploying it as part of https://github.com/prometheus-operator/kube-prometheus[kube-prometheus], which provisions an entire monitoring stack.
+You can follow the https://prometheus-operator.dev/docs/prologue/quick-start/[quickstart] from the Prometheus operator https://prometheus-operator.dev/[documentation].
 
 Alternatively, you can quickly deploy the Prometheus operator by running:
 
@@ -25,7 +25,7 @@ $ kubectl apply -f https://raw.githubusercontent.com/prometheus-operator/prometh
 
 WARNING: Beware this installs the operator in the `default` namespace. You must download the file locally and replace the `namespace` fields to deploy the resources into another namespace. This also installs the version from the `main` branch, which you can change in the URL by choosing a stable release version.
 
-Then, you can create a `Prometheus` resource, that the operator will use as configuration to deploy a managed Prometheus instance:
+Then, you can create a Prometheus resource, that the operator will use as configuration to deploy a managed Prometheus instance:
 
 [source,console]
 ----
@@ -42,7 +42,7 @@ EOF
 ----
 
 By default, the Prometheus instance discovers applications to be monitored in the same namespace.
-You can use the `podMonitorNamespaceSelector` field from the `Prometheus` resource to enable cross-namespace monitoring.
+You can use the `podMonitorNamespaceSelector` field from the Prometheus resource to enable cross-namespace monitoring.
 You may also need to specify a ServiceAccount with the `serviceAccountName` field, that's bound to a Role with the necessary permissions.
 
 [[openshift]]
@@ -91,7 +91,39 @@ data:
       enabled: true
 ----
 
-On OpenShift versions prior to 4.3, or if you do not want to change your cluster monitoring stack configuration, you can refer to the <<Kubernetes>> section in order to deploy a separate Prometheus Operator instance.
+On OpenShift versions prior to 4.3, or if you do not want to change your cluster monitoring stack configuration, you can refer to the <<Kubernetes>> section in order to deploy a separate Prometheus operator instance.
+
+[[discovery]]
+== Discovery
+
+A PodMonitor resource must be created in the same namespace as the `kcp-glbc-controller-manager` Deployment, for the Prometheus operator to reconcile, so that the managed Prometheus instance can scrape the _metrics_ endpoint.
+
+As an example, hereafter is the PodMonitor resource that is created when executing the `kustomize build config/prometheus | kubectl apply -f -` command:
+
+.pod_monitor.yaml
+[source,yaml]
+----
+apiVersion: monitoring.coreos.com/v1
+kind: PodMonitor
+metadata:
+  name: kcp-glbc-controller-manager
+  labels: # <1>
+    app.kubernetes.io/name: kcp-glbc
+    app.kubernetes.io/component: controller-manager
+spec:
+  selector:
+    matchLabels: # <2>
+      app.kubernetes.io/name: kcp-glbc
+      app.kubernetes.io/component: controller-manager
+  podMetricsEndpoints:
+    - port: metrics
+----
+<1> The labels must match the `podMonitorSelector` field from the Prometheus resource
+<2> This label selector matches the `kcp-glbc-controller-manager` Deployment Pod template labels
+
+The Prometheus operator https://github.com/prometheus-operator/prometheus-operator/blob/v0.56.0/Documentation/user-guides/getting-started.md#related-resources[getting started] guide documents the discovery mechanism, as well as the relationship between the operator resources.
+
+In case the metrics are not discovered, you may want to rely on https://github.com/prometheus-operator/prometheus-operator/blob/v0.56.0/Documentation/troubleshooting.md#troubleshooting-servicemonitor-changes[Troubleshooting ServiceMonitor changes], which also applies to PodMonitor resources troubleshooting.
 
 [[metrics]]
 == Metrics
