@@ -111,7 +111,6 @@ undeploy: ## Undeploy controller from the K8s cluster specified in ~/.kube/confi
 LD_DIR=config/deploy/local
 LD_AWS_CREDS_ENV=$(LD_DIR)/aws-credentials.env
 LD_CONTROLLER_CONFIG_ENV=$(LD_DIR)/controller-config.env
-LD_GLBC_KUBECONFIG=$(LD_DIR)/glbc.kubeconfig
 LD_KCP_KUBECONFIG=$(LD_DIR)/kcp.kubeconfig
 
 $(LD_AWS_CREDS_ENV):
@@ -124,14 +123,11 @@ $(LD_CONTROLLER_CONFIG_ENV):
 		< $(LD_CONTROLLER_CONFIG_ENV).template \
 		> $(LD_CONTROLLER_CONFIG_ENV)
 
-$(LD_GLBC_KUBECONFIG):
-	cp ./tmp/kcp-cluster-glbc-control.kubeconfig.internal $(LD_GLBC_KUBECONFIG)
-
 $(LD_KCP_KUBECONFIG):
 	cp .kcp/admin.kubeconfig $(LD_KCP_KUBECONFIG)
 
 .PHONY: generate-ld-config
-generate-ld-config: $(LD_AWS_CREDS_ENV) $(LD_CONTROLLER_CONFIG_ENV) $(LD_GLBC_KUBECONFIG) $(LD_KCP_KUBECONFIG) ## Generate local deployment files.
+generate-ld-config: $(LD_AWS_CREDS_ENV) $(LD_CONTROLLER_CONFIG_ENV) $(LD_KCP_KUBECONFIG) ## Generate local deployment files.
 
 .PHONY: clean-ld-env
 clean-ld-env:
@@ -140,7 +136,6 @@ clean-ld-env:
 
 .PHONY: clean-ld-kubeconfig
 clean-ld-kubeconfig:
-	-rm -f $(LD_GLBC_KUBECONFIG)
 	-rm -f $(LD_KCP_KUBECONFIG)
 
 .PHONY: clean-ld-config
@@ -152,7 +147,7 @@ ifeq ($(DO_BREW),true)
 endif
 
 .PHONY: local-setup
-local-setup: clean kind kcp build ## Setup kcp locally using kind.
+local-setup: clean kind kcp kustomize build ## Setup kcp locally using kind.
 	./utils/local-setup.sh -c ${NUM_CLUSTERS} ${LOCAL_SETUP_FLAGS}
 
 ##@ Build Dependencies
