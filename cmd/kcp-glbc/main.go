@@ -70,14 +70,14 @@ func main() {
 		overrides.CurrentContext = *kubecontext
 	}
 
-	r, err := clientcmd.NewNonInteractiveDeferredLoadingClientConfig(
+	kcpClientConfig, err := clientcmd.NewNonInteractiveDeferredLoadingClientConfig(
 		&clientcmd.ClientConfigLoadingRules{ExplicitPath: *kubeconfig},
 		&overrides).ClientConfig()
 	if err != nil {
 		klog.Fatal(err)
 	}
 
-	gr, err := clientcmd.NewNonInteractiveDeferredLoadingClientConfig(
+	glbcClientConfig, err := clientcmd.NewNonInteractiveDeferredLoadingClientConfig(
 		&clientcmd.ClientConfigLoadingRules{ExplicitPath: *glbcKubeconfig},
 		&clientcmd.ConfigOverrides{}).ClientConfig()
 	if err != nil {
@@ -86,67 +86,75 @@ func main() {
 
 	ctx := genericapiserver.SetupSignalContext()
 
-	kubeClient, err := kubernetes.NewClusterForConfig(r)
+	kcpKubeClient, err := kubernetes.NewClusterForConfig(kcpClientConfig)
 	if err != nil {
 		klog.Fatal(err)
 	}
-	kubeInformerFactory := informers.NewSharedInformerFactory(kubeClient.Cluster(logicalcluster.New(*logicalClusterTarget)), resyncPeriod)
+	kcpKubeInformerFactory := informers.NewSharedInformerFactory(kcpKubeClient.Cluster(logicalcluster.New(*logicalClusterTarget)), resyncPeriod)
 
-	dnsRecordClient, err := kuadrantv1.NewClusterForConfig(r)
+	kcpDnsRecordClient, err := kuadrantv1.NewClusterForConfig(kcpClientConfig)
 	if err != nil {
 		klog.Fatal(err)
 	}
-	kuadrantInformerFactory := externalversions.NewSharedInformerFactory(dnsRecordClient.Cluster(logicalcluster.New(*logicalClusterTarget)), resyncPeriod)
+	kcpKuadrantInformerFactory := externalversions.NewSharedInformerFactory(kcpDnsRecordClient.Cluster(logicalcluster.New(*logicalClusterTarget)), resyncPeriod)
 
-	// glbcTypedClient targets the control cluster (this is the cluster where glbc is deployed). This is not a KCP cluster.
-	glbcTypedClient, err := kubernetes.NewForConfig(gr)
+	// glbcKubeClient targets the control cluster (this is the cluster where glbc is deployed).
+	// This is not a KCP cluster.
+	glbcKubeClient, err := kubernetes.NewForConfig(glbcClientConfig)
 	if err != nil {
 		klog.Fatal(err)
 	}
-	tlsCertProvider := tls.CertProviderLEStaging
-	if *tlsProvider == "le-production" {
-		tlsCertProvider = tls.CertProviderLEProd
-	}
-	klog.Info("using tls cert provider ", tlsCertProvider, *tlsProvider)
 
-	// certman client targets the control cluster, this is the same cluster as glbc is deployed to
-	certClient := certmanclient.NewForConfigOrDie(gr)
-	certConfig := tls.CertManagerConfig{
-		DNSValidator: tls.DNSValidatorRoute53,
-		CertClient:   certClient,
-		CertProvider: tlsCertProvider,
-		Region:       *region,
-		K8sClient:    glbcTypedClient,
-		ValidDomains: []string{*domain},
-	}
+	namespace := env.GetNamespace()
+
 	var certProvider tls.Provider = &tls.FakeProvider{}
 	if *tlsProviderEnabled {
-		certProvider, err = tls.NewCertManager(certConfig)
+		if namespace == "" {
+			namespace = tls.DefaultCertificateNS
+		}
+
+		tlsCertProvider := tls.CertProviderLEStaging
+		if *tlsProvider == "le-production" {
+			tlsCertProvider = tls.CertProviderLEProd
+		}
+		klog.Info("using TLS cert provider ", tlsCertProvider, *tlsProvider)
+
+		certProvider, err = tls.NewCertManager(tls.CertManagerConfig{
+			DNSValidator:  tls.DNSValidatorRoute53,
+			CertClient:    certmanclient.NewForConfigOrDie(glbcClientConfig),
+			CertProvider:  tlsCertProvider,
+			Region:        *region,
+			K8sClient:     glbcKubeClient,
+			ValidDomains:  []string{*domain},
+			CertificateNS: namespace,
+		})
 		if err != nil {
 			klog.Fatal(err)
 		}
-	}
-	tlsreconciler.InitMetrics(certProvider)
 
-	// ensure Issuer Is Setup at start up time
-	// TODO consider extracting out the setup to CRD
-	if err := certProvider.Initialize(ctx); err != nil {
-		klog.Fatal(err)
+		tlsreconciler.InitMetrics(certProvider)
+
+		// ensure Issuer is setup at start up time
+		// TODO consider extracting out the setup to CRD
+		if err := certProvider.Initialize(ctx); err != nil {
+			klog.Fatal(err)
+		}
 	}
-	glbcFilteredInformerFactory := informers.NewFilteredSharedInformerFactory(glbcTypedClient, time.Minute, "cert-manager", nil)
+
+	glbcKubeInformerFactory := informers.NewSharedInformerFactoryWithOptions(glbcKubeClient, time.Minute, informers.WithNamespace(namespace))
 	tlsController, err := tlsreconciler.NewController(&tlsreconciler.ControllerConfig{
-		SharedInformerFactory: glbcFilteredInformerFactory,
-		GlbcKubeClient:        glbcTypedClient,
-		KcpClient:             kubeClient,
+		GlbcSecretInformer: glbcKubeInformerFactory.Core().V1().Secrets(),
+		GlbcKubeClient:     glbcKubeClient,
+		KcpKubeClient:      kcpKubeClient,
 	})
 	if err != nil {
 		klog.Fatal(err)
 	}
 
-	controllerConfig := &ingress.ControllerConfig{
-		KubeClient:            kubeClient,
-		DnsRecordClient:       dnsRecordClient,
-		SharedInformerFactory: kubeInformerFactory,
+	ingressController := ingress.NewController(&ingress.ControllerConfig{
+		KubeClient:            kcpKubeClient,
+		DnsRecordClient:       kcpDnsRecordClient,
+		SharedInformerFactory: kcpKubeInformerFactory,
 		Domain:                domain,
 		CertProvider:          certProvider,
 		TLSEnabled:            *tlsProviderEnabled,
@@ -157,12 +165,11 @@ func main() {
 		// 	Namespace: "default",
 		// },
 		CustomHostsEnabled: enableCustomHosts,
-	}
-	ingressController := ingress.NewController(controllerConfig)
+	})
 
 	dnsRecordController, err := dns.NewController(&dns.ControllerConfig{
-		DnsRecordClient:       dnsRecordClient,
-		SharedInformerFactory: kuadrantInformerFactory,
+		DnsRecordClient:       kcpDnsRecordClient,
+		SharedInformerFactory: kcpKuadrantInformerFactory,
 		DNSProvider:           dnsProvider,
 	})
 	if err != nil {
@@ -170,29 +177,32 @@ func main() {
 	}
 
 	serviceController, err := service.NewController(&service.ControllerConfig{
-		ServicesClient:        kubeClient,
-		SharedInformerFactory: kubeInformerFactory,
+		ServicesClient:        kcpKubeClient,
+		SharedInformerFactory: kcpKubeInformerFactory,
 	})
 	if err != nil {
 		klog.Fatal(err)
 	}
 
 	deploymentController, err := deployment.NewController(&deployment.ControllerConfig{
-		DeploymentClient:      kubeClient,
-		SharedInformerFactory: kubeInformerFactory,
+		DeploymentClient:      kcpKubeClient,
+		SharedInformerFactory: kcpKubeInformerFactory,
 	})
 	if err != nil {
 		klog.Fatal(err)
 	}
 
-	kubeInformerFactory.Start(ctx.Done())
-	kubeInformerFactory.WaitForCacheSync(ctx.Done())
+	kcpKubeInformerFactory.Start(ctx.Done())
+	kcpKubeInformerFactory.WaitForCacheSync(ctx.Done())
 
-	kuadrantInformerFactory.Start(ctx.Done())
-	kuadrantInformerFactory.WaitForCacheSync(ctx.Done())
+	kcpKuadrantInformerFactory.Start(ctx.Done())
+	kcpKuadrantInformerFactory.WaitForCacheSync(ctx.Done())
 
-	glbcFilteredInformerFactory.Start(ctx.Done())
-	glbcFilteredInformerFactory.WaitForCacheSync(ctx.Done())
+	if *tlsProviderEnabled {
+		// the control cluster Kube informer is only used when TLS certificate issuance is enabled
+		glbcKubeInformerFactory.Start(ctx.Done())
+		glbcKubeInformerFactory.WaitForCacheSync(ctx.Done())
+	}
 
 	// start listening on the metrics endpoint
 	metricsServer, err := metrics.NewServer(monitoringPort)

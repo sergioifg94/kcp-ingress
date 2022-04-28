@@ -36,7 +36,8 @@ import (
 type DNSValidator int
 
 const (
-	DNSValidatorRoute53 DNSValidator = iota
+	DNSValidatorRoute53  DNSValidator = iota
+	DefaultCertificateNS string       = "cert-manager"
 )
 
 type CertProvider string
@@ -51,7 +52,6 @@ const (
 	CertProviderLEProd    CertProvider = "letsencryptprod"
 	leProdAPI             string       = "https://acme-v02.api.letsencrypt.org/directory"
 	leStagingAPI          string       = "https://acme-staging-v02.api.letsencrypt.org/directory"
-	defaultCertificateNS  string       = "cert-manager"
 )
 
 // CertManager is a certificate provider.
@@ -113,6 +113,7 @@ func NewCertManager(c CertManagerConfig) (*CertManager, error) {
 		certProvider:          c.CertProvider,
 		Region:                c.Region,
 		validDomains:          c.ValidDomains,
+		certificateNS:         c.CertificateNS,
 	}
 
 	if c.LEConfig == nil {
@@ -126,9 +127,6 @@ func NewCertManager(c CertManagerConfig) (*CertManager, error) {
 		return nil, fmt.Errorf("certmanager: missing env var %s", envLEEmail)
 	}
 
-	if cm.certificateNS == "" {
-		cm.certificateNS = defaultCertificateNS
-	}
 	return cm, nil
 }
 
