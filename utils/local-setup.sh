@@ -16,11 +16,17 @@
 # limitations under the License.
 #
 
+DO_BREW="false"
+SCRIPT_DIR=$( cd -- "$( dirname -- "${BASH_SOURCE[0]}" )" &> /dev/null && pwd )
+
 usage() { echo "usage: ./local-setup.sh -c <number of clusters>" 1>&2; exit 1; }
-while getopts ":c:" arg; do
+while getopts ":bc:" arg; do
   case "${arg}" in
     c)
       NUM_CLUSTERS=${OPTARG}
+      ;;
+    b)
+      DO_BREW="true"
       ;;
     *)
       usage
@@ -29,6 +35,13 @@ while getopts ":c:" arg; do
 done
 shift $((OPTIND-1))
 
+if [[ "$DO_BREW" == "true" ]]; then
+  if [[ "${OSTYPE}" =~ ^darwin.* ]]; then
+    ${SCRIPT_DIR}/macos/required_brew_packages.sh
+  fi
+else
+  echo "skipping brew"
+fi
 
 if [ -z "${NUM_CLUSTERS}" ]; then
     usage
