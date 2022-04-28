@@ -140,8 +140,8 @@ createGLBCCluster
 
 echo "Deploying $NUM_CLUSTERS kind k8s clusters locally."
 
-port80=8080
-port443=8443
+port80=8081
+port443=8444
 for cluster in $CLUSTERS
 do
   createCluster "$cluster" $port80 $port443
