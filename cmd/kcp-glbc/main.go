@@ -107,7 +107,7 @@ func main() {
 
 	namespace := env.GetNamespace()
 
-	var certProvider tls.Provider = &tls.FakeProvider{}
+	var certProvider tls.Provider
 	if *tlsProviderEnabled {
 		if namespace == "" {
 			namespace = tls.DefaultCertificateNS
@@ -165,7 +165,6 @@ func main() {
 		SharedInformerFactory: kcpKubeInformerFactory,
 		Domain:                domain,
 		CertProvider:          certProvider,
-		TLSEnabled:            *tlsProviderEnabled,
 		HostResolver:          net.NewDefaultHostResolver(),
 		// For testing. TODO: Make configurable through flags/env variable
 		// HostResolver: &net.ConfigMapHostResolver{
