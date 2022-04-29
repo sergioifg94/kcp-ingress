@@ -47,8 +47,8 @@ var (
 	kubecontext          = flag.String("context", env.GetEnvString("GLBC_KCP_CONTEXT", ""), "Context to use in the Kubeconfig file, instead of the current context")
 	logicalClusterTarget = flag.String("logical-cluster", env.GetEnvString("GLBC_LOGICAL_CLUSTER_TARGET", "*"), "set the target logical cluster")
 	// TLS certificate issuance options
-	tlsProviderEnabled = flag.Bool("glbc-tls-provided", env.GetEnvBool("GLBC_TLS_PROVIDED", false), "when set to true glbc will generate LE certs for hosts it creates")
-	tlsProvider        = flag.String("glbc-tls-provider", env.GetEnvString("GLBC_TLS_PROVIDER", "le-staging"), "decides which provider to use. Current allowed values -glbc-tls-provider=le-staging -glbc-tls-provider=le-production ")
+	tlsProviderEnabled = flag.Bool("glbc-tls-provided", env.GetEnvBool("GLBC_TLS_PROVIDED", false), "Whether to generate TLS certificates for hosts")
+	tlsProvider        = flag.String("glbc-tls-provider", env.GetEnvString("GLBC_TLS_PROVIDER", "glbc-ca"), "The TLS certificate issuer, one of [glbc-ca, le-staging, le-production]")
 	// DNS management options
 	domain            = flag.String("domain", env.GetEnvString("GLBC_DOMAIN", "hcpapps.net"), "The domain to use to expose ingresses")
 	enableCustomHosts = flag.Bool("enable-custom-hosts", env.GetEnvBool("GLBC_ENABLE_CUSTOM_HOSTS", false), "Flag to enable hosts to be custom")
@@ -113,11 +113,19 @@ func main() {
 			namespace = tls.DefaultCertificateNS
 		}
 
-		tlsCertProvider := tls.CertProviderLEStaging
-		if *tlsProvider == "le-production" {
+		var tlsCertProvider tls.CertProvider
+		switch *tlsProvider {
+		case "glbc-ca":
+			tlsCertProvider = tls.CertProviderCA
+		case "le-staging":
+			tlsCertProvider = tls.CertProviderLEStaging
+		case "le-production":
 			tlsCertProvider = tls.CertProviderLEProd
+		default:
+			klog.Fatalf("unsupported TLS certificate issuer:", *tlsProvider)
 		}
-		klog.Info("using TLS cert provider ", tlsCertProvider, *tlsProvider)
+
+		klog.Infof("Using TLS certificate issuer: %s", tlsCertProvider)
 
 		certProvider, err = tls.NewCertManager(tls.CertManagerConfig{
 			DNSValidator:  tls.DNSValidatorRoute53,
