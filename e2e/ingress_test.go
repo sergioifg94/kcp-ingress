@@ -27,6 +27,7 @@ import (
 
 func TestIngress(t *testing.T) {
 	test := With(t)
+	test.T().Parallel()
 	// Create the test workspace
 	workspace := test.NewTestWorkspace()
 

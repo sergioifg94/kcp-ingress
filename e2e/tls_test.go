@@ -39,6 +39,7 @@ import (
 
 func TestTLS(t *testing.T) {
 	test := With(t)
+	test.T().Parallel()
 	// Create the test workspace
 	workspace := test.NewTestWorkspace()
 
