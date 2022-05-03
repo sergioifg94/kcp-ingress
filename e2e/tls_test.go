@@ -23,6 +23,7 @@ import (
 
 	. "github.com/onsi/gomega"
 	. "github.com/onsi/gomega/gstruct"
+	"github.com/onsi/gomega/types"
 
 	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
@@ -35,6 +36,7 @@ import (
 	. "github.com/kuadrant/kcp-glbc/e2e/support"
 	kuadrantv1 "github.com/kuadrant/kcp-glbc/pkg/apis/kuadrant/v1"
 	kuadrantcluster "github.com/kuadrant/kcp-glbc/pkg/cluster"
+	"github.com/kuadrant/kcp-glbc/pkg/util/env"
 )
 
 func TestTLS(t *testing.T) {
@@ -114,20 +116,85 @@ func TestTLS(t *testing.T) {
 	))
 
 	// Check the TLS Secret
-	test.Eventually(Secret(test, namespace, context.Name())).
-		WithTimeout(TestTimeoutShort).
-		Should(WithTransform(Certificate, PointTo(MatchFields(IgnoreExtras,
-			Fields{
-				"DNSNames": ConsistOf(hostname),
-				"Issuer": Equal(pkix.Name{
-					Organization: []string{"Kuadrant"},
-					Names: []pkix.AttributeTypeAndValue{
-						{
-							Type:  []int{2, 5, 4, 10},
-							Value: "Kuadrant",
-						},
-					},
-				}),
+	issuer := env.GetEnvString("GLBC_TLS_PROVIDER", "glbc-ca")
+	fields := map[string]types.GomegaMatcher{
+		"DNSNames": ConsistOf(hostname),
+	}
+	switch issuer {
+
+	case "glbc-ca":
+		fields["Issuer"] = Equal(pkix.Name{
+			Organization: []string{"Kuadrant"},
+			Names: []pkix.AttributeTypeAndValue{
+				{
+					Type:  []int{2, 5, 4, 10},
+					Value: "Kuadrant",
+				},
 			},
-		))))
+		})
+
+	case "le-staging":
+		fields["Issuer"] = Equal(pkix.Name{
+			Country:      []string{"US"},
+			Organization: []string{"(STAGING) Let's Encrypt"},
+			CommonName:   "(STAGING) Artificial Apricot R3",
+			Names: []pkix.AttributeTypeAndValue{
+				{
+					Type:  []int{2, 5, 4, 6},
+					Value: "US",
+				},
+				{
+					Type:  []int{2, 5, 4, 10},
+					Value: "(STAGING) Let's Encrypt",
+				},
+				{
+					Type:  []int{2, 5, 4, 3},
+					Value: "(STAGING) Artificial Apricot R3",
+				},
+			},
+		})
+		fields["Subject"] = Equal(pkix.Name{
+			CommonName: hostname,
+			Names: []pkix.AttributeTypeAndValue{
+				{
+					Type:  []int{2, 5, 4, 3},
+					Value: hostname,
+				},
+			},
+		})
+
+	case "le-production":
+		fields["Issuer"] = Equal(pkix.Name{
+			Country:      []string{"US"},
+			Organization: []string{"Let's Encrypt"},
+			CommonName:   "Artificial Apricot R3",
+			Names: []pkix.AttributeTypeAndValue{
+				{
+					Type:  []int{2, 5, 4, 6},
+					Value: "US",
+				},
+				{
+					Type:  []int{2, 5, 4, 10},
+					Value: "Let's Encrypt",
+				},
+				{
+					Type:  []int{2, 5, 4, 3},
+					Value: "R3",
+				},
+			},
+		})
+		fields["Subject"] = Equal(pkix.Name{
+			CommonName: hostname,
+			Names: []pkix.AttributeTypeAndValue{
+				{
+					Type:  []int{2, 5, 4, 3},
+					Value: hostname,
+				},
+			},
+		})
+	}
+
+	test.Eventually(Secret(test, namespace, context.Name())).
+		WithTimeout(TestTimeoutMedium).
+		Should(WithTransform(Certificate, PointTo(MatchFields(IgnoreExtras, fields))))
 }
