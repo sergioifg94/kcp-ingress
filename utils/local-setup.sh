@@ -69,6 +69,9 @@ KIND_CLUSTER_PREFIX="kcp-cluster-"
 KCP_GLBC_CLUSTER_NAME="${KIND_CLUSTER_PREFIX}glbc-control"
 KCP_GLBC_KUBECONFIG="${KCP_GLBC_CLUSTER_NAME}.kubeconfig"
 
+: ${KCP_VERSION:="release-0.4"}
+KCP_SYNCER_IMAGE="ghcr.io/kcp-dev/kcp/syncer:${KCP_VERSION}"
+
 for ((i=1;i<=$NUM_CLUSTERS;i++))
 do
 	CLUSTERS="${CLUSTERS}${KIND_CLUSTER_PREFIX}${i} "
@@ -118,44 +121,44 @@ EOF
   } &>/dev/null
 }
 
+createKCPWorkloadCluster() {
+  createCluster $1 $2 $3
+  echo "Deploying kcp syncer to ${1}"
+  KUBECONFIG=.kcp/admin.kubeconfig ${KUBECTL_KCP_BIN} workload sync $1 --syncer-image=${KCP_SYNCER_IMAGE} --resources=ingresses.networking.k8s.io,services > ${TEMP_DIR}/${1}-syncer.yaml
+  kubectl config use-context kind-${1}
+  kubectl apply -f ${TEMP_DIR}/${1}-syncer.yaml
+}
+
 createGLBCCluster() {
   createCluster "$KCP_GLBC_CLUSTER_NAME" $1 $2
-
   kubectl config use-context kind-${KCP_GLBC_CLUSTER_NAME}
-
-  echo "Deploying cert manager to kind glbc cluster"
+  echo "Deploying cert manager to ${KCP_GLBC_CLUSTER_NAME}"
   kubectl apply -f https://github.com/cert-manager/cert-manager/releases/download/v1.7.1/cert-manager.yaml
   kubectl -n cert-manager wait --timeout=300s --for=condition=Available deployments --all
 }
 
+createKCPWorkspace() {
+  echo "Creating HCG Workspace"
+  KUBECONFIG=.kcp/admin.kubeconfig ${KUBECTL_KCP_BIN} workspace create kcp-glbc --enter
+  echo "Waiting 15 seconds..."
+  sleep 15
+  echo "Registering HCG APIs"
+  kubectl --kubeconfig=.kcp/admin.kubeconfig apply -f ./config/crd/bases
+  kubectl --kubeconfig=.kcp/admin.kubeconfig apply -f ./utils/kcp-contrib/apiresourceschema.yaml
+  kubectl --kubeconfig=.kcp/admin.kubeconfig apply -f ./utils/kcp-contrib/apiexport.yaml
+}
+
+#Delete existing kind clusters
 clusterCount=$(${KIND_BIN} get clusters | grep ${KIND_CLUSTER_PREFIX} | wc -l)
 if ! [[ $clusterCount =~ "0" ]] ; then
   echo "Deleting previous kind clusters."
   ${KIND_BIN} get clusters | grep ${KIND_CLUSTER_PREFIX} | xargs ${KIND_BIN} delete clusters
 fi
 
-echo "Deploying $NUM_CLUSTERS kind k8s clusters locally."
-
-port80=8081
-port443=8444
-for cluster in $CLUSTERS
-do
-  createCluster "$cluster" $port80 $port443
-  port80=$((port80+1))
-  port443=$((port443+1))
-#move to next cluster
-done
-
-echo "Deploying 1 kind k8s glbc cluster locally."
-
-createGLBCCluster $port80 $port443
-
+#1. Start KCP
 echo "Starting KCP, sending logs to ${KCP_LOG_FILE}"
-${KCP_BIN} start --push-mode --discovery-poll-interval 3s --run-controllers --resources-to-sync=secrets,deployments,services,ingresses.networking.k8s.io --auto-publish-apis > ${KCP_LOG_FILE} 2>&1 &
+${KCP_BIN} start --discovery-poll-interval 3s --run-controllers > ${KCP_LOG_FILE} 2>&1 &
 KCP_PID=$!
-
-echo "Waiting 15 seconds..."
-sleep 15
 
 if ! ps -p ${KCP_PID}; then
   echo "####"
@@ -164,22 +167,26 @@ if ! ps -p ${KCP_PID}; then
   exit 1 #this will trigger cleanup function
 fi
 
-echo "Exporting KUBECONFIG=.kcp/admin.kubeconfig"
-export KUBECONFIG=.kcp/admin.kubeconfig
-
-echo "Creating HCG Workspace"
-${KUBECTL_KCP_BIN} workspace create kcp-glbc --enter
-
 echo "Waiting 15 seconds..."
 sleep 15
 
-echo "Registering HCG APIs"
-kubectl apply -f ./config/crd/bases
-kubectl apply -f ./utils/kcp-contrib/apiresourceschema.yaml
-kubectl apply -f ./utils/kcp-contrib/apiexport.yaml
+#2. Create kcp-glbc workspace
+createKCPWorkspace
 
-echo "Registering kind k8s clusters into KCP"
-kubectl apply $(find ./tmp/ -name 'kcp-cluster-[[:digit:]]*.yaml' | awk ' { print " -f " $1 } ')
+#3. Create KCP Workload clusters
+echo "Creating $NUM_CLUSTERS kcp workload cluster(s)."
+port80=8081
+port443=8444
+for cluster in $CLUSTERS
+do
+  createKCPWorkloadCluster "$cluster" $port80 $port443
+  port80=$((port80+1))
+  port443=$((port443+1))
+done
+
+#4. Create GLBC cluster
+echo "Creating glbc cluster."
+createGLBCCluster $port80 $port443
 
 echo ""
 echo "KCP PID          : ${KCP_PID}"
