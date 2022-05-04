@@ -51,7 +51,6 @@ func NewController(config *ControllerConfig) *Controller {
 		dnsRecordClient:       config.DnsRecordClient,
 		domain:                config.Domain,
 		tracker:               &tracker,
-		tlsEnabled:            config.TLSEnabled,
 		hostResolver:          hostResolver,
 		hostsWatcher: net.NewHostsWatcher(
 			hostResolver,
@@ -87,7 +86,6 @@ type ControllerConfig struct {
 	DnsRecordClient       kuadrantv1.ClusterInterface
 	SharedInformerFactory informers.SharedInformerFactory
 	Domain                *string
-	TLSEnabled            bool
 	CertProvider          tls.Provider
 	HostResolver          net.HostResolver
 	CustomHostsEnabled    *bool
@@ -102,7 +100,6 @@ type Controller struct {
 	lister                networkingv1lister.IngressLister
 	certProvider          tls.Provider
 	domain                *string
-	tlsEnabled            bool
 	tracker               *tracker
 	hostResolver          net.HostResolver
 	hostsWatcher          *net.HostsWatcher
