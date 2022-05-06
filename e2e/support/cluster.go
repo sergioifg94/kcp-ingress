@@ -4,84 +4,104 @@
 package support
 
 import (
+	"bytes"
 	"fmt"
 	"io/ioutil"
 	"os"
+	"os/exec"
 	"path"
-	"strings"
 
+	tenancyv1alpha1 "github.com/kcp-dev/kcp/pkg/apis/tenancy/v1alpha1"
 	"github.com/onsi/gomega"
+	"k8s.io/cli-runtime/pkg/genericclioptions"
 
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 
-	kcp "github.com/kcp-dev/kcp/pkg/reconciler/workload/namespace"
-
 	"github.com/kcp-dev/apimachinery/pkg/logicalcluster"
 	workloadv1alpha1 "github.com/kcp-dev/kcp/pkg/apis/workload/v1alpha1"
+	workloadplugin "github.com/kcp-dev/kcp/pkg/cliplugins/workload/plugin"
+
+	"k8s.io/apimachinery/pkg/util/sets"
 )
 
-const ClusterLabel = kcp.ClusterLabel
+func createWorkloadCluster(t Test, workspace *tenancyv1alpha1.ClusterWorkspace, name string) *workloadv1alpha1.WorkloadCluster {
 
-var WithKubeConfigByName = &withKubeConfigByName{}
+	logicalClusterName := logicalcluster.From(workspace).Join(workspace.Name).String()
 
-type withKubeConfigByName struct{}
-
-func WithKubeConfigByID(id string) Option {
-	return &withKubeConfigByID{id}
-}
-
-type withKubeConfigByID struct {
-	ID string
-}
-
-func (o *withKubeConfigByName) applyTo(object metav1.Object) error {
-	// FIXME: workaround for https://github.com/kcp-dev/kcp/issues/730
-	return WithKubeConfigByID(strings.TrimRight(object.GetGenerateName(), "-")).applyTo(object)
-}
-
-func (o *withKubeConfigByID) applyTo(object metav1.Object) error {
-	var cluster *workloadv1alpha1.WorkloadCluster
-	if c, ok := object.(*workloadv1alpha1.WorkloadCluster); !ok {
-		return fmt.Errorf("KubeConfig option can only be applied to Cluster resources")
-	} else {
-		cluster = c
-	}
-
-	dir := os.Getenv(workloadClusterKubeConfigDir)
-	if dir == "" {
-		return fmt.Errorf("%s environment variable is not set", workloadClusterKubeConfigDir)
-	}
-	data, err := ioutil.ReadFile(path.Join(dir, o.ID+".kubeconfig"))
-	if err != nil {
-		return fmt.Errorf("error reading cluster %q Kubeconfig: %v", o.ID, err)
-	}
-
-	cluster.Spec.KubeConfig = string(data)
-
-	return nil
-}
-
-func createWorkloadCluster(t Test, name string, options ...Option) *workloadv1alpha1.WorkloadCluster {
-	cluster := &workloadv1alpha1.WorkloadCluster{
-		TypeMeta: metav1.TypeMeta{
-			APIVersion: workloadv1alpha1.SchemeGroupVersion.String(),
-			Kind:       "WorkloadCluster",
-		},
-		ObjectMeta: metav1.ObjectMeta{
-			// FIXME: workaround for https://github.com/kcp-dev/kcp/issues/730
-			// Name: name,
-			GenerateName: name + "-",
-		},
-	}
-
-	for _, option := range options {
-		t.Expect(option.applyTo(cluster)).To(gomega.Succeed())
-	}
-
-	cluster, err := t.Client().Kcp().Cluster(logicalcluster.From(cluster)).WorkloadV1alpha1().WorkloadClusters().Create(t.Ctx(), cluster, metav1.CreateOptions{})
+	//Run workload plugin sync command
+	syncerResources, err := execKcpWorkloadSync(t, name, logicalClusterName)
 	t.Expect(err).NotTo(gomega.HaveOccurred())
 
-	return cluster
+	//Apply syncer resources to workload cluster
+	err = workloadClusterKubeCtlApply(name, syncerResources)
+	t.Expect(err).NotTo(gomega.HaveOccurred())
+
+	// Get the workload cluster and return it
+	c, err := t.Client().Kcp().Cluster(logicalcluster.New(logicalClusterName)).WorkloadV1alpha1().WorkloadClusters().Get(t.Ctx(), name, metav1.GetOptions{})
+	t.Expect(err).NotTo(gomega.HaveOccurred())
+
+	return c
+}
+
+func execKcpWorkloadSync(t Test, workloadClusterName, logicalClusterName string) (string, error) {
+	clusterServer := fmt.Sprintf("%s/clusters/%s", t.Client().GetConfig().Host, logicalClusterName)
+	//Configure workload plugin kubeconfig for test workspace
+	outBuffer := new(bytes.Buffer)
+	opts := workloadplugin.NewOptions(genericclioptions.IOStreams{In: os.Stdin, Out: outBuffer, ErrOut: os.Stderr})
+	opts.KubectlOverrides.ClusterInfo.Server = clusterServer
+	kubeconfig, err := workloadplugin.NewConfig(opts)
+	if err != nil {
+		return "", err
+	}
+
+	//Workload plugin sync options
+	//ToDo allow this to be set based on the KCP version exported
+	syncerImage := "ghcr.io/kcp-dev/kcp/syncer:release-0.4"
+	replicas := 1
+	kcpNamespaceName := "default" //Creates service account here
+	requiredResourcesToSync := sets.NewString("deployments.apps", "secrets", "configmaps", "serviceaccounts")
+	userResourcesToSync := sets.NewString("ingresses.networking.k8s.io", "services")
+	resourcesToSync := userResourcesToSync.Union(requiredResourcesToSync).List()
+
+	//Run workload plugin sync command
+	err = kubeconfig.Sync(t.Ctx(), workloadClusterName, kcpNamespaceName, syncerImage, resourcesToSync, replicas)
+	if err != nil {
+		return "", err
+	}
+
+	//Write temp file with syncer resources
+	tmpFile, err := ioutil.TempFile(t.T().TempDir(), "syncer-")
+	if err != nil {
+		return "", err
+	}
+	_, err = tmpFile.Write(outBuffer.Bytes())
+	if err != nil {
+		return "", err
+	}
+	err = tmpFile.Close()
+
+	return tmpFile.Name(), err
+}
+
+func kubeCtlApply(kubeconfig, file string) error {
+	cmd := exec.Command("kubectl", "--kubeconfig", kubeconfig, "apply", "-f", file)
+	return cmd.Run()
+}
+
+func workloadClusterKubeConfig(name string) (string, error) {
+	dir := os.Getenv(workloadClusterKubeConfigDir)
+	if dir == "" {
+		return "", fmt.Errorf("%s environment variable is not set", workloadClusterKubeConfigDir)
+	}
+	return path.Join(dir, name+".kubeconfig"), nil
+}
+
+func workloadClusterKubeCtlApply(clusterName, file string) error {
+	clusterKubeconfig, err := workloadClusterKubeConfig(clusterName)
+	if err != nil {
+		return err
+	}
+	return kubeCtlApply(clusterKubeconfig, file)
 }
 
 func WorkloadCluster(t Test, workspace, name string) func(g gomega.Gomega) *workloadv1alpha1.WorkloadCluster {

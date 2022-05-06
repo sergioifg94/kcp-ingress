@@ -5,6 +5,7 @@ package e2e
 
 import (
 	"testing"
+	"time"
 
 	. "github.com/onsi/gomega"
 	. "github.com/onsi/gomega/gstruct"
@@ -17,8 +18,8 @@ import (
 
 	"github.com/kcp-dev/apimachinery/pkg/logicalcluster"
 	apisv1alpha1 "github.com/kcp-dev/kcp/pkg/apis/apis/v1alpha1"
-	workloadv1alpha1 "github.com/kcp-dev/kcp/pkg/apis/workload/v1alpha1"
 	kcp "github.com/kcp-dev/kcp/pkg/reconciler/workload/namespace"
+	conditionsapi "github.com/kcp-dev/kcp/third_party/conditions/apis/conditions/v1alpha1"
 
 	. "github.com/kuadrant/kcp-glbc/e2e/support"
 	kuadrantv1 "github.com/kuadrant/kcp-glbc/pkg/apis/kuadrant/v1"
@@ -43,11 +44,11 @@ func TestIngress(t *testing.T) {
 		Should(BeTrue())
 
 	// Register workload cluster 1 into the test workspace
-	cluster1 := test.NewWorkloadCluster("kcp-cluster-1", WithKubeConfigByName, InWorkspace(workspace))
+	cluster1 := test.NewWorkloadCluster(workspace, "kcp-cluster-1")
 
 	// Wait until cluster 1 is ready
-	test.Eventually(WorkloadCluster(test, cluster1.ClusterName, cluster1.Name)).Should(WithTransform(
-		ConditionStatus(workloadv1alpha1.WorkloadClusterReadyCondition),
+	test.Eventually(WorkloadCluster(test, cluster1.ClusterName, cluster1.Name)).WithTimeout(time.Minute * 3).Should(WithTransform(
+		ConditionStatus(conditionsapi.ReadyCondition),
 		Equal(corev1.ConditionTrue),
 	))
 
@@ -107,13 +108,14 @@ func TestIngress(t *testing.T) {
 	))
 
 	// Register workload cluster 2 into the test workspace
-	cluster2 := test.NewWorkloadCluster("kcp-cluster-2", WithKubeConfigByName, InWorkspace(workspace))
+	cluster2 := test.NewWorkloadCluster(workspace, "kcp-cluster-2")
 
 	// Wait until cluster 2 is ready
-	test.Eventually(WorkloadCluster(test, cluster2.ClusterName, cluster2.Name)).Should(WithTransform(
-		ConditionStatus(workloadv1alpha1.WorkloadClusterReadyCondition),
+	test.Eventually(WorkloadCluster(test, cluster2.ClusterName, cluster2.Name)).WithTimeout(time.Minute * 3).Should(WithTransform(
+		ConditionStatus(conditionsapi.ReadyCondition),
 		Equal(corev1.ConditionTrue),
 	))
+
 	// update the namespace with the second cluster placement
 	_, err = test.Client().Core().Cluster(logicalcluster.From(namespace)).CoreV1().Namespaces().Apply(test.Ctx(), corev1apply.Namespace(namespace.Name).WithLabels(map[string]string{kcp.ClusterLabel: cluster2.Name}), applyOptions)
 
