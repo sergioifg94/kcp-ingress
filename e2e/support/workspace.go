@@ -66,8 +66,6 @@ func Workspace(t Test, name string) func() *tenancyv1alpha1.ClusterWorkspace {
 
 func createTestWorkspace(t Test) *tenancyv1alpha1.ClusterWorkspace {
 	name := "test-" + uuid.New().String()
-	// FIXME: To be removed when https://github.com/kcp-dev/kcp/pull/834 is available
-	name = name[:31]
 
 	workspace := &tenancyv1alpha1.ClusterWorkspace{
 		TypeMeta: metav1.TypeMeta{

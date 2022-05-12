@@ -28,7 +28,7 @@ type Test interface {
 	NewTestWorkspace() *tenancyv1alpha1.ClusterWorkspace
 	NewGLBCAPIBinding(...Option) *apisv1alpha1.APIBinding
 	NewTestNamespace(...Option) *corev1.Namespace
-	NewWorkloadCluster(name string, options ...Option) *workloadv1alpha1.WorkloadCluster
+	NewWorkloadCluster(workspace *tenancyv1alpha1.ClusterWorkspace, name string) *workloadv1alpha1.WorkloadCluster
 }
 
 type Option interface {
@@ -101,6 +101,6 @@ func (t *T) NewTestNamespace(options ...Option) *corev1.Namespace {
 	return namespace
 }
 
-func (t *T) NewWorkloadCluster(name string, options ...Option) *workloadv1alpha1.WorkloadCluster {
-	return createWorkloadCluster(t, name, options...)
+func (t *T) NewWorkloadCluster(workspace *tenancyv1alpha1.ClusterWorkspace, name string) *workloadv1alpha1.WorkloadCluster {
+	return createWorkloadCluster(t, workspace, name)
 }

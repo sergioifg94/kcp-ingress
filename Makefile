@@ -3,7 +3,7 @@ SHELL := /usr/bin/env bash
 
 NUM_CLUSTERS := 2
 DO_BREW := true
-KCP_BRANCH := v0.3.0-beta.1
+KCP_BRANCH := v0.4.0-alpha.0
 
 IMAGE_TAG_BASE ?= quay.io/kuadrant/kcp-glbc
 IMAGE_TAG ?= latest
@@ -147,7 +147,8 @@ ifeq ($(DO_BREW),true)
 endif
 
 .PHONY: local-setup
-local-setup: clean kind kcp kustomize build ## Setup kcp locally using kind.
+local-setup: export KCP_VERSION=${KCP_BRANCH}
+local-setup: clean kind kcp build ## Setup kcp locally using kind.
 	./utils/local-setup.sh -c ${NUM_CLUSTERS} ${LOCAL_SETUP_FLAGS}
 
 ##@ Build Dependencies
