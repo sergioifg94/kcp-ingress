@@ -1,0 +1,110 @@
+apiVersion: integreatly.org/v1alpha1
+kind: GrafanaDashboard
+metadata:
+  name: glbc-dashboard
+  labels:
+    app: grafana
+spec:
+  json: >
+    {
+      "id": null,
+      "title": "GLBC",
+      "tags": [],
+      "style": "dark",
+      "timezone": "browser",
+      "editable": true,
+      "hideControls": false,
+      "graphTooltip": 1,
+      "panels": [
+        {
+          "fieldConfig": {
+            "defaults": {
+              "thresholds": {
+                "mode": "absolute",
+                "steps": [
+                  {
+                    "color": "green",
+                    "value": null
+                  }
+                ]
+              },
+              "mappings": [],
+              "color": {
+                "mode": "fixed",
+                "fixedColor": "green"
+              },
+              "decimals": 0
+            },
+            "overrides": []
+          },
+          "gridPos": {
+            "h": 9,
+            "w": 12,
+            "x": 0,
+            "y": 0
+          },
+          "id": 2,
+          "options": {
+            "reduceOptions": {
+              "values": false,
+              "calcs": [
+                  "lastNotNull"
+              ],
+              "fields": ""
+            },
+            "orientation": "auto",
+            "text": {},
+            "textMode": "auto",
+            "colorMode": "value",
+            "graphMode": "area",
+            "justifyMode": "auto"
+          },
+          "pluginVersion": "7.5.15",
+          "targets": [
+            {
+              "expr": "sum(increase(glbc_aws_route53_request_total[$__range]))",
+              "legendFormat": "Total Requests",
+              "interval": "",
+              "exemplar": true,
+              "format": "time_series",
+              "hide": false,
+              "instant": true,
+              "refId": "A"
+            },
+            {
+              "expr": "sum(increase(glbc_aws_route53_request_errors_total[$__range]))",
+              "legendFormat": "Total Errors",
+              "interval": "",
+              "exemplar": true,
+              "hide": false,
+              "instant": true,
+              "refId": "B"
+            }
+          ],
+          "title": "AWS Route53 Requests",
+          "type": "stat",
+          "description": "",
+          "timeFrom": null,
+          "timeShift": null,
+          "datasource": null
+        }
+      ],
+      "time": {
+        "from": "now-6h",
+        "to": "now"
+      },
+      "timepicker": {
+        "time_options": [],
+        "refresh_intervals": []
+      },
+      "templating": {
+        "list": []
+      },
+      "annotations": {
+        "list": []
+      },
+      "refresh": "5s",
+      "schemaVersion": 17,
+      "version": 0,
+      "links": []
+    }
