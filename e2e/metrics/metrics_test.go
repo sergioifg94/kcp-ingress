@@ -126,7 +126,7 @@ func TestMetrics(t *testing.T) {
 					Metric: []*prometheus.Metric{
 						{
 							Label: []*prometheus.LabelPair{
-								label("host", hostname),
+								label("hostname", hostname),
 								label("issuer", issuer),
 							},
 							Gauge: &prometheus.Gauge{
@@ -135,7 +135,7 @@ func TestMetrics(t *testing.T) {
 						},
 						{
 							Label: []*prometheus.LabelPair{
-								label("host", domain),
+								label("hostname", domain),
 								label("issuer", issuer),
 							},
 							Gauge: &prometheus.Gauge{
@@ -194,7 +194,7 @@ func TestMetrics(t *testing.T) {
 				Metric: []*prometheus.Metric{
 					{
 						Label: []*prometheus.LabelPair{
-							label("host", hostname),
+							label("hostname", hostname),
 							label("issuer", issuer),
 						},
 						Gauge: &prometheus.Gauge{
@@ -203,7 +203,7 @@ func TestMetrics(t *testing.T) {
 					},
 					{
 						Label: []*prometheus.LabelPair{
-							label("host", domain),
+							label("hostname", domain),
 							label("issuer", issuer),
 						},
 						Gauge: &prometheus.Gauge{
@@ -360,7 +360,7 @@ func TestMetrics(t *testing.T) {
 				Metric: []*prometheus.Metric{
 					{
 						Label: []*prometheus.LabelPair{
-							label("host", hostname),
+							label("hostname", hostname),
 							label("issuer", issuer),
 						},
 						Gauge: &prometheus.Gauge{
@@ -369,7 +369,7 @@ func TestMetrics(t *testing.T) {
 					},
 					{
 						Label: []*prometheus.LabelPair{
-							label("host", domain),
+							label("hostname", domain),
 							label("issuer", issuer),
 						},
 						Gauge: &prometheus.Gauge{
