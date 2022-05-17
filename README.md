@@ -36,19 +36,6 @@ To verify the resources were created successfully, check the output of the follo
 kubectl get deployment,service,ingress
 ```
 
-If errors are encountered about resources not existing, sometimes deleting the clusters from KCP and recreating them can solve the problem:
-
-Delete the clusters:
-```bash 
-kubectl delete workloadcluster kcp-cluster-1
-kubectl delete workloadcluster kcp-cluster-2
-```
-Recreate them:
-```bash
-kubectl apply -f ./tmp/kcp-cluster-1.yaml
-kubectl apply -f ./tmp/kcp-cluster-2.yaml
-```
-
 ### Add CRC cluster (optional)
 
 With a running local setup i.e. you have successfully executed `make local-setup`, you can run the following to create and add a CRC cluster:
