@@ -107,9 +107,6 @@ EOF
   ${KIND_BIN} get kubeconfig --name=${cluster} > ${TEMP_DIR}/${cluster}.kubeconfig
   ${KIND_BIN} get kubeconfig --internal --name=${cluster} > ${TEMP_DIR}/${cluster}.kubeconfig.internal
 
-  echo "Creating Cluster objects for the kind cluster."
-  ${KIND_BIN} get kubeconfig --name=${cluster} | sed -e 's/^/    /' | cat utils/kcp-contrib/cluster.yaml - | sed -e "s/name: local/name: ${cluster}/" > ${TEMP_DIR}/${cluster}.yaml
-
   echo "Deploying Ingress controller to kind cluster"
   {
   kubectl config use-context kind-${cluster}
