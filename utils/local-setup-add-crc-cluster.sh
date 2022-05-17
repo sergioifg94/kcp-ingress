@@ -59,8 +59,6 @@ crc start -p $PULL_SECRET
 cp ~/.crc/machines/crc/kubeconfig ${TEMP_DIR}/${CRC_KUBECONFIG}
 cp ${TEMP_DIR}/${CRC_KUBECONFIG} ${TEMP_DIR}/${CRC_KUBECONFIG}.internal
 
-cat ${TEMP_DIR}/${CRC_KUBECONFIG} | sed -e 's/^/    /' | cat utils/kcp-contrib/cluster.yaml - | sed -e "s/name: local/name: ${CRC_CLUSTER_NAME}/" >${TEMP_DIR}/${CRC_CLUSTER_NAME}.yaml
-
 echo "Registering crc cluster into KCP"
 KUBECONFIG=.kcp/admin.kubeconfig ${KUBECTL_KCP_BIN} workload sync ${CRC_CLUSTER_NAME} --syncer-image=${KCP_SYNCER_IMAGE} --resources=ingresses.networking.k8s.io,services > ${TEMP_DIR}/${CRC_CLUSTER_NAME}-syncer.yaml
 kubectl --context crc-admin apply -f ${TEMP_DIR}/${CRC_CLUSTER_NAME}-syncer.yaml
