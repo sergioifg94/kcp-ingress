@@ -11,7 +11,6 @@ import (
 	"k8s.io/client-go/tools/cache"
 	"k8s.io/client-go/util/workqueue"
 
-	"github.com/kuadrant/kcp-glbc/pkg/cluster"
 	"github.com/kuadrant/kcp-glbc/pkg/reconciler"
 )
 
@@ -47,9 +46,8 @@ func NewController(config *ControllerConfig) (*Controller, error) {
 		AddFunc: func(obj interface{}) {
 			secret := obj.(*corev1.Secret)
 			issuer, hasIssuer := secret.Annotations[tlsIssuerAnnotation]
-			hostname, hasHostname := secret.Annotations[cluster.ANNOTATION_HCG_HOST]
-			if hasIssuer && hasHostname {
-				tlsCertificateSecretCount.WithLabelValues(issuer, hostname).Inc()
+			if hasIssuer {
+				tlsCertificateSecretCount.WithLabelValues(issuer).Inc()
 			}
 			c.Enqueue(obj)
 		},
@@ -59,9 +57,8 @@ func NewController(config *ControllerConfig) (*Controller, error) {
 		DeleteFunc: func(obj interface{}) {
 			secret := obj.(*corev1.Secret)
 			issuer, hasIssuer := secret.Annotations[tlsIssuerAnnotation]
-			hostname, hasHostname := secret.Annotations[cluster.ANNOTATION_HCG_HOST]
-			if hasIssuer && hasHostname {
-				tlsCertificateSecretCount.WithLabelValues(issuer, hostname).Dec()
+			if hasIssuer {
+				tlsCertificateSecretCount.WithLabelValues(issuer).Dec()
 			}
 			c.Enqueue(obj)
 		},

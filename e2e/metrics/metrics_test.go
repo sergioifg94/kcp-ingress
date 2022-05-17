@@ -225,17 +225,6 @@ func TestMetrics(t *testing.T) {
 				Metric: []*prometheus.Metric{
 					{
 						Label: []*prometheus.LabelPair{
-							label("hostname", hostname),
-							label("issuer", issuer),
-							label("result", "succeeded"),
-						},
-						Counter: &prometheus.Counter{
-							Value: float64P(1),
-						},
-					},
-					{
-						Label: []*prometheus.LabelPair{
-							label("hostname", domain),
 							label("issuer", issuer),
 							label("result", "failed"),
 						},
@@ -245,12 +234,11 @@ func TestMetrics(t *testing.T) {
 					},
 					{
 						Label: []*prometheus.LabelPair{
-							label("hostname", domain),
 							label("issuer", issuer),
 							label("result", "succeeded"),
 						},
 						Counter: &prometheus.Counter{
-							Value: float64P(0),
+							Value: float64P(1),
 						},
 					},
 				},
@@ -268,7 +256,6 @@ func TestMetrics(t *testing.T) {
 				Metric: []*prometheus.Metric{
 					{
 						Label: []*prometheus.LabelPair{
-							label("hostname", domain),
 							label("issuer", issuer),
 						},
 						Counter: &prometheus.Counter{
@@ -289,7 +276,6 @@ func TestMetrics(t *testing.T) {
 				"Type": EqualP(prometheus.MetricType_GAUGE),
 				"Metric": ContainElement(&prometheus.Metric{
 					Label: []*prometheus.LabelPair{
-						label("hostname", hostname),
 						label("issuer", issuer),
 					},
 					Gauge: &prometheus.Gauge{
@@ -313,7 +299,6 @@ func TestMetrics(t *testing.T) {
 				Metric: []*prometheus.Metric{
 					{
 						Label: []*prometheus.LabelPair{
-							label("hostname", hostname),
 							label("issuer", issuer),
 							label("result", "succeeded"),
 						},
@@ -354,7 +339,6 @@ func TestMetrics(t *testing.T) {
 				"Type": EqualP(prometheus.MetricType_GAUGE),
 				"Metric": ContainElement(&prometheus.Metric{
 					Label: []*prometheus.LabelPair{
-						label("hostname", hostname),
 						label("issuer", issuer),
 					},
 					Gauge: &prometheus.Gauge{
@@ -404,17 +388,6 @@ func TestMetrics(t *testing.T) {
 				Metric: []*prometheus.Metric{
 					{
 						Label: []*prometheus.LabelPair{
-							label("hostname", hostname),
-							label("issuer", issuer),
-							label("result", "succeeded"),
-						},
-						Counter: &prometheus.Counter{
-							Value: float64P(1),
-						},
-					},
-					{
-						Label: []*prometheus.LabelPair{
-							label("hostname", domain),
 							label("issuer", issuer),
 							label("result", "failed"),
 						},
@@ -424,12 +397,11 @@ func TestMetrics(t *testing.T) {
 					},
 					{
 						Label: []*prometheus.LabelPair{
-							label("hostname", domain),
 							label("issuer", issuer),
 							label("result", "succeeded"),
 						},
 						Counter: &prometheus.Counter{
-							Value: float64P(0),
+							Value: float64P(1),
 						},
 					},
 				},
@@ -444,7 +416,6 @@ func TestMetrics(t *testing.T) {
 				Metric: []*prometheus.Metric{
 					{
 						Label: []*prometheus.LabelPair{
-							label("hostname", domain),
 							label("issuer", issuer),
 						},
 						Counter: &prometheus.Counter{
@@ -463,7 +434,6 @@ func TestMetrics(t *testing.T) {
 				Metric: []*prometheus.Metric{
 					{
 						Label: []*prometheus.LabelPair{
-							label("hostname", hostname),
 							label("issuer", issuer),
 							label("result", "succeeded"),
 						},

@@ -134,11 +134,11 @@ func (c *Controller) observeCertificateIssuanceDuration(kctx cluster.ObjectMappe
 	// FIXME: refactor the certificate management so that metrics reflect actual state transitions rather than client requests, and so that it's possible to observe issuance errors
 	hostname := kctx.Host()
 	// The certificate request has successfully completed
-	tlsCertificateRequestTotal.WithLabelValues(issuer, hostname, resultLabelSucceeded).Inc()
+	tlsCertificateRequestTotal.WithLabelValues(issuer, resultLabelSucceeded).Inc()
 	// The certificate request has successfully completed so there is one less pending request
 	tls.CertificateRequestCount.WithLabelValues(issuer, hostname).Dec()
 
 	tlsCertificateIssuanceDuration.
-		WithLabelValues(issuer, hostname, resultLabelSucceeded).
+		WithLabelValues(issuer, resultLabelSucceeded).
 		Observe(creationTimestamp.Sub(kctx.CreationTimestamp().Time).Seconds())
 }
