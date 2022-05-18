@@ -432,11 +432,7 @@ spec:
         "list": [
           {
             "allValue": null,
-            "current": {
-              "selected": true,
-              "text": "kcp-glbc-stable",
-              "value": "kcp-glbc-stable"
-            },
+            "current": {},
             "datasource": null,
             "definition": "label_values(namespace)",
             "description": null,
@@ -446,33 +442,12 @@ spec:
             "label": "Namespace",
             "multi": false,
             "name": "namespace",
-            "options": [
-              {
-                "selected": false,
-                "text": "kcp-glbc-monitoring",
-                "value": "kcp-glbc-monitoring"
-              },
-              {
-                "selected": false,
-                "text": "kcp-glbc-observability",
-                "value": "kcp-glbc-observability"
-              },
-              {
-                "selected": true,
-                "text": "kcp-glbc-stable",
-                "value": "kcp-glbc-stable"
-              },
-              {
-                "selected": false,
-                "text": "kcp-glbc-unstable",
-                "value": "kcp-glbc-unstable"
-              }
-            ],
+            "options": [],
             "query": {
               "query": "label_values(namespace)",
               "refId": "StandardVariableQuery"
             },
-            "refresh": 0,
+            "refresh": 1,
             "regex": "/^kcp-glbc.*/",
             "skipUrlSync": false,
             "sort": 0,
