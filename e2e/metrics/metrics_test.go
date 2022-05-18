@@ -20,9 +20,11 @@ package metrics
 import (
 	"bytes"
 	"context"
+	"fmt"
 	"io"
 	"math"
 	"net/http"
+	"strings"
 	"testing"
 	"time"
 
@@ -105,7 +107,6 @@ func TestMetrics(t *testing.T) {
 
 	hostname := ""
 	domain := env.GetEnvString("GLBC_DOMAIN", "hcpapps.net")
-	ingress := &networkingv1.Ingress{}
 
 	// We pull the metrics aggressively as the certificate can be issued quickly when using the CA issuer.
 	// We may want to adjust the pull interval as well as the timeout based on the configured issuer.
@@ -113,7 +114,7 @@ func TestMetrics(t *testing.T) {
 		HaveKey("glbc_tls_certificate_pending_request_count"),
 		WithTransform(Metric("glbc_tls_certificate_pending_request_count"), Satisfy(
 			func(m *prometheus.MetricFamily) bool {
-				ingress, err = test.Client().Core().Cluster(logicalcluster.From(namespace)).NetworkingV1().Ingresses(namespace.Name).Get(test.Ctx(), name, metav1.GetOptions{})
+				ingress, err := test.Client().Core().Cluster(logicalcluster.From(namespace)).NetworkingV1().Ingresses(namespace.Name).Get(test.Ctx(), name, metav1.GetOptions{})
 				if err != nil {
 					t.Fatal(err)
 				}
@@ -150,29 +151,27 @@ func TestMetrics(t *testing.T) {
 		)),
 	))
 
+	secretName := strings.ReplaceAll(fmt.Sprintf("%s-%s-%s", namespace.GetClusterName(), namespace.Name, name), ":", "")
+
 	// Wait until the Ingress is reconciled with the load balancer Ingresses
 	test.Eventually(Ingress(test, namespace, name)).WithTimeout(TestTimeoutMedium).Should(And(
+		// Host spec
 		WithTransform(Annotations, And(
 			HaveKey(kuadrantcluster.ANNOTATION_HCG_HOST),
 			HaveKey(kuadrantcluster.ANNOTATION_HCG_CUSTOM_HOST_REPLACED)),
 		),
-		WithTransform(LoadBalancerIngresses, HaveLen(1)),
 		Satisfy(HostsEqualsToGeneratedHost),
-	))
-
-	// Check the Ingress TLS spec
-	mapping, err := kuadrantcluster.NewControlObjectMapper(ingress)
-	test.Expect(err).NotTo(HaveOccurred())
-
-	test.Expect(ingress).To(WithTransform(IngressTLS, ConsistOf(
-		networkingv1.IngressTLS{
+		// TLS certificate spec
+		WithTransform(IngressTLS, ConsistOf(networkingv1.IngressTLS{
 			Hosts:      []string{hostname},
-			SecretName: mapping.Name(),
-		}),
+			SecretName: secretName,
+		})),
+		// Load balancer status
+		WithTransform(LoadBalancerIngresses, HaveLen(1)),
 	))
 
 	// Check the TLS Secret
-	test.Eventually(Secret(test, namespace, mapping.Name())).
+	test.Eventually(Secret(test, namespace, secretName)).
 		WithTimeout(TestTimeoutMedium).
 		Should(WithTransform(Certificate, PointTo(MatchFields(IgnoreExtras,
 			map[string]types.GomegaMatcher{
@@ -286,6 +285,7 @@ func TestMetrics(t *testing.T) {
 		)),
 	))
 
+	ingress := GetIngress(test, namespace, name)
 	secret := GetSecret(test, namespace, ingress.Spec.TLS[0].SecretName)
 	// Ingress creation timestamp is serialized to RFC3339 format and set in an annotation on the certificate request
 	duration := secret.CreationTimestamp.Sub(ingress.CreationTimestamp.Rfc3339Copy().Time).Seconds()
