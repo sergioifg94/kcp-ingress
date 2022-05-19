@@ -148,7 +148,7 @@ spec:
           "targets": [
             {
               "exemplar": true,
-              "expr": "sum(increase(glbc_tls_certificate_request_total{namespace=\"$namespace\",result=\"failed\"}[$__range])) by (issuer)",
+              "expr": "sum(increase(glbc_tls_certificate_request_total{namespace=\"$namespace\"}[$__range])) by (issuer)",
               "format": "time_series",
               "hide": false,
               "instant": true,
@@ -169,6 +169,7 @@ spec:
               "exemplar": true,
               "expr": "sum(increase(glbc_tls_certificate_request_total{namespace=\"$namespace\", result=\"failed\"}[$__range])) by (issuer)",
               "hide": false,
+              "instant": true,
               "interval": "",
               "legendFormat": "Total Failed {{issuer}}",
               "refId": "C"
@@ -177,6 +178,7 @@ spec:
               "exemplar": true,
               "expr": "sum(increase(glbc_tls_certificate_secret_count{namespace=\"$namespace\" }[$__range])) by (issuer)",
               "hide": false,
+              "instant": true,
               "interval": "",
               "legendFormat": "Total Secrets {{issuer}}",
               "refId": "D"
@@ -185,14 +187,16 @@ spec:
               "exemplar": true,
               "expr": "sum(increase(glbc_tls_certificate_pending_request_count{namespace=\"$namespace\"}[$__range])) by (issuer)",
               "hide": false,
+              "instant": true,
               "interval": "",
               "legendFormat": "Total Pending {{issuer}}",
               "refId": "E"
             },
             {
               "exemplar": true,
-              "expr": "sum(increase(glbc_tls_certificate_issuance_duration_seconds_bucket{namespace=\"$namespace\"}[$__range])) by (issuer) - sum(increase(glbc_tls_certificate_issuance_duration_seconds_bucket{namespace=\"$namespace\" , le=\"300\"}[$__range]))  by (issuer)",
+              "expr": "sum(increase(glbc_tls_certificate_issuance_duration_seconds_bucket{namespace=\"$namespace\", le=\"+Inf\"}[$__range])) by (issuer) - sum(increase(glbc_tls_certificate_issuance_duration_seconds_bucket{namespace=\"$namespace\" , le=\"300\"}[$__range]))  by (issuer)",
               "hide": false,
+              "instant": true,
               "interval": "",
               "legendFormat": "Total > 5m {{issuer}}",
               "refId": "F"
