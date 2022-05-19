@@ -47,7 +47,6 @@ import (
 	. "github.com/kuadrant/kcp-glbc/e2e/support"
 	kuadrantv1 "github.com/kuadrant/kcp-glbc/pkg/apis/kuadrant/v1"
 	kuadrantcluster "github.com/kuadrant/kcp-glbc/pkg/cluster"
-	"github.com/kuadrant/kcp-glbc/pkg/util/env"
 )
 
 const issuer = "glbc-ca"
@@ -106,7 +105,6 @@ func TestMetrics(t *testing.T) {
 	test.Expect(err).NotTo(HaveOccurred())
 
 	hostname := ""
-	domain := env.GetEnvString("GLBC_DOMAIN", "hcpapps.net")
 
 	// We pull the metrics aggressively as the certificate can be issued quickly when using the CA issuer.
 	// We may want to adjust the pull interval as well as the timeout based on the configured issuer.
@@ -127,20 +125,10 @@ func TestMetrics(t *testing.T) {
 					Metric: []*prometheus.Metric{
 						{
 							Label: []*prometheus.LabelPair{
-								label("hostname", hostname),
 								label("issuer", issuer),
 							},
 							Gauge: &prometheus.Gauge{
 								Value: float64P(1),
-							},
-						},
-						{
-							Label: []*prometheus.LabelPair{
-								label("hostname", domain),
-								label("issuer", issuer),
-							},
-							Gauge: &prometheus.Gauge{
-								Value: float64P(0),
 							},
 						},
 					},
@@ -193,16 +181,6 @@ func TestMetrics(t *testing.T) {
 				Metric: []*prometheus.Metric{
 					{
 						Label: []*prometheus.LabelPair{
-							label("hostname", hostname),
-							label("issuer", issuer),
-						},
-						Gauge: &prometheus.Gauge{
-							Value: float64P(0),
-						},
-					},
-					{
-						Label: []*prometheus.LabelPair{
-							label("hostname", domain),
 							label("issuer", issuer),
 						},
 						Gauge: &prometheus.Gauge{
@@ -360,16 +338,6 @@ func TestMetrics(t *testing.T) {
 				Metric: []*prometheus.Metric{
 					{
 						Label: []*prometheus.LabelPair{
-							label("hostname", hostname),
-							label("issuer", issuer),
-						},
-						Gauge: &prometheus.Gauge{
-							Value: float64P(0),
-						},
-					},
-					{
-						Label: []*prometheus.LabelPair{
-							label("hostname", domain),
 							label("issuer", issuer),
 						},
 						Gauge: &prometheus.Gauge{

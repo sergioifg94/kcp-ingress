@@ -221,7 +221,7 @@ The KCP GLBC monitoring endpoint exposes the metrics listed in the following sec
 | `glbc_tls_certificate_pending_request_count`
 | `GaugeVec`
 | Current number of pending certificate requests
-| `issuer`, `hostname`
+| `issuer`
 
 | `glbc_tls_certificate_request_total`
 | `CounterVec`
