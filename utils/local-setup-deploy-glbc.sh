@@ -21,6 +21,15 @@
 
 set -e pipefail
 
+if ! command -v timeout &> /dev/null
+then
+    echo "'timeout' command not found."
+    if [[ "$OSTYPE" == "darwin"* ]]; then
+        echo "Try 'brew install coreutils'"
+    fi
+    exit
+fi
+
 wait_for() {
   local command="${1}"
   local description="${2}"
