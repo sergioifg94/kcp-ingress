@@ -159,10 +159,16 @@ func (c *Controller) ensureDNS(ctx context.Context, ingress *networkingv1.Ingres
 				return err
 			}
 			// Create the resource in the cluster
-			_, err = c.dnsRecordClient.Cluster(logicalcluster.From(record)).KuadrantV1().DNSRecords(record.Namespace).Create(ctx, record, metav1.CreateOptions{})
+			existing, err = c.dnsRecordClient.Cluster(logicalcluster.From(record)).KuadrantV1().DNSRecords(record.Namespace).Create(ctx, record, metav1.CreateOptions{})
 			if err != nil {
 				return err
 			}
+
+			// metric to observe the ingress admission time
+			ingressObjectTimeToAdmission.
+				WithLabelValues(ingress.ClusterName, ingress.Namespace).
+				Observe(existing.CreationTimestamp.Time.Sub(ingress.CreationTimestamp.Time).Seconds())
+
 		} else if err == nil {
 			// If it does exist, update it
 			if err := c.setDnsRecordFromIngress(ctx, ingress, existing); err != nil {
