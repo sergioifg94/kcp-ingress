@@ -6,7 +6,7 @@ The KCP Global Load Balancer Controller (GLBC) solves multi cluster ingress use 
 
 The main use case it solves currently is providing you with a single host that can be used to access your workload and bring traffic to the correct physical clusters. The GLBC manages the DNS for this host and provides you with a valid TLS certificate. If your workload moves/is moved or expands contracts across clusters, GLBC will ensure that the DNS for this host is correct and traffic will continue to reach your workload.
 
-It also offers the ability to setup a health check for your applciation. When this health check fails for a particular cluster, the unhealthy cluster will be removed from the DNS response.
+It also offers the ability to setup a health check for your workload. When this health check fails for a particular cluster, the unhealthy cluster will be removed from the DNS response.
 
 The GLBCs main API is the kubernetes Ingress object. GLBC watches for Ingress objects and mutates them adding in the GLBC managed host and tls certificate. 
 
