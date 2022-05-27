@@ -6,9 +6,7 @@ spec:
   client:
     preferService: true
   ingress:
-    enabled: True
-    pathType: Prefix
-    path: "/"
+    enabled: false
   config:
     log:
       mode: "console"

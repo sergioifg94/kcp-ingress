@@ -16,8 +16,12 @@
 # limitations under the License.
 #
 
+LOCAL_SETUP_DIR="$(dirname "${BASH_SOURCE[0]}")"
+KCP_GLBC_DIR="${LOCAL_SETUP_DIR}/.."
+source "${LOCAL_SETUP_DIR}"/.setupEnv
+source "${LOCAL_SETUP_DIR}"/.startUtils
+
 DO_BREW="false"
-SCRIPT_DIR=$( cd -- "$( dirname -- "${BASH_SOURCE[0]}" )" &> /dev/null && pwd )
 
 usage() { echo "usage: ./local-setup.sh -c <number of clusters>" 1>&2; exit 1; }
 while getopts ":bc:" arg; do
@@ -56,18 +60,11 @@ cleanup() {
   kill "$KCP_PID"
 }
 
-GOROOT=$(go env GOROOT)
-export GOROOT
-export KIND_BIN="./bin/kind"
-export KCP_BIN="./bin/kcp"
-export KUBECTL_KCP_BIN="./bin/kubectl-kcp"
-export KUSTOMIZE_BIN="./bin/kustomize"
 TEMP_DIR="./tmp"
 KCP_LOG_FILE="${TEMP_DIR}"/kcp.log
 
 KIND_CLUSTER_PREFIX="kcp-cluster-"
 KCP_GLBC_CLUSTER_NAME="${KIND_CLUSTER_PREFIX}glbc-control"
-KCP_GLBC_KUBECONFIG="${KCP_GLBC_CLUSTER_NAME}.kubeconfig"
 
 : ${KCP_VERSION:="release-0.4"}
 KCP_SYNCER_IMAGE="ghcr.io/kcp-dev/kcp/syncer:${KCP_VERSION}"
@@ -78,6 +75,8 @@ do
 done
 
 mkdir -p ${TEMP_DIR}
+
+[[ ! -z "$KUBECONFIG" ]] && KUBECONFIG="$KUBECONFIG" || KUBECONFIG="$HOME/.kube/config"
 
 createCluster() {
   cluster=$1;
@@ -106,43 +105,38 @@ EOF
 
   ${KIND_BIN} get kubeconfig --name=${cluster} > ${TEMP_DIR}/${cluster}.kubeconfig
   ${KIND_BIN} get kubeconfig --internal --name=${cluster} > ${TEMP_DIR}/${cluster}.kubeconfig.internal
-
-  echo "Deploying Ingress controller to kind cluster"
-  {
-  kubectl config use-context kind-${cluster}
-
-  VERSION=$(curl https://raw.githubusercontent.com/kubernetes/ingress-nginx/master/stable.txt)
-  curl https://raw.githubusercontent.com/kubernetes/ingress-nginx/"${VERSION}"/deploy/static/provider/kind/deploy.yaml | sed "s/--publish-status-address=localhost/--report-node-internal-ip-address/g" | kubectl apply -f -
-  kubectl annotate ingressclass nginx "ingressclass.kubernetes.io/is-default-class=true"
-
-  } &>/dev/null
 }
 
 createKCPWorkloadCluster() {
+  echo "Creating KCP WorkloadCluster (${1})"
   createCluster $1 $2 $3
-  echo "Deploying kcp syncer to ${1}"
-  KUBECONFIG=.kcp/admin.kubeconfig ${KUBECTL_KCP_BIN} workload sync $1 --syncer-image=${KCP_SYNCER_IMAGE} --resources=ingresses.networking.k8s.io,services > ${TEMP_DIR}/${1}-syncer.yaml
+
   kubectl config use-context kind-${1}
+
+  echo "Deploying Ingress controller to ${1}"
+  VERSION=$(curl https://raw.githubusercontent.com/kubernetes/ingress-nginx/master/stable.txt)
+  curl https://raw.githubusercontent.com/kubernetes/ingress-nginx/"${VERSION}"/deploy/static/provider/kind/deploy.yaml | sed "s/--publish-status-address=localhost/--report-node-internal-ip-address/g" | kubectl apply -f -
+  kubectl annotate ingressclass nginx "ingressclass.kubernetes.io/is-default-class=true"
+  echo "Waiting for deployments to be ready ..."
+  kubectl -n ingress-nginx wait --timeout=300s --for=condition=Available deployments --all
+
+  echo "Deploying kcp syncer to ${1}"
+  kubectl --kubeconfig=.kcp/admin.kubeconfig create namespace kcp-syncer --dry-run=client -o yaml | kubectl --kubeconfig=.kcp/admin.kubeconfig apply -f -
+  KUBECONFIG=.kcp/admin.kubeconfig ${KUBECTL_KCP_BIN} workload sync $1 --kcp-namespace kcp-syncer --syncer-image=${KCP_SYNCER_IMAGE} --resources=ingresses.networking.k8s.io,services >${TEMP_DIR}/${1}-syncer.yaml
   kubectl apply -f ${TEMP_DIR}/${1}-syncer.yaml
 }
 
-createGLBCCluster() {
-  createCluster "$KCP_GLBC_CLUSTER_NAME" $1 $2
-  kubectl config use-context kind-${KCP_GLBC_CLUSTER_NAME}
-  echo "Deploying cert manager to ${KCP_GLBC_CLUSTER_NAME}"
-  kubectl apply -f https://github.com/cert-manager/cert-manager/releases/download/v1.7.1/cert-manager.yaml
-  kubectl -n cert-manager wait --timeout=300s --for=condition=Available deployments --all
+createKCPWorkspace() {
+  echo "Creating KCP Workspace (${1})"
+  KUBECONFIG=.kcp/admin.kubeconfig ${KUBECTL_KCP_BIN} workspace use root:default
+  KUBECONFIG=.kcp/admin.kubeconfig ${KUBECTL_KCP_BIN} workspace create ${1} --enter
 }
 
-createKCPWorkspace() {
-  echo "Creating HCG Workspace"
-  KUBECONFIG=.kcp/admin.kubeconfig ${KUBECTL_KCP_BIN} workspace create kcp-glbc --enter
-  echo "Waiting 15 seconds..."
-  sleep 15
-  echo "Registering HCG APIs"
-  kubectl --kubeconfig=.kcp/admin.kubeconfig apply -f ./config/crd/bases
-  kubectl --kubeconfig=.kcp/admin.kubeconfig apply -f ./utils/kcp-contrib/apiresourceschema.yaml
-  kubectl --kubeconfig=.kcp/admin.kubeconfig apply -f ./utils/kcp-contrib/apiexport.yaml
+deployGLBC() {
+  echo "Deploying GLBC"
+  # Note: This doesn't actually deploy glbc, we call the deploy script here to setup the KCP workspace, GLBC ApiBindings and to install cert manager.
+  # This allows devs to continue to run the controller locally for dev/test purposes.
+  KUBECONFIG=.kcp/admin.kubeconfig ${SCRIPT_DIR}/deploy.sh -c cert-manager
 }
 
 #Delete existing kind clusters
@@ -164,39 +158,49 @@ if ! ps -p ${KCP_PID}; then
   exit 1 #this will trigger cleanup function
 fi
 
-echo "Waiting 15 seconds..."
-sleep 15
+echo "Waiting for KCP server to be ready..."
+wait_for "grep 'Ready to start controllers' ${KCP_LOG_FILE}" "kcp" "1m" "5"
 
-#2. Create kcp-glbc workspace
-createKCPWorkspace
+(cd ${KCP_GLBC_DIR} && make generate-ld-config)
 
-#3. Create KCP Workload clusters
-echo "Creating $NUM_CLUSTERS kcp workload cluster(s)."
-port80=8081
-port443=8444
-for cluster in $CLUSTERS
-do
-  createKCPWorkloadCluster "$cluster" $port80 $port443
-  port80=$((port80+1))
-  port443=$((port443+1))
-done
-
-#4. Create GLBC cluster
-echo "Creating glbc cluster."
-createGLBCCluster $port80 $port443
+#2. Create GLBC workspace (kcp-glbc)
+createKCPWorkspace "kcp-glbc"
+#3. Create GLBC workload cluster
+createKCPWorkloadCluster $KCP_GLBC_CLUSTER_NAME 8081 8444
+#4. Deploy GLBC and CertManager and register there APIs
+deployGLBC
+## ToDo Enable user workspace
+# Note: This is temporarily removed until we move to a version of KCP that supports using multiple workspaces (0.5.0).
+# Until then we only really need the 1 kind cluster for testing since the placement/locations API's are not currently available.
+##5. Create User workspace (kcp-glbc-user)
+#createKCPWorkspace "kcp-glbc-user"
+##6. Create User workload clusters
+#echo "Creating $NUM_CLUSTERS kcp workload cluster(s)"
+#port80=8082
+#port443=8445
+#for cluster in $CLUSTERS; do
+#  createKCPWorkloadCluster "$cluster" $port80 $port443
+#  port80=$((port80+1))
+#  port443=$((port443+1))
+#done
 
 echo ""
 echo "KCP PID          : ${KCP_PID}"
 echo ""
 echo "The kind k8s clusters have been registered, and KCP is running, now you should run kcp-glbc."
 echo ""
-echo "Run locally:"
+echo "Run Option 1 (Local):"
 echo ""
-echo "       ./bin/kcp-glbc --kubeconfig .kcp/admin.kubeconfig --context system:admin --glbc-kubeconfig ${TEMP_DIR}/${KCP_GLBC_KUBECONFIG}"
+echo "       ./bin/kcp-glbc --kubeconfig .kcp/admin.kubeconfig --context system:admin --glbc-kubeconfig .kcp/admin.kubeconfig"
 echo ""
-echo "Run monitored in the $KCP_GLBC_CLUSTER_NAME cluster:"
+echo "Run Option 2 (Deploy latest in KCP with monitoring enabled):"
 echo ""
-echo "       ./utils/local-setup-deploy-glbc.sh"
+echo "       KUBECONFIG=${PWD}/.kcp/admin.kubeconfig ./utils/deploy.sh"
+echo "       KUBECONFIG=${KUBECONFIG} ./utils/deploy-observability.sh"
+echo ""
+echo "When glbc is running, try deploying the sample service:"
+echo ""
+echo "       kubectl apply -f samples/echo-service/echo.yaml"
 echo ""
 echo "Don't forget to export the proper KUBECONFIG to create objects against KCP:"
 echo "export KUBECONFIG=${PWD}/.kcp/admin.kubeconfig"

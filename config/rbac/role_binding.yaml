@@ -8,4 +8,4 @@ roleRef:
   name: kcp-glbc-controller-manager
 subjects:
   - kind: ServiceAccount
-    name: kcp-glbc-controller-manager
+    name: default
