@@ -139,10 +139,11 @@ kubectl -n kcp-glbc edit configmap kcp-glbc-controller-config
 | `GLBC_DNS_PROVIDER` |  The dns provider to use, one of [aws, fake] | fake |
 | `GLBC_DOMAIN` |  The domain to use when exposing ingresses via glbc | dev.hcpapps.net |
 | `GLBC_ENABLE_CUSTOM_HOSTS` | Allow custom hosts in glbc managed ingresses | false |
-| `GLBC_TLS_PROVIDED` | Generate TLS certs for glbc managed hosts | false |
-| `GLBC_TLS_PROVIDER` | TLS Cert provider to use, one of [le-staging, le-production] | le-staging |
-| `HCG_LE_EMAIL` | EMail address to use during LE cert requests | kuadrant-dev@redhat.com |
+| `GLBC_KCP_CONTEXT` | The kcp kube context | system:admin |
 | `GLBC_LOGICAL_CLUSTER_TARGET` | logical cluster to target | `*` |
+| `GLBC_TLS_PROVIDED` | Generate TLS certs for glbc managed hosts | false |
+| `GLBC_TLS_PROVIDER` | TLS Cert provider to use, one of [glbc-ca, le-staging, le-production] | glbc-ca |
+| `HCG_LE_EMAIL` | EMail address to use during LE cert requests | kuadrant-dev@redhat.com |
 
 ### Applying configuration changes
 
