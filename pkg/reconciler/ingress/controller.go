@@ -7,6 +7,7 @@ import (
 	networkingv1 "k8s.io/api/networking/v1"
 	"k8s.io/apimachinery/pkg/api/equality"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/labels"
 	"k8s.io/apimachinery/pkg/util/runtime"
 	"k8s.io/client-go/informers"
 	"k8s.io/client-go/kubernetes"
@@ -66,6 +67,14 @@ func NewController(config *ControllerConfig) *Controller {
 	c.sharedInformerFactory.Core().V1().Services().Informer().AddEventHandler(cache.ResourceEventHandlerFuncs{
 		UpdateFunc: func(_, obj interface{}) { c.ingressesFromService(obj) },
 		DeleteFunc: func(obj interface{}) { c.ingressesFromService(obj) },
+	})
+
+	// Watch for updates on Namespaces. It is necessary for the placement logic,
+	// that relies on the workloads.kcp.dev/cluster label set on the Namespaces.
+	// It may be removed once it's migrated to the KCP Location API.
+	c.sharedInformerFactory.Core().V1().Namespaces().Informer().AddEventHandler(cache.ResourceEventHandlerFuncs{
+		AddFunc:    func(obj interface{}) { c.ingressesInNamespace(obj) },
+		UpdateFunc: func(_, obj interface{}) { c.ingressesInNamespace(obj) },
 	})
 
 	c.indexer = c.sharedInformerFactory.Networking().V1().Ingresses().Informer().GetIndexer()
@@ -129,7 +138,7 @@ func (c *Controller) process(ctx context.Context, key string) error {
 	return nil
 }
 
-// ingressesFromService enqueues all the related ingresses for a given service when the service is changed.
+// ingressesFromService enqueues all the related Ingresses for a given service when the service is changed.
 func (c *Controller) ingressesFromService(obj interface{}) {
 	service := obj.(*corev1.Service)
 
@@ -146,5 +155,20 @@ func (c *Controller) ingressesFromService(obj interface{}) {
 	for _, ingress := range ingresses.List() {
 		c.Logger.Info("Enqueuing Ingress reconciliation via tracked Service", "ingress", ingress, "service", service)
 		c.Queue.Add(ingress)
+	}
+}
+
+// ingressesInNamespace enqueues all the Ingresses within the given Namespace.
+func (c *Controller) ingressesInNamespace(ns interface{}) {
+	namespace := ns.(*corev1.Namespace)
+
+	ingresses, err := c.lister.Ingresses(namespace.Name).List(labels.Everything())
+	if err != nil {
+		runtime.HandleError(err)
+		return
+	}
+
+	for _, ingress := range ingresses {
+		c.Enqueue(ingress)
 	}
 }
