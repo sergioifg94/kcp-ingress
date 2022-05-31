@@ -58,15 +58,12 @@ func NewController(config *ControllerConfig) *Controller {
 	// Watch for events related to Ingresses
 	c.sharedInformerFactory.Networking().V1().Ingresses().Informer().AddEventHandler(cache.ResourceEventHandlerFuncs{
 		AddFunc: func(obj interface{}) {
-			ingress := obj.(*networkingv1.Ingress)
-			initMetrics(ingress)
-			ingressObjectTotal.WithLabelValues(ingress.ClusterName, ingress.Namespace).Inc()
+			ingressObjectTotal.Inc()
 			c.Enqueue(obj)
 		},
 		UpdateFunc: func(_, obj interface{}) { c.Enqueue(obj) },
 		DeleteFunc: func(obj interface{}) {
-			ingress := obj.(*networkingv1.Ingress)
-			ingressObjectTotal.WithLabelValues(ingress.ClusterName, ingress.Namespace).Dec()
+			ingressObjectTotal.Dec()
 			c.Enqueue(obj)
 		},
 	})
@@ -127,7 +124,6 @@ func (c *Controller) process(ctx context.Context, key string) error {
 
 	err = c.reconcile(ctx, current)
 	if err != nil {
-		ingressObjectReconcilationTotal.WithLabelValues(current.ClusterName, current.Namespace, current.Name, resultLabelFailed).Inc()
 		return err
 	}
 
@@ -135,7 +131,6 @@ func (c *Controller) process(ctx context.Context, key string) error {
 		_, err := c.kubeClient.Cluster(logicalcluster.From(current)).NetworkingV1().Ingresses(current.Namespace).Update(ctx, current, metav1.UpdateOptions{})
 		return err
 	}
-	ingressObjectReconcilationTotal.WithLabelValues(current.ClusterName, current.Namespace, current.Name, resultLabelSucceeded).Inc()
 
 	return nil
 }

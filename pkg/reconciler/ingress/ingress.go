@@ -166,7 +166,6 @@ func (c *Controller) ensureDNS(ctx context.Context, ingress *networkingv1.Ingres
 
 			// metric to observe the ingress admission time
 			ingressObjectTimeToAdmission.
-				WithLabelValues(ingress.ClusterName, ingress.Namespace).
 				Observe(existing.CreationTimestamp.Time.Sub(ingress.CreationTimestamp.Time).Seconds())
 
 		} else if err == nil {

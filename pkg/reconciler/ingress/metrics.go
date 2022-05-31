@@ -5,20 +5,10 @@ import (
 
 	"github.com/kuadrant/kcp-glbc/pkg/metrics"
 	"github.com/prometheus/client_golang/prometheus"
-	networkingv1 "k8s.io/api/networking/v1"
-)
-
-const (
-	ingressWorkspace     = "workspace"
-	ingressNamespace     = "namespace"
-	ingressName          = "name"
-	resultLabel          = "result"
-	resultLabelSucceeded = "succeeded"
-	resultLabelFailed    = "failed"
 )
 
 var (
-	ingressObjectTimeToAdmission = prometheus.NewHistogramVec(
+	ingressObjectTimeToAdmission = prometheus.NewHistogram(
 		prometheus.HistogramOpts{
 			Name: "glbc_ingress_managed_object_time_to_admission",
 			Help: "Duration of the ingress object admission",
@@ -33,30 +23,12 @@ var (
 				2 * time.Minute.Seconds(),
 				5 * time.Minute.Seconds(),
 			},
-		},
-		[]string{
-			ingressWorkspace,
-			ingressNamespace,
 		})
 
-	ingressObjectTotal = prometheus.NewGaugeVec(
+	ingressObjectTotal = prometheus.NewGauge(
 		prometheus.GaugeOpts{
 			Name: "glbc_ingress_managed_object_total",
 			Help: "Total number of managed ingress object",
-		}, []string{
-			ingressWorkspace,
-			ingressNamespace,
-		})
-
-	ingressObjectReconcilationTotal = prometheus.NewCounterVec(
-		prometheus.CounterOpts{
-			Name: "glbc_ingress_managed_object_reconciliation",
-			Help: "Number of managed ingress object reconciliation",
-		}, []string{
-			ingressWorkspace,
-			ingressNamespace,
-			ingressName,
-			resultLabel,
 		})
 )
 
@@ -65,11 +37,5 @@ func init() {
 	metrics.Registry.MustRegister(
 		ingressObjectTimeToAdmission,
 		ingressObjectTotal,
-		ingressObjectReconcilationTotal,
 	)
-}
-
-func initMetrics(ingress *networkingv1.Ingress) {
-	ingressObjectReconcilationTotal.WithLabelValues(ingress.ClusterName, ingress.Namespace, ingress.Name, resultLabelSucceeded).Add(0)
-	ingressObjectReconcilationTotal.WithLabelValues(ingress.ClusterName, ingress.Namespace, ingress.Name, resultLabelFailed).Add(0)
 }
