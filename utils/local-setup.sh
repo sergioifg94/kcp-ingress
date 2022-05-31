@@ -108,7 +108,8 @@ EOF
 }
 
 createKCPWorkloadCluster() {
-  echo "Creating KCP WorkloadCluster (${1})"
+  [[ ! -z "$4" ]] && clusterName=${4} ||  clusterName=${1}
+  echo "Creating KCP WorkloadCluster (${clusterName})"
   createCluster $1 $2 $3
 
   kubectl config use-context kind-${1}
@@ -122,8 +123,8 @@ createKCPWorkloadCluster() {
 
   echo "Deploying kcp syncer to ${1}"
   kubectl --kubeconfig=.kcp/admin.kubeconfig create namespace kcp-syncer --dry-run=client -o yaml | kubectl --kubeconfig=.kcp/admin.kubeconfig apply -f -
-  KUBECONFIG=.kcp/admin.kubeconfig ${KUBECTL_KCP_BIN} workload sync $1 --kcp-namespace kcp-syncer --syncer-image=${KCP_SYNCER_IMAGE} --resources=ingresses.networking.k8s.io,services >${TEMP_DIR}/${1}-syncer.yaml
-  kubectl apply -f ${TEMP_DIR}/${1}-syncer.yaml
+  KUBECONFIG=.kcp/admin.kubeconfig ${KUBECTL_KCP_BIN} workload sync ${clusterName} --kcp-namespace kcp-syncer --syncer-image=${KCP_SYNCER_IMAGE} --resources=ingresses.networking.k8s.io,services >${TEMP_DIR}/${clusterName}-syncer.yaml
+  kubectl apply -f ${TEMP_DIR}/${clusterName}-syncer.yaml
 }
 
 createKCPWorkspace() {
@@ -166,7 +167,7 @@ wait_for "grep 'Ready to start controllers' ${KCP_LOG_FILE}" "kcp" "1m" "5"
 #2. Create GLBC workspace (kcp-glbc)
 createKCPWorkspace "kcp-glbc"
 #3. Create GLBC workload cluster
-createKCPWorkloadCluster $KCP_GLBC_CLUSTER_NAME 8081 8444
+createKCPWorkloadCluster $KCP_GLBC_CLUSTER_NAME 8081 8444 "glbc"
 #4. Deploy GLBC and CertManager and register there APIs
 deployGLBC
 ## ToDo Enable user workspace

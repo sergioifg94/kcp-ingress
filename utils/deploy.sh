@@ -24,8 +24,12 @@ source "${DEPLOY_SCRIPT_DIR}"/.startUtils
 ORG_WORKSPACE=root:default
 GLBC_WORKSPACE=kcp-glbc
 GLBC_NAMESPACE=kcp-glbc
+GLBC_WORKLOAD_CLUSTER=glbc
 DEPLOY_COMPONENTS=glbc,cert-manager
 GLBC_KUSTOMIZATION=${KCP_GLBC_DIR}/config/deploy/local
+
+KCP_VERSION="release-0.4"
+KCP_SYNCER_IMAGE="ghcr.io/kcp-dev/kcp/syncer:${KCP_VERSION}"
 
 ############################################################
 # Help                                                     #
@@ -84,20 +88,15 @@ ${KUBECTL_KCP_BIN} workspace list > /dev/null || (echo "You must be targeting a 
 ${KUBECTL_KCP_BIN} workspace use ${ORG_WORKSPACE}
 ${KUBECTL_KCP_BIN} workspace create ${GLBC_WORKSPACE} --enter || ${KUBECTL_KCP_BIN} workspace use ${GLBC_WORKSPACE}
 
-## Check at least one workload cluster is available and ready
-kubectl get workloadclusters | grep -qv "No resources found" || (echo "No workload clusters found, please add at least one before continuing!" && exit 1)
-echo "Waiting for workload clusters to be ready, this could take a minute...."
-kubectl wait --timeout=300s --for=condition=Ready=true workloadclusters --all
-
-## Register GLBC APIs
-kubectl apply -f ${KCP_GLBC_DIR}/config/crd/bases
-kubectl apply -f ${KCP_GLBC_DIR}/utils/kcp-contrib/apiresourceschema.yaml
-kubectl apply -f ${KCP_GLBC_DIR}/utils/kcp-contrib/apiexport.yaml
-
-## Register CertManager APIs
-kubectl apply -f ${KCP_GLBC_DIR}/config/cert-manager/certificates-apiresourceschema.yaml
-kubectl apply -f ${KCP_GLBC_DIR}/config/cert-manager/cert-manager-apiexport.yaml
-kubectl apply -f ${KCP_GLBC_DIR}/config/cert-manager/cert-manager-apibinding.yaml
+create_glbc_workload_cluster() {
+  echo "Creating GLBC workload cluster '${GLBC_WORKLOAD_CLUSTER}'"
+  ${KUBECTL_KCP_BIN} workload sync ${GLBC_WORKLOAD_CLUSTER} --kcp-namespace kcp-syncer --syncer-image=${KCP_SYNCER_IMAGE} --resources=ingresses.networking.k8s.io,services > ${GLBC_KUSTOMIZATION}/${GLBC_WORKLOAD_CLUSTER}-syncer.yaml
+  echo "Apply the following syncer config to the intended GLBC physical cluster."
+  echo ""
+  echo "   kubectl apply -f ${GLBC_KUSTOMIZATION}/${GLBC_WORKLOAD_CLUSTER}-syncer.yaml"
+  echo ""
+  echo "This script will automatically continue once the cluster is synced!"
+}
 
 deploy_cert_manager() {
   echo "Deploying Cert Manager"
@@ -108,6 +107,9 @@ deploy_cert_manager() {
 
 deploy_glbc() {
   echo "Deploying GLBC"
+  ## Create cluster scoped service account
+  # ToDo Allow adding -o ${GLBC_KUSTOMIZATION}/kcp.kubeconfig for non local deployments
+  ${DEPLOY_SCRIPT_DIR}/create_glbc_ns.sh -n "default" -c ${GLBC_WORKSPACE} -C
   ${KUSTOMIZE_BIN} build ${GLBC_KUSTOMIZATION} | kubectl apply -f -
   echo "Waiting for GLBC deployments to be ready..."
   kubectl -n ${GLBC_NAMESPACE} wait --timeout=300s --for=condition=Available deployments --all
@@ -124,6 +126,24 @@ deploy_glbc_observability() {
     ${KUSTOMIZE_BIN} build config/prometheus/ | kubectl -n ${GLBC_NAMESPACE} apply -f -
 }
 
+## Create GLBC workload cluster
+kubectl create namespace kcp-syncer --dry-run=client -o yaml | kubectl apply -f -
+kubectl get workloadclusters ${GLBC_WORKLOAD_CLUSTER} || create_glbc_workload_cluster
+echo "Waiting for '${GLBC_WORKLOAD_CLUSTER}' workload cluster to be ready, this could take a while...."
+kubectl wait --timeout=300s --for=condition=Ready=true workloadclusters ${GLBC_WORKLOAD_CLUSTER}
+
+## Register GLBC APIs
+kubectl apply -f ${KCP_GLBC_DIR}/config/crd/bases
+kubectl apply -f ${KCP_GLBC_DIR}/utils/kcp-contrib/apiresourceschema.yaml
+kubectl apply -f ${KCP_GLBC_DIR}/utils/kcp-contrib/apiexport.yaml
+
+## Register CertManager APIs
+kubectl apply -f ${KCP_GLBC_DIR}/config/cert-manager/certificates-apiresourceschema.yaml
+kubectl apply -f ${KCP_GLBC_DIR}/config/cert-manager/cert-manager-apiexport.yaml
+#ToDO apibinding target needs to change based on target namespace
+kubectl apply -f ${KCP_GLBC_DIR}/config/cert-manager/cert-manager-apibinding.yaml
+
+## Deploy components
 if [[ $DEPLOY_COMPONENTS =~ "cert-manager" ]]; then
   deploy_cert_manager
 fi
