@@ -870,12 +870,10 @@ spec:
           - --v=2
           - --cluster-resource-namespace=$(POD_NAMESPACE)
           - --leader-elect=false
-          - --controllers=issuers,certificaterequests-issuer-acme,certificaterequests-issuer-ca,certificates-readiness
+          - --controllers=*,-ingress-shim
           ports:
           - containerPort: 9402
             protocol: TCP
           env:
           - name: POD_NAMESPACE
-            valueFrom:
-              fieldRef:
-                fieldPath: metadata.namespace
+            value: cert-manager

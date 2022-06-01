@@ -142,8 +142,9 @@ ${KUBECTL_KCP_BIN} workspace create ${GLBC_WORKSPACE} --enter || ${KUBECTL_KCP_B
 ## Create GLBC workload cluster
 kubectl create namespace kcp-syncer --dry-run=client -o yaml | kubectl apply -f -
 kubectl get workloadclusters ${GLBC_WORKLOAD_CLUSTER} || create_glbc_workload_cluster
-echo "Waiting for '${GLBC_WORKLOAD_CLUSTER}' workload cluster to be ready, this could take a while...."
-kubectl wait --timeout=300s --for=condition=Ready=true workloadclusters ${GLBC_WORKLOAD_CLUSTER}
+
+## Register K8s v1 APIs
+kubectl apply -f ${KCP_GLBC_DIR}/utils/kcp-contrib/crds
 
 ## Register GLBC APIs
 kubectl apply -f ${KCP_GLBC_DIR}/config/crd/bases
