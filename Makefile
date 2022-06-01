@@ -1,7 +1,7 @@
 
 SHELL := /usr/bin/env bash
 
-NUM_CLUSTERS := 2
+NUM_CLUSTERS := 1
 DO_BREW := true
 KCP_BRANCH := v0.4.0-alpha.0
 

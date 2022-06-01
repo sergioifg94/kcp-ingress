@@ -69,6 +69,8 @@ KCP_GLBC_CLUSTER_NAME="${KIND_CLUSTER_PREFIX}glbc-control"
 : ${KCP_VERSION:="release-0.4"}
 KCP_SYNCER_IMAGE="ghcr.io/kcp-dev/kcp/syncer:${KCP_VERSION}"
 
+: ${GLBC_DEPLOY_COMPONENTS:="cert-manager"}
+
 for ((i=1;i<=$NUM_CLUSTERS;i++))
 do
 	CLUSTERS="${CLUSTERS}${KIND_CLUSTER_PREFIX}${i} "
@@ -137,7 +139,7 @@ deployGLBC() {
   echo "Deploying GLBC"
   # Note: This doesn't actually deploy glbc, we call the deploy script here to setup the KCP workspace, GLBC ApiBindings and to install cert manager.
   # This allows devs to continue to run the controller locally for dev/test purposes.
-  KUBECONFIG=.kcp/admin.kubeconfig ${SCRIPT_DIR}/deploy.sh -c cert-manager
+  KUBECONFIG=.kcp/admin.kubeconfig ${SCRIPT_DIR}/deploy.sh -c ${GLBC_DEPLOY_COMPONENTS}
 }
 
 #Delete existing kind clusters
@@ -168,22 +170,21 @@ wait_for "grep 'Ready to start controllers' ${KCP_LOG_FILE}" "kcp" "1m" "5"
 createKCPWorkspace "kcp-glbc"
 #3. Create GLBC workload cluster
 createKCPWorkloadCluster $KCP_GLBC_CLUSTER_NAME 8081 8444 "glbc"
-#4. Deploy GLBC and CertManager and register there APIs
+#4. Prepare workspace for GLBC deployment
 deployGLBC
-## ToDo Enable user workspace
 # Note: This is temporarily removed until we move to a version of KCP that supports using multiple workspaces (0.5.0).
-# Until then we only really need the 1 kind cluster for testing since the placement/locations API's are not currently available.
+# Until then we will just use the single workspace for everything
 ##5. Create User workspace (kcp-glbc-user)
 #createKCPWorkspace "kcp-glbc-user"
-##6. Create User workload clusters
-#echo "Creating $NUM_CLUSTERS kcp workload cluster(s)"
-#port80=8082
-#port443=8445
-#for cluster in $CLUSTERS; do
-#  createKCPWorkloadCluster "$cluster" $port80 $port443
-#  port80=$((port80+1))
-#  port443=$((port443+1))
-#done
+#6. Create User workload clusters
+echo "Creating $NUM_CLUSTERS kcp workload cluster(s)"
+port80=8082
+port443=8445
+for cluster in $CLUSTERS; do
+  createKCPWorkloadCluster "$cluster" $port80 $port443
+  port80=$((port80+1))
+  port443=$((port443+1))
+done
 
 echo ""
 echo "KCP PID          : ${KCP_PID}"
