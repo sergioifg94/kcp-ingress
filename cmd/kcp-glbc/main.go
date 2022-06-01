@@ -224,12 +224,13 @@ func main() {
 	exitOnError(err, "Failed to create TLS certificate controller")
 
 	ingressController := ingress.NewController(&ingress.ControllerConfig{
-		KubeClient:            kcpKubeClient,
-		DnsRecordClient:       kcpKuadrantClient,
-		SharedInformerFactory: kcpKubeInformerFactory,
-		Domain:                options.Domain,
-		CertProvider:          certProvider,
-		HostResolver:          net.NewDefaultHostResolver(),
+		KubeClient:                    kcpKubeClient,
+		KuadrantClient:                kcpKuadrantClient,
+		SharedInformerFactory:         kcpKubeInformerFactory,
+		KuadrantSharedInformerFactory: kcpKuadrantInformerFactory,
+		Domain:                        options.Domain,
+		CertProvider:                  certProvider,
+		HostResolver:                  net.NewDefaultHostResolver(),
 		// For testing. TODO: Make configurable through flags/env variable
 		// HostResolver: &net.ConfigMapHostResolver{
 		// 	Name:      "hosts",
@@ -262,6 +263,7 @@ func main() {
 		SharedInformerFactory:    kcpKuadrantInformerFactory,
 		DNSVerifier:              dns.NewVerifier(gonet.DefaultResolver),
 	})
+
 	exitOnError(err, "Failed to create DomainVerification controller")
 
 	kcpKubeInformerFactory.Start(ctx.Done())
