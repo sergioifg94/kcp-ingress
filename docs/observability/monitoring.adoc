@@ -240,6 +240,25 @@ The KCP GLBC monitoring endpoint exposes the metrics listed in the following sec
 
 |===
 
+=== Ingress Object Metrics
+
+.Ingress object metrics
+|===
+|Name |Type |Description |Labels
+
+
+| `glbc_ingress_managed_object_total`
+| `Gauge`
+| Total number of managed ingress object
+| none
+
+| `glbc_ingress_managed_object_time_to_admission`
+| `Histogram`
+| Duration of the ingress object admission
+| none
+
+|===
+
 === Controller Metrics
 
 .Reconcilation metrics

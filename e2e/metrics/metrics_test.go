@@ -182,6 +182,25 @@ func TestMetrics(t *testing.T) {
 	metrics, err := getMetrics(test.Ctx())
 	test.Expect(err).NotTo(HaveOccurred())
 
+	// should be managing 1 ingress
+	test.Expect(metrics).To(And(
+		HaveKey("glbc_ingress_managed_object_total"),
+		WithTransform(Metric("glbc_ingress_managed_object_total"), EqualP(
+			prometheus.MetricFamily{
+				Name: stringP("glbc_ingress_managed_object_total"),
+				Help: stringP("Total number of managed ingress object"),
+				Type: metricTypeP(prometheus.MetricType_GAUGE),
+				Metric: []*prometheus.Metric{
+					{
+						Gauge: &prometheus.Gauge{
+							Value: float64P(1),
+						},
+					},
+				},
+			},
+		)),
+	))
+
 	test.Expect(metrics).To(And(
 		HaveKey("glbc_tls_certificate_pending_request_count"),
 		WithTransform(Metric("glbc_tls_certificate_pending_request_count"), EqualP(
@@ -318,7 +337,7 @@ func TestMetrics(t *testing.T) {
 		Delete(test.Ctx(), name, metav1.DeleteOptions{})).
 		To(Succeed())
 
-	// Only the TLS certificate Secret count should change
+	// Only the TLS certificate Secret count and number of ingresses managed should change
 	test.Eventually(Metrics(test.Ctx()), TestTimeoutShort).Should(And(
 		HaveKey("glbc_tls_certificate_secret_count"),
 		WithTransform(Metric("glbc_tls_certificate_secret_count"), MatchFieldsP(IgnoreExtras,
@@ -336,6 +355,21 @@ func TestMetrics(t *testing.T) {
 				}),
 			},
 		)),
+		HaveKey("glbc_ingress_managed_object_total"),
+		WithTransform(Metric("glbc_ingress_managed_object_total"), EqualP(
+			prometheus.MetricFamily{
+				Name: stringP("glbc_ingress_managed_object_total"),
+				Help: stringP("Total number of managed ingress object"),
+				Type: metricTypeP(prometheus.MetricType_GAUGE),
+				Metric: []*prometheus.Metric{
+					{
+						Gauge: &prometheus.Gauge{
+							Value: float64P(0),
+						},
+					},
+				},
+			}),
+		),
 	))
 
 	// The other metrics should not be updated

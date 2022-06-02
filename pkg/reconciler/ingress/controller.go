@@ -58,9 +58,15 @@ func NewController(config *ControllerConfig) *Controller {
 
 	// Watch for events related to Ingresses
 	c.sharedInformerFactory.Networking().V1().Ingresses().Informer().AddEventHandler(cache.ResourceEventHandlerFuncs{
-		AddFunc:    func(obj interface{}) { c.Enqueue(obj) },
+		AddFunc: func(obj interface{}) {
+			ingressObjectTotal.Inc()
+			c.Enqueue(obj)
+		},
 		UpdateFunc: func(_, obj interface{}) { c.Enqueue(obj) },
-		DeleteFunc: func(obj interface{}) { c.Enqueue(obj) },
+		DeleteFunc: func(obj interface{}) {
+			ingressObjectTotal.Dec()
+			c.Enqueue(obj)
+		},
 	})
 
 	// Watch for events related to Services
