@@ -54,6 +54,7 @@ spec:
             - name: kcp-kubeconfig
               mountPath: "/tmp/kcp"
               readOnly: true
+      serviceAccountName: kcp-glbc-controller-manager
       terminationGracePeriodSeconds: 10
       volumes:
         - name: kcp-kubeconfig

@@ -31,6 +31,7 @@ source "${DEPLOY_SCRIPT_DIR}"/.startUtils
 
 CLUSTER_ROLE=false
 OUTPUT_DIR=${KCP_GLBC_DIR}/tmp
+CA_DATA=""
 
 trap cleanup EXIT 1 2 3 6 15
 
@@ -49,6 +50,7 @@ help()
    echo
    echo "Syntax: create_glbc_ns.sh [-n|c|C|o]"
    echo "options:"
+   echo "a     Certificate Authority Data to add to the cluster of the generated kubeconfig (default: ${CA_DATA})."
    echo "c     Cluster Name (required)"
    echo "C     Apply cluster role permissions (default: ${CLUSTER_ROLE})."
    echo "h     Print this Help."
@@ -57,8 +59,11 @@ help()
    echo
 }
 
-while getopts "n:c:Co:" arg; do
+while getopts "a:n:c:Co:" arg; do
   case "${arg}" in
+    a)
+      CA_DATA=${OPTARG}
+      ;;
     n)
       # The namespace to create
       namespace=${OPTARG}
@@ -140,6 +145,18 @@ users:
     user:
       token: ${secretToken}
 current-context: ${serviceAccount}@${clusterName}" > ${OUTPUT_FILE}
+
+echo ${CA_DATA}
+
+#ToDO Check the contents of CA_DATA are valid and not "null"
+if [  ! -z "${CA_DATA}" ] ; then
+  echo "${CA_DATA}" | base64 --decode > "${KCP_GLBC_DIR}/tmp/ca.crt"
+  kubectl config set-cluster "${clusterName}" \
+  --kubeconfig="${OUTPUT_FILE}" \
+  --server="${clusterServer}" \
+  --certificate-authority="${KCP_GLBC_DIR}/tmp/ca.crt" \
+  --embed-certs=true
+fi
 
 echo ""
 echo "KUBECONFIG: ${OUTPUT_FILE}"

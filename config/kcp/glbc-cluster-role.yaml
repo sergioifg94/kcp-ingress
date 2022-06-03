@@ -38,4 +38,10 @@ rules:
   - dnsrecords/status
   verbs:
   - "*"
-
+- apiGroups:
+  - "cert-manager.io"
+  resources:
+  - issuers
+  - certificates
+  verbs:
+  - "*"

@@ -461,7 +461,7 @@ roleRef:
   kind: ClusterRole
   name: cert-manager-cainjector
 subjects:
-  - name: default
+  - name: cert-manager-cainjector
     namespace: "cert-manager"
     kind: ServiceAccount
 ---
@@ -481,7 +481,7 @@ roleRef:
   kind: ClusterRole
   name: cert-manager-controller-issuers
 subjects:
-  - name: default
+  - name: cert-manager
     namespace: "cert-manager"
     kind: ServiceAccount
 ---
@@ -501,7 +501,7 @@ roleRef:
   kind: ClusterRole
   name: cert-manager-controller-clusterissuers
 subjects:
-  - name: default
+  - name: cert-manager
     namespace: "cert-manager"
     kind: ServiceAccount
 ---
@@ -521,7 +521,7 @@ roleRef:
   kind: ClusterRole
   name: cert-manager-controller-certificates
 subjects:
-  - name: default
+  - name: cert-manager
     namespace: "cert-manager"
     kind: ServiceAccount
 ---
@@ -541,7 +541,7 @@ roleRef:
   kind: ClusterRole
   name: cert-manager-controller-orders
 subjects:
-  - name: default
+  - name: cert-manager
     namespace: "cert-manager"
     kind: ServiceAccount
 ---
@@ -561,7 +561,7 @@ roleRef:
   kind: ClusterRole
   name: cert-manager-controller-challenges
 subjects:
-  - name: default
+  - name: cert-manager
     namespace: "cert-manager"
     kind: ServiceAccount
 ---
@@ -581,7 +581,7 @@ roleRef:
   kind: ClusterRole
   name: cert-manager-controller-ingress-shim
 subjects:
-  - name: default
+  - name: cert-manager
     namespace: "cert-manager"
     kind: ServiceAccount
 ---
@@ -601,7 +601,7 @@ roleRef:
   kind: ClusterRole
   name: cert-manager-controller-approve:cert-manager-io
 subjects:
-  - name: default
+  - name: cert-manager
     namespace: "cert-manager"
     kind: ServiceAccount
 ---
@@ -621,7 +621,7 @@ roleRef:
   kind: ClusterRole
   name: cert-manager-controller-certificatesigningrequests
 subjects:
-  - name: default
+  - name: cert-manager
     namespace: "cert-manager"
     kind: ServiceAccount
 ---
@@ -643,7 +643,7 @@ roleRef:
 subjects:
 - apiGroup: ""
   kind: ServiceAccount
-  name: default
+  name: cert-manager-webhook
   namespace: cert-manager
 ---
 # Source: cert-manager/templates/cainjector-rbac.yaml
@@ -754,7 +754,7 @@ roleRef:
   name: cert-manager-cainjector:leaderelection
 subjects:
   - kind: ServiceAccount
-    name: default
+    name: cert-manager-cainjector
     namespace: cert-manager
 ---
 # Source: cert-manager/templates/rbac.yaml
@@ -778,7 +778,7 @@ roleRef:
 subjects:
   - apiGroup: ""
     kind: ServiceAccount
-    name: default
+    name: cert-manager
     namespace: cert-manager
 ---
 # Source: cert-manager/templates/webhook-rbac.yaml
@@ -800,7 +800,7 @@ roleRef:
 subjects:
 - apiGroup: ""
   kind: ServiceAccount
-  name: default
+  name: cert-manager-webhook
   namespace: cert-manager
 ---
 # Source: cert-manager/templates/service.yaml

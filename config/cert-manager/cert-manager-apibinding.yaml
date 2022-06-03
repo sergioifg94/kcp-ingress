@@ -6,5 +6,5 @@ metadata:
 spec:
   reference:
     workspace:
-      name: kcp-glbc
+      path: root:default:kcp-glbc
       exportName: cert-manager-stable
