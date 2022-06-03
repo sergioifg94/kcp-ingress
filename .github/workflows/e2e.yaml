@@ -191,6 +191,9 @@ jobs:
 
           # Then run e2e tests
           make e2e
+      - name: Verify generated metrics documentation
+        run: |
+          make verify-gen-metrics-docs
       - name: Shutdown GLBC
         if: ${{ always() }}
         run: |

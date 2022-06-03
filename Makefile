@@ -198,3 +198,14 @@ KUSTOMIZE_INSTALL_SCRIPT ?= "https://raw.githubusercontent.com/kubernetes-sigs/k
 kustomize: $(KUSTOMIZE) ## Download kustomize locally if necessary.
 $(KUSTOMIZE):
 	curl -s $(KUSTOMIZE_INSTALL_SCRIPT) | bash -s -- $(subst v,,$(KUSTOMIZE_VERSION)) $(LOCALBIN)
+
+# Generate metrics adoc content based on /metrics response from a running server
+.PHONY: gen-metrics-docs
+gen-metrics-docs:
+	curl http://localhost:8080/metrics > tmp/metrics.pef
+	go run ./utils/prometheus_format.go -f tmp/metrics.pef -c utils/prometheus_format_tables.csv > docs/observability/generated_metrics.adoc
+
+# Ensure the generated metrics content is latest
+.PHONY: verify-gen-metrics-docs
+verify-gen-metrics-docs: gen-metrics-docs
+	git diff --exit-code

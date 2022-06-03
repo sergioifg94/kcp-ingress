@@ -104,6 +104,3 @@ $ sudo brew services start chipmk/tap/docker-mac-net-connect
 This is done automatically as part of the `make local-setup` but will require presenting a sudo password to start the service if it is not configured to autostart.
 
 N.B. This does not remove the requirement to have the DNS records created in a valid DNS service (e.g. route53 in AWS).
-
-                                                                                                                                                     
-```
