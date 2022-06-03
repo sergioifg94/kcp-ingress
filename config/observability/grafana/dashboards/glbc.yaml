@@ -41,7 +41,7 @@ spec:
         },
         {
           "datasource": null,
-          "description": "Shows the rate of requests to Route53 for the selected time range. Note that if a different DNS provider than Route53 is used, these values may be 0.",
+          "description": "Shows aggregate data on DNS requests to AWS Route53 for the selected time range.\nNote that if a different DNS provider than Route53 is used, these values may be 0.",
           "fieldConfig": {
             "defaults": {
               "color": {
@@ -91,7 +91,7 @@ spec:
           "targets": [
             {
               "exemplar": true,
-              "expr": "sum(rate(glbc_aws_route53_request_total{namespace=\"$namespace\"}[$__range]))",
+              "expr": "sum(increase(glbc_aws_route53_request_total{namespace=\"$namespace\"}[$__range]))",
               "format": "time_series",
               "hide": false,
               "instant": true,
@@ -101,7 +101,7 @@ spec:
             },
             {
               "exemplar": true,
-              "expr": "sum(rate(glbc_aws_route53_request_errors_total{namespace=\"$namespace\"}[$__range]))",
+              "expr": "sum(increase(glbc_aws_route53_request_errors_total{namespace=\"$namespace\"}[$__range]))",
               "hide": false,
               "instant": true,
               "interval": "",
@@ -120,7 +120,7 @@ spec:
           "dashLength": 10,
           "dashes": false,
           "datasource": null,
-          "description": "Shows aggregate data on DNS requests to AWS Route53 for the selected time range.\nNote that if a different DNS provider than Route53 is used, these values may be 0.",
+          "description": "Shows the rate of requests to Route53 for the selected time range. Note that if a different DNS provider than Route53 is used, these values may be 0.",
           "fieldConfig": {
             "defaults": {},
             "overrides": []
@@ -162,7 +162,7 @@ spec:
           "targets": [
             {
               "exemplar": true,
-              "expr": "sum(increase(glbc_aws_route53_request_total{namespace=\"$namespace\"}[$__range]))",
+              "expr": "sum(rate(glbc_aws_route53_request_total{namespace=\"$namespace\"}[$__range]))",
               "hide": false,
               "interval": "",
               "legendFormat": "Total Requests",
@@ -170,7 +170,7 @@ spec:
             },
             {
               "exemplar": true,
-              "expr": "sum(increase(glbc_aws_route53_request_errors_total{namespace=\"$namespace\"}[$__range]))",
+              "expr": "sum(rate(glbc_aws_route53_request_errors_total{namespace=\"$namespace\"}[$__range]))",
               "hide": false,
               "interval": "",
               "legendFormat": "Total Errors",
