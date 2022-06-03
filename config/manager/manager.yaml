@@ -32,9 +32,6 @@ spec:
           name: manager
           securityContext:
             allowPrivilegeEscalation: false
-          env:
-            - name: NAMESPACE
-              value: kcp-glbc
           envFrom:
             - secretRef:
                 name: aws-credentials
