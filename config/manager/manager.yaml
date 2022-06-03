@@ -34,9 +34,7 @@ spec:
             allowPrivilegeEscalation: false
           env:
             - name: NAMESPACE
-              valueFrom:
-                fieldRef:
-                  fieldPath: metadata.namespace
+              value: kcp-glbc
           envFrom:
             - secretRef:
                 name: aws-credentials
@@ -59,7 +57,6 @@ spec:
             - name: kcp-kubeconfig
               mountPath: "/tmp/kcp"
               readOnly: true
-      serviceAccountName: kcp-glbc-controller-manager
       terminationGracePeriodSeconds: 10
       volumes:
         - name: kcp-kubeconfig

@@ -1,7 +1,7 @@
 
 SHELL := /usr/bin/env bash
 
-NUM_CLUSTERS := 2
+NUM_CLUSTERS := 1
 DO_BREW := true
 KCP_BRANCH := v0.4.0-alpha.0
 
@@ -152,7 +152,7 @@ endif
 
 .PHONY: local-setup
 local-setup: export KCP_VERSION=${KCP_BRANCH}
-local-setup: clean kind kcp build ## Setup kcp locally using kind.
+local-setup: clean kind kcp kustomize build ## Setup kcp locally using kind.
 	./utils/local-setup.sh -c ${NUM_CLUSTERS} ${LOCAL_SETUP_FLAGS}
 
 ##@ Build Dependencies
