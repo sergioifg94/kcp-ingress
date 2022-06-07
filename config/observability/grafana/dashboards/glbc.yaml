@@ -28,12 +28,189 @@ spec:
       "links": [],
       "panels": [
         {
+          "collapsed": false,
           "datasource": null,
           "gridPos": {
             "h": 1,
             "w": 24,
             "x": 0,
             "y": 0
+          },
+          "id": 39,
+          "panels": [],
+          "title": "Managed ingress objects",
+          "type": "row"
+        },
+        {
+          "datasource": null,
+          "description": "Shows the total number of managed ingress objects",
+          "fieldConfig": {
+            "defaults": {
+            "color": {
+              "mode": "thresholds"
+            },
+            "mappings": [],
+            "thresholds": {
+              "mode": "absolute",
+              "steps": [
+              {
+                "color": "green",
+                "value": null
+              },
+              {
+                "color": "red",
+                "value": 80
+              }
+              ]
+            }
+            },
+            "overrides": []
+          },
+          "gridPos": {
+            "h": 2,
+            "w": 5,
+            "x": 0,
+            "y": 1
+          },
+          "id": 41,
+          "options": {
+            "colorMode": "value",
+            "graphMode": "area",
+            "justifyMode": "auto",
+            "orientation": "horizontal",
+            "reduceOptions": {
+            "calcs": [
+              "lastNotNull"
+            ],
+            "fields": "",
+            "values": false
+            },
+            "text": {
+            "titleSize": 18,
+            "valueSize": 18
+            },
+            "textMode": "auto"
+          },
+          "pluginVersion": "7.5.15",
+          "targets": [
+            {
+            "exemplar": true,
+            "expr": "sum(glbc_ingress_managed_object_total)",
+            "instant": true,
+            "interval": "",
+            "legendFormat": "Total",
+            "refId": "A"
+            }
+          ],
+          "title": "Total Ingress objects",
+          "type": "stat"
+        },
+        {
+          "aliasColors": {},
+          "bars": false,
+          "dashLength": 10,
+          "dashes": false,
+          "datasource": null,
+          "description": "Shows average time of the ingress objects to be admitted in the load balance",
+          "fieldConfig": {
+            "defaults": {},
+            "overrides": []
+          },
+          "fill": 1,
+          "fillGradient": 0,
+          "gridPos": {
+            "h": 6,
+            "w": 18,
+            "x": 5,
+            "y": 1
+          },
+          "hiddenSeries": false,
+          "id": 43,
+          "legend": {
+            "alignAsTable": false,
+            "avg": false,
+            "current": false,
+            "max": false,
+            "min": false,
+            "rightSide": false,
+            "show": false,
+            "total": false,
+            "values": false
+          },
+          "lines": true,
+          "linewidth": 1,
+          "nullPointMode": "null",
+          "options": {
+            "alertThreshold": true
+          },
+          "percentage": false,
+          "pluginVersion": "7.5.15",
+          "pointradius": 2,
+          "points": false,
+          "renderer": "flot",
+          "seriesOverrides": [],
+          "spaceLength": 10,
+          "stack": false,
+          "steppedLine": false,
+          "targets": [
+            {
+            "exemplar": true,
+            "expr": "histogram_quantile(0.9, sum(rate(glbc_ingress_managed_object_time_to_admission_bucket[5m])))",
+            "interval": "",
+            "legendFormat": "",
+            "refId": "A"
+            }
+          ],
+          "thresholds": [],
+          "timeFrom": null,
+          "timeRegions": [],
+          "timeShift": null,
+          "title": "Average time to ingress admission",
+          "tooltip": {
+            "shared": true,
+            "sort": 0,
+            "value_type": "individual"
+          },
+          "type": "graph",
+          "xaxis": {
+            "buckets": null,
+            "mode": "time",
+            "name": null,
+            "show": true,
+            "values": []
+          },
+          "yaxes": [
+            {
+              "$$hashKey": "object:182",
+              "format": "s",
+              "label": null,
+              "logBase": 1,
+              "max": null,
+              "min": null,
+              "show": true
+            },
+            {
+              "$$hashKey": "object:183",
+              "format": "s",
+              "label": null,
+              "logBase": 1,
+              "max": null,
+              "min": null,
+              "show": true
+            }
+          ],
+          "yaxis": {
+            "align": false,
+            "alignLevel": null
+          }
+        },
+        {
+          "datasource": null,
+          "gridPos": {
+            "h": 1,
+            "w": 24,
+            "x": 0,
+            "y": 7
           },
           "id": 15,
           "title": "AWS Route53 - Requests, Errors & Duration (RED Method)",
@@ -66,7 +243,7 @@ spec:
             "h": 7,
             "w": 4,
             "x": 0,
-            "y": 1
+            "y": 8
           },
           "id": 2,
           "options": {
@@ -131,7 +308,7 @@ spec:
             "h": 8,
             "w": 20,
             "x": 4,
-            "y": 1
+            "y": 8
           },
           "hiddenSeries": false,
           "id": 10,
@@ -225,7 +402,7 @@ spec:
             "h": 1,
             "w": 24,
             "x": 0,
-            "y": 9
+            "y": 16
           },
           "id": 13,
           "panels": [],
@@ -261,7 +438,7 @@ spec:
             "h": 2,
             "w": 4,
             "x": 0,
-            "y": 10
+            "y": 17
           },
           "id": 9,
           "options": {
@@ -312,7 +489,7 @@ spec:
             "h": 8,
             "w": 20,
             "x": 4,
-            "y": 10
+            "y": 17
           },
           "hiddenSeries": false,
           "id": 11,
@@ -458,7 +635,7 @@ spec:
             "h": 6,
             "w": 4,
             "x": 0,
-            "y": 12
+            "y": 19
           },
           "id": 7,
           "options": {
@@ -549,7 +726,7 @@ spec:
             "h": 1,
             "w": 24,
             "x": 0,
-            "y": 18
+            "y": 25
           },
           "id": 17,
           "panels": [],
@@ -585,7 +762,7 @@ spec:
             "h": 6,
             "w": 4,
             "x": 0,
-            "y": 19
+            "y": 26
           },
           "id": 19,
           "options": {
@@ -637,7 +814,7 @@ spec:
             "h": 8,
             "w": 20,
             "x": 4,
-            "y": 19
+            "y": 26
           },
           "hiddenSeries": false,
           "id": 6,
@@ -760,7 +937,7 @@ spec:
             "h": 6,
             "w": 4,
             "x": 0,
-            "y": 25
+            "y": 32
           },
           "id": 20,
           "options": {
@@ -814,7 +991,7 @@ spec:
             "h": 8,
             "w": 20,
             "x": 4,
-            "y": 27
+            "y": 34
           },
           "hiddenSeries": false,
           "id": 4,
@@ -927,7 +1104,7 @@ spec:
             "h": 8,
             "w": 20,
             "x": 4,
-            "y": 35
+            "y": 42
           },
           "hiddenSeries": false,
           "id": 37,
@@ -1018,7 +1195,7 @@ spec:
             "h": 1,
             "w": 24,
             "x": 0,
-            "y": 43
+            "y": 50
           },
           "id": 30,
           "panels": [],
@@ -1044,7 +1221,7 @@ spec:
             "h": 7,
             "w": 12,
             "x": 0,
-            "y": 44
+            "y": 51
           },
           "hiddenSeries": false,
           "id": 32,
@@ -1146,7 +1323,7 @@ spec:
             "h": 7,
             "w": 12,
             "x": 12,
-            "y": 44
+            "y": 51
           },
           "hiddenSeries": false,
           "id": 34,
@@ -1249,7 +1426,7 @@ spec:
             "h": 7,
             "w": 12,
             "x": 0,
-            "y": 51
+            "y": 58
           },
           "hiddenSeries": false,
           "id": 33,
@@ -1351,7 +1528,7 @@ spec:
             "h": 7,
             "w": 12,
             "x": 12,
-            "y": 51
+            "y": 58
           },
           "hiddenSeries": false,
           "id": 35,
@@ -1454,7 +1631,7 @@ spec:
             "h": 7,
             "w": 12,
             "x": 12,
-            "y": 58
+            "y": 65
           },
           "hiddenSeries": false,
           "id": 36,
