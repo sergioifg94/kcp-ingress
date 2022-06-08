@@ -87,6 +87,10 @@ func TestMetrics(t *testing.T) {
 				"Metric": ContainElement(certificateSecretCount(issuer, 0)),
 			},
 		)),
+		// Client go rest metrics should exist
+		// Asserting actual values may cause flakes, so just existence will suffice
+		HaveKey("rest_client_request_latency_seconds"),
+		HaveKey("rest_client_requests_total"),
 		// glbc_tls_certificate_issuance_duration_seconds
 		// histogram vector are not initialized
 		Not(HaveKey("glbc_tls_certificate_issuance_duration_seconds")),
