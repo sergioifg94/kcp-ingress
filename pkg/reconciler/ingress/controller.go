@@ -7,7 +7,6 @@ import (
 	networkingv1 "k8s.io/api/networking/v1"
 	"k8s.io/apimachinery/pkg/api/equality"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	"k8s.io/apimachinery/pkg/labels"
 	"k8s.io/apimachinery/pkg/util/runtime"
 	"k8s.io/client-go/informers"
 	"k8s.io/client-go/kubernetes"
@@ -20,7 +19,6 @@ import (
 
 	kuadrantv1 "github.com/kuadrant/kcp-glbc/pkg/client/kuadrant/clientset/versioned"
 	"github.com/kuadrant/kcp-glbc/pkg/net"
-	"github.com/kuadrant/kcp-glbc/pkg/placement"
 	"github.com/kuadrant/kcp-glbc/pkg/reconciler"
 	"github.com/kuadrant/kcp-glbc/pkg/tls"
 )
@@ -37,7 +35,6 @@ func NewController(config *ControllerConfig) *Controller {
 		impl.Client = config.KubeClient.Cluster(tenancyv1alpha1.RootCluster)
 	}
 	hostResolver = net.NewSafeHostResolver(hostResolver)
-	ingressPlacer := placement.NewPlacer()
 
 	base := reconciler.NewController(controllerName, queue)
 	c := &Controller{
@@ -51,7 +48,6 @@ func NewController(config *ControllerConfig) *Controller {
 		hostResolver:          hostResolver,
 		hostsWatcher:          net.NewHostsWatcher(&base.Logger, hostResolver, net.DefaultInterval),
 		customHostsEnabled:    config.CustomHostsEnabled,
-		ingressPlacer:         ingressPlacer,
 	}
 	c.Process = c.process
 	c.hostsWatcher.OnChange = c.Enqueue
@@ -78,18 +74,6 @@ func NewController(config *ControllerConfig) *Controller {
 			}
 		},
 		DeleteFunc: func(obj interface{}) { c.ingressesFromService(obj) },
-	})
-
-	// Watch for updates on Namespaces. It is necessary for the placement logic,
-	// that relies on the workloads.kcp.dev/cluster label set on the Namespaces.
-	// It may be removed once it's migrated to the KCP Location API.
-	c.sharedInformerFactory.Core().V1().Namespaces().Informer().AddEventHandler(cache.ResourceEventHandlerFuncs{
-		AddFunc: func(obj interface{}) { c.ingressesInNamespace(obj) },
-		UpdateFunc: func(old, obj interface{}) {
-			if old.(*corev1.Namespace).ResourceVersion != obj.(*corev1.Namespace).ResourceVersion {
-				c.ingressesInNamespace(obj)
-			}
-		},
 	})
 
 	c.indexer = c.sharedInformerFactory.Networking().V1().Ingresses().Informer().GetIndexer()
@@ -121,7 +105,6 @@ type Controller struct {
 	hostResolver          net.HostResolver
 	hostsWatcher          *net.HostsWatcher
 	customHostsEnabled    bool
-	ingressPlacer         placement.Placer
 }
 
 func (c *Controller) process(ctx context.Context, key string) error {
@@ -170,20 +153,5 @@ func (c *Controller) ingressesFromService(obj interface{}) {
 	for _, ingress := range ingresses.List() {
 		c.Logger.Info("Enqueuing Ingress reconciliation via tracked Service", "ingress", ingress, "service", service)
 		c.Queue.Add(ingress)
-	}
-}
-
-// ingressesInNamespace enqueues all the Ingresses within the given Namespace.
-func (c *Controller) ingressesInNamespace(ns interface{}) {
-	namespace := ns.(*corev1.Namespace)
-
-	ingresses, err := c.lister.Ingresses(namespace.Name).List(labels.Everything())
-	if err != nil {
-		runtime.HandleError(err)
-		return
-	}
-
-	for _, ingress := range ingresses {
-		c.Enqueue(ingress)
 	}
 }
