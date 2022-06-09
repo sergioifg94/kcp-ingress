@@ -4,5 +4,6 @@ glbc_controller_,Reconcilation metrics
 glbc_ingress_,Ingress object metrics
 glbc_tls_certificate_,TLS certificate metrics
 workqueue_,Workqueue metrics
+rest_client_,client-go REST API Call metrics
 go_,Go Runtime metrics
 process_,Process metrics
