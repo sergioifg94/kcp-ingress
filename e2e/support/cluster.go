@@ -26,10 +26,10 @@ import (
 	"k8s.io/client-go/restmapper"
 	"k8s.io/client-go/tools/clientcmd"
 
-	"github.com/kcp-dev/apimachinery/pkg/logicalcluster"
 	tenancyv1alpha1 "github.com/kcp-dev/kcp/pkg/apis/tenancy/v1alpha1"
 	workloadv1alpha1 "github.com/kcp-dev/kcp/pkg/apis/workload/v1alpha1"
 	workloadplugin "github.com/kcp-dev/kcp/pkg/cliplugins/workload/plugin"
+	"github.com/kcp-dev/logicalcluster"
 )
 
 var (

@@ -8,8 +8,8 @@ import (
 
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 
-	"github.com/kcp-dev/apimachinery/pkg/logicalcluster"
 	apisv1alpha1 "github.com/kcp-dev/kcp/pkg/apis/apis/v1alpha1"
+	"github.com/kcp-dev/logicalcluster"
 )
 
 func createGLBCAPIBinding(t Test, options ...Option) *apisv1alpha1.APIBinding {
@@ -24,8 +24,8 @@ func createGLBCAPIBinding(t Test, options ...Option) *apisv1alpha1.APIBinding {
 		Spec: apisv1alpha1.APIBindingSpec{
 			Reference: apisv1alpha1.ExportReference{
 				Workspace: &apisv1alpha1.WorkspaceExportReference{
-					WorkspaceName: "kcp-glbc",
-					ExportName:    "glbc",
+					Path:       "kcp-glbc",
+					ExportName: "glbc",
 				},
 			},
 		},
