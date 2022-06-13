@@ -237,7 +237,7 @@ ${KUBECTL_KCP_BIN} workspace create ${GLBC_WORKSPACE} --enter || ${KUBECTL_KCP_B
 ## Bind to compute APIs
 create_api_binding "kubernetes" "kubernetes" "${ORG_WORKSPACE}:${GLBC_WORKSPACE_COMPUTE}"
 
-## Register Core APIs
+## Register the Pod API (required by cert-manager)
 kubectl apply -f ${KCP_GLBC_DIR}/utils/kcp-contrib/crds/pods.yaml
 
 ## Register GLBC APIs
@@ -278,9 +278,7 @@ ${KUBECTL_KCP_BIN} workspace create ${GLBC_WORKSPACE_USER} --enter || ${KUBECTL_
 ## Bind to compute APIs
 create_api_binding "kubernetes" "kubernetes" "${ORG_WORKSPACE}:${GLBC_WORKSPACE_USER_COMPUTE}"
 ## Bind to GLBC APIs
-# ToDo Why doens't this work?
-#create_api_binding "glbc" "glbc" "${ORG_WORKSPACE}:${GLBC_WORKSPACE}"
-kubectl apply -f ${KCP_GLBC_DIR}/config/crd/bases
+create_api_binding "glbc" "glbc" "${ORG_WORKSPACE}:${GLBC_WORKSPACE}"
 
 createGLBCNSOptions=""
 if [[ ! $MULTI_WORKSPACE_AWARE = true ]]; then
