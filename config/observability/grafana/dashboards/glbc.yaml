@@ -24,7 +24,7 @@ spec:
       "gnetId": null,
       "graphTooltip": 1,
       "id": 2,
-      "iteration": 1654686081619,
+      "iteration": 1655118941373,
       "links": [],
       "panels": [
         {
@@ -236,6 +236,7 @@ spec:
           }
         },
         {
+          "collapsed": false,
           "datasource": null,
           "gridPos": {
             "h": 1,
@@ -244,7 +245,7 @@ spec:
             "y": 8
           },
           "id": 15,
-          "title": "AWS Route53 - Requests, Errors & Duration (RED Method)",
+          "title": "AWS Route53 - Rate, Errors & Duration (RED Method)",
           "type": "row"
         },
         {
@@ -437,7 +438,7 @@ spec:
           },
           "id": 13,
           "panels": [],
-          "title": "TLS Certificates - Requests, Errors & Duration (RED Method)",
+          "title": "TLS Certificates - Rate, Errors & Duration (RED Method)",
           "type": "row"
         },
         {
@@ -1230,7 +1231,7 @@ spec:
           },
           "id": 30,
           "panels": [],
-          "title": "Reconciliation & Workers - Requests, Errors & Duration (RED Method)",
+          "title": "Reconciliation & Workers - Rate, Errors & Duration (RED Method)",
           "type": "row"
         },
         {
@@ -1739,6 +1740,336 @@ spec:
               "max": null,
               "min": null,
               "show": true
+            }
+          ],
+          "yaxis": {
+            "align": false,
+            "alignLevel": null
+          }
+        },
+        {
+          "collapsed": false,
+          "datasource": null,
+          "gridPos": {
+            "h": 1,
+            "w": 24,
+            "x": 0,
+            "y": 73
+          },
+          "id": 45,
+          "panels": [],
+          "title": "KCP API Requests - Rate, Errors & Duration (RED Method)",
+          "type": "row"
+        },
+        {
+          "aliasColors": {},
+          "bars": false,
+          "dashLength": 10,
+          "dashes": false,
+          "datasource": null,
+          "description": "Shows the rate of non 5xx requests per HTTP method.",
+          "fieldConfig": {
+            "defaults": {},
+            "overrides": []
+          },
+          "fill": 1,
+          "fillGradient": 0,
+          "gridPos": {
+            "h": 8,
+            "w": 12,
+            "x": 0,
+            "y": 74
+          },
+          "hiddenSeries": false,
+          "id": 47,
+          "legend": {
+            "alignAsTable": true,
+            "avg": false,
+            "current": false,
+            "max": false,
+            "min": false,
+            "rightSide": true,
+            "show": true,
+            "total": false,
+            "values": false
+          },
+          "lines": true,
+          "linewidth": 1,
+          "nullPointMode": "null",
+          "options": {
+            "alertThreshold": true
+          },
+          "percentage": false,
+          "pluginVersion": "7.5.15",
+          "pointradius": 2,
+          "points": false,
+          "renderer": "flot",
+          "seriesOverrides": [],
+          "spaceLength": 10,
+          "stack": false,
+          "steppedLine": false,
+          "targets": [
+            {
+              "exemplar": true,
+              "expr": "rate(rest_client_requests_total{job=~\".*kcp-glbc-controller-manager\",namespace=\"$namespace\",code!~\"5.*\"}[5m])",
+              "interval": "",
+              "legendFormat": "{{code}} {{method}}",
+              "refId": "A"
+            }
+          ],
+          "thresholds": [],
+          "timeFrom": null,
+          "timeRegions": [],
+          "timeShift": null,
+          "title": "Request Rate - Non 5xx",
+          "tooltip": {
+            "shared": true,
+            "sort": 0,
+            "value_type": "individual"
+          },
+          "type": "graph",
+          "xaxis": {
+            "buckets": null,
+            "mode": "time",
+            "name": null,
+            "show": true,
+            "values": []
+          },
+          "yaxes": [
+            {
+              "format": "short",
+              "label": null,
+              "logBase": 1,
+              "max": null,
+              "min": "0",
+              "show": true
+            },
+            {
+              "format": "short",
+              "label": null,
+              "logBase": 1,
+              "max": null,
+              "min": null,
+              "show": false
+            }
+          ],
+          "yaxis": {
+            "align": false,
+            "alignLevel": null
+          }
+        },
+        {
+          "aliasColors": {},
+          "bars": false,
+          "dashLength": 10,
+          "dashes": false,
+          "datasource": null,
+          "description": "Shows the rate of 5xx requests per HTTP method.",
+          "fieldConfig": {
+            "defaults": {},
+            "overrides": []
+          },
+          "fill": 1,
+          "fillGradient": 0,
+          "gridPos": {
+            "h": 8,
+            "w": 12,
+            "x": 12,
+            "y": 74
+          },
+          "hiddenSeries": false,
+          "id": 49,
+          "legend": {
+            "alignAsTable": true,
+            "avg": false,
+            "current": false,
+            "max": false,
+            "min": false,
+            "rightSide": true,
+            "show": true,
+            "total": false,
+            "values": false
+          },
+          "lines": true,
+          "linewidth": 1,
+          "nullPointMode": "null",
+          "options": {
+            "alertThreshold": true
+          },
+          "percentage": false,
+          "pluginVersion": "7.5.15",
+          "pointradius": 2,
+          "points": false,
+          "renderer": "flot",
+          "seriesOverrides": [],
+          "spaceLength": 10,
+          "stack": false,
+          "steppedLine": false,
+          "targets": [
+            {
+              "exemplar": true,
+              "expr": "rate(rest_client_requests_total{job=~\".*kcp-glbc-controller-manager\",namespace=\"$namespace\",code=~\"5.*\"}[5m])",
+              "interval": "",
+              "legendFormat": "{{code}} {{method}}",
+              "refId": "A"
+            }
+          ],
+          "thresholds": [],
+          "timeFrom": null,
+          "timeRegions": [],
+          "timeShift": null,
+          "title": "Request Rate - 5xx",
+          "tooltip": {
+            "shared": true,
+            "sort": 0,
+            "value_type": "individual"
+          },
+          "type": "graph",
+          "xaxis": {
+            "buckets": null,
+            "mode": "time",
+            "name": null,
+            "show": true,
+            "values": []
+          },
+          "yaxes": [
+            {
+              "format": "short",
+              "label": null,
+              "logBase": 1,
+              "max": null,
+              "min": "0",
+              "show": true
+            },
+            {
+              "format": "short",
+              "label": null,
+              "logBase": 1,
+              "max": null,
+              "min": null,
+              "show": false
+            }
+          ],
+          "yaxis": {
+            "align": false,
+            "alignLevel": null
+          }
+        },
+        {
+          "aliasColors": {},
+          "bars": false,
+          "dashLength": 10,
+          "dashes": false,
+          "datasource": null,
+          "description": "Shows the average request times & various percentiles aggregated across all requests.",
+          "fieldConfig": {
+            "defaults": {},
+            "overrides": []
+          },
+          "fill": 1,
+          "fillGradient": 0,
+          "gridPos": {
+            "h": 8,
+            "w": 12,
+            "x": 0,
+            "y": 82
+          },
+          "hiddenSeries": false,
+          "id": 48,
+          "legend": {
+            "alignAsTable": true,
+            "avg": false,
+            "current": false,
+            "max": false,
+            "min": false,
+            "rightSide": true,
+            "show": true,
+            "total": false,
+            "values": false
+          },
+          "lines": true,
+          "linewidth": 1,
+          "nullPointMode": "null",
+          "options": {
+            "alertThreshold": true
+          },
+          "percentage": false,
+          "pluginVersion": "7.5.15",
+          "pointradius": 2,
+          "points": false,
+          "renderer": "flot",
+          "seriesOverrides": [],
+          "spaceLength": 10,
+          "stack": false,
+          "steppedLine": false,
+          "targets": [
+            {
+              "exemplar": true,
+              "expr": "histogram_quantile(0.99, sum(rate(rest_client_request_latency_seconds_bucket{job=~\".*kcp-glbc-controller-manager\",namespace=~\"$namespace\"}[$__range])) by(le))",
+              "interval": "",
+              "legendFormat": "99th %ile",
+              "refId": "A"
+            },
+            {
+              "exemplar": true,
+              "expr": "histogram_quantile(0.95, sum(rate(rest_client_request_latency_seconds_bucket{job=~\".*kcp-glbc-controller-manager\",namespace=~\"$namespace\"}[$__range])) by(le))",
+              "hide": false,
+              "interval": "",
+              "legendFormat": "95th %ile",
+              "refId": "B"
+            },
+            {
+              "exemplar": true,
+              "expr": "histogram_quantile(0.90, sum(rate(rest_client_request_latency_seconds_bucket{job=~\".*kcp-glbc-controller-manager\",namespace=~\"$namespace\"}[$__range])) by(le))",
+              "hide": false,
+              "interval": "",
+              "legendFormat": "90th %ile",
+              "refId": "C"
+            },
+            {
+              "exemplar": true,
+              "expr": "sum(rest_client_request_latency_seconds_sum{job=~\".*kcp-glbc-controller-manager\",namespace=~\"$namespace\"}) / sum(rest_client_request_latency_seconds_count{job=~\".*kcp-glbc-controller-manager\",namespace=~\"$namespace\"})",
+              "hide": false,
+              "instant": false,
+              "interval": "",
+              "legendFormat": "Average",
+              "refId": "D"
+            }
+          ],
+          "thresholds": [],
+          "timeFrom": null,
+          "timeRegions": [],
+          "timeShift": null,
+          "title": "Request Times",
+          "tooltip": {
+            "shared": true,
+            "sort": 0,
+            "value_type": "individual"
+          },
+          "type": "graph",
+          "xaxis": {
+            "buckets": null,
+            "mode": "time",
+            "name": null,
+            "show": true,
+            "values": []
+          },
+          "yaxes": [
+            {
+              "format": "ms",
+              "label": null,
+              "logBase": 1,
+              "max": null,
+              "min": null,
+              "show": true
+            },
+            {
+              "format": "short",
+              "label": null,
+              "logBase": 1,
+              "max": null,
+              "min": null,
+              "show": false
             }
           ],
           "yaxis": {
