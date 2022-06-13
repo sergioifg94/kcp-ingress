@@ -4,6 +4,7 @@ import (
 	"context"
 	"flag"
 	"fmt"
+	"net/url"
 	"os"
 	"sync"
 	"time"
@@ -50,8 +51,6 @@ const (
 )
 
 var options struct {
-	// The path to the GLBC kubeconfig
-	GlbcKubeconfig string
 	// The path to the kcp kubeconfig
 	Kubeconfig string
 	// The kcp context
@@ -81,8 +80,6 @@ var options struct {
 func init() {
 	flagSet := flag.CommandLine
 
-	// Control cluster client options
-	flagSet.StringVar(&options.GlbcKubeconfig, "glbc-kubeconfig", "", "Path to GLBC kubeconfig")
 	// KCP client options
 	flagSet.StringVar(&options.Kubeconfig, "kubeconfig", "", "Path to kubeconfig")
 	flagSet.StringVar(&options.Kubecontext, "context", env.GetEnvString("GLBC_KCP_CONTEXT", ""), "Context to use in the Kubeconfig file, instead of the current context")
@@ -163,13 +160,10 @@ func main() {
 	kcpKuadrantClient, err = kuadrantv1.NewClusterForConfig(kcpClientConfig)
 	exitOnError(err, "Failed to create KCP kuadrant client")
 
-	controlClientConfig, err := clientcmd.NewNonInteractiveDeferredLoadingClientConfig(
-		&clientcmd.ClientConfigLoadingRules{ExplicitPath: options.GlbcKubeconfig},
-		&clientcmd.ConfigOverrides{}).ClientConfig()
-	exitOnError(err, "Failed to create K8S config")
-	// glbcKubeClient targets the control workspace (this is the cluster where kcp-glbc is deployed).
-	controlKubeClient, err := kubernetes.NewForConfig(controlClientConfig)
-	exitOnError(err, "Failed to create K8S core client")
+	// controlKubeClient targets the GLBC workspace (this is the cluster where kcp-glbc is deployed).
+	kubeClient, err := kubernetes.NewClusterForConfig(kcpClientConfig)
+	exitOnError(err, "Failed to create GLBC control client")
+	controlKubeClient := kubeClient.Cluster(logicalcluster.New(options.GLBCWorkspace))
 
 	namespace := env.GetNamespace()
 
@@ -192,6 +186,10 @@ func main() {
 		}
 
 		log.Logger.Info("Creating TLS certificate provider", "issuer", tlsCertProvider)
+
+		// Build the GLBC workspace API server URL manually, as the cert-manager client
+		// is not logical cluster aware at the moment.
+		controlClientConfig := getGLBCWorkspaceClientConfig(kcpClientConfig)
 
 		certProvider, err = tls.NewCertManager(tls.CertManagerConfig{
 			DNSValidator:  tls.DNSValidatorRoute53,
@@ -321,4 +319,13 @@ func getAPIExportVirtualWorkspaceURL(export *apisv1alpha1.APIExport) string {
 	}
 
 	return export.Status.VirtualWorkspaces[0].URL
+}
+
+func getGLBCWorkspaceClientConfig(config *rest.Config) *rest.Config {
+	cfg := rest.CopyConfig(config)
+	u, err := url.Parse(cfg.Host)
+	exitOnError(err, "Failed to parse client config host")
+	u.Path = "/clusters/" + options.GLBCWorkspace
+	cfg.Host = u.String()
+	return cfg
 }
