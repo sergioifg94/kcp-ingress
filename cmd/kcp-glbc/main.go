@@ -145,6 +145,12 @@ func main() {
 	exitOnError(err, "Failed to create KCP core client")
 	kcpKubeInformerFactory := informers.NewSharedInformerFactory(kcpKubeClient.Cluster(logicalcluster.New(options.LogicalClusterTarget)), resyncPeriod)
 
+	// Override the Kubernetes client as create and delete operations are not working yet
+	// via the APIExport virtual workspace API server.
+	// See https://github.com/kcp-dev/kcp/issues/1253 for more details.
+	kcpKubeClient, err = kubernetes.NewClusterForConfig(kcpClientConfig)
+	exitOnError(err, "Failed to create KCP kuadrant client")
+
 	// GLBC APIs client, i.e., for DNSRecord resources, bootstrapped from the GLBC workspace.
 	glbcAPIExport, err := kcpClient.Cluster(logicalcluster.New(options.GLBCWorkspace)).ApisV1alpha1().APIExports().Get(ctx, "glbc", metav1.GetOptions{})
 	exitOnError(err, "Failed to get GLBC APIExport")
