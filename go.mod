@@ -141,6 +141,7 @@ require (
 
 replace (
 	github.com/kcp-dev/kcp/pkg/apis => github.com/kcp-dev/kcp/pkg/apis v0.5.0-alpha.1
+	gopkg.in/square/go-jose.v2 => gopkg.in/square/go-jose.v2 v2.2.2
 	k8s.io/api => github.com/kcp-dev/kubernetes/staging/src/k8s.io/api v0.0.0-20220524063253-5bb0eeecf2cf
 	k8s.io/apiextensions-apiserver => github.com/kcp-dev/kubernetes/staging/src/k8s.io/apiextensions-apiserver v0.0.0-20220524063253-5bb0eeecf2cf
 	k8s.io/apimachinery => github.com/kcp-dev/kubernetes/staging/src/k8s.io/apimachinery v0.0.0-20220524063253-5bb0eeecf2cf

@@ -1,5 +1,4 @@
 //go:build e2e
-// +build e2e
 
 /*
 Licensed under the Apache License, Version 2.0 (the "License");
@@ -20,7 +19,6 @@ package e2e
 import (
 	"crypto/x509/pkix"
 	"testing"
-	"time"
 
 	. "github.com/onsi/gomega"
 	. "github.com/onsi/gomega/gstruct"
@@ -42,31 +40,40 @@ import (
 
 func TestTLS(t *testing.T) {
 	test := With(t)
-	test.T().Parallel()
+	// Tests cannot be run in parallel as of kcp 0.5.0
+	// test.T().Parallel()
+
 	// Create the test workspace
 	workspace := test.NewTestWorkspace()
 
-	// Import the GLBC APIs
-	binding := test.NewGLBCAPIBinding(InWorkspace(workspace))
+	// Import GLBC APIs
+	binding := test.NewAPIBinding("glbc", WithExportReference(GLBCWorkspace, "glbc"), InWorkspace(workspace))
 
 	// Wait until the APIBinding is actually in bound phase
 	test.Eventually(APIBinding(test, binding.ClusterName, binding.Name)).
 		Should(WithTransform(APIBindingPhase, Equal(apisv1alpha1.APIBindingPhaseBound)))
 
-	// And check the APIs are imported into the workspace
+	// And check the APIs are imported into the test workspace
 	test.Expect(HasImportedAPIs(test, workspace, kuadrantv1.SchemeGroupVersion.WithKind("DNSRecord"))(test)).
 		Should(BeTrue())
 
-	// Register workload cluster 1 into the test workspace
-	cluster1 := test.NewWorkloadCluster("kcp-cluster-1", InWorkspace(workspace), WithKubeConfigByName, Syncer().ResourcesToSync(GLBCResources...))
+	// Register workload cluster 1 into the compute-service workspace
+	cluster1 := test.NewWorkloadCluster("kcp-cluster-1", InWorkspace(ComputeWorkspace), WithKubeConfigByName, Syncer().ResourcesToSync(GLBCResources...))
 
 	// Wait until cluster 1 is ready
-	test.Eventually(WorkloadCluster(test, cluster1.ClusterName, cluster1.Name)).WithTimeout(time.Minute * 3).Should(WithTransform(
+	test.Eventually(WorkloadCluster(test, cluster1.ClusterName, cluster1.Name)).WithTimeout(TestTimeoutShort).Should(WithTransform(
 		ConditionStatus(conditionsapi.ReadyCondition),
 		Equal(corev1.ConditionTrue),
 	))
 
-	// Wait until the APIs are imported into the workspace
+	// Import compute workspace APIs
+	binding = test.NewAPIBinding("kubernetes", WithComputeServiceExport(ComputeWorkspace), InWorkspace(workspace))
+
+	// Wait until the APIBinding is actually in bound phase
+	test.Eventually(APIBinding(test, binding.ClusterName, binding.Name)).
+		Should(WithTransform(APIBindingPhase, Equal(apisv1alpha1.APIBindingPhaseBound)))
+
+	// Wait until the APIs are imported into the test workspace
 	test.Eventually(HasImportedAPIs(test, workspace,
 		corev1.SchemeGroupVersion.WithKind("Service"),
 		appsv1.SchemeGroupVersion.WithKind("Deployment"),
