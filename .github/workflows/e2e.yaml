@@ -151,7 +151,10 @@ jobs:
           echo "Exporting KUBECONFIG=${KUBECONFIG}"
           echo "KUBECONFIG=${KUBECONFIG}" >> $GITHUB_ENV
 
-          echo "Creating HCG Workspace"
+          echo "Creating Compute Service Workspace"
+          ./bin/kubectl-kcp workspace create kcp-glbc-user-compute
+
+          echo "Creating GLBC Workspace"
           ./bin/kubectl-kcp workspace create kcp-glbc --enter
 
           echo "Waiting 15 seconds..."
@@ -161,9 +164,6 @@ jobs:
           kubectl apply -f ./utils/kcp-contrib/crds
 
           echo "Export GLBC APIs"
-          # Workaround for https://github.com/kcp-dev/kcp/issues/1038
-          kubectl apply -f ./config/crd/bases
-          #
           kubectl apply -f ./utils/kcp-contrib/apiresourceschema.yaml
           kubectl apply -f ./utils/kcp-contrib/apiexport.yaml
 
@@ -172,7 +172,9 @@ jobs:
           export AWS_DNS_PUBLIC_ZONE_ID=FAKE_ZONE_ID
           echo "AWS_DNS_PUBLIC_ZONE_ID=FAKE_ZONE_ID" >> $GITHUB_ENV
           echo "Starting GLBC, sending logs to ${GLBC_LOG_FILE}"
-          ./bin/kcp-glbc --kubeconfig .kcp/admin.kubeconfig --context system:admin --glbc-kubeconfig "${HOME}"/.kube/config --dns-provider fake --glbc-tls-provided true > ${GLBC_LOG_FILE} 2>&1 &
+          unset KUBECONFIG
+          kubectl config use-context kind-glbc
+          ./bin/kcp-glbc --kubeconfig .kcp/admin.kubeconfig --context system:admin --dns-provider fake --glbc-tls-provided true > ${GLBC_LOG_FILE} 2>&1 &
           GLBC_PID=$!
           echo "GLBC_PID=${GLBC_PID}" >> $GITHUB_ENV
 
