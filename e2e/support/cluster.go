@@ -247,19 +247,13 @@ func applyKcpWorkloadSync(t Test, config *workloadClusterConfig) (func() error, 
 		if err != nil {
 			return cleanup, err
 		}
-		_, err = client.Resource(mapping.Resource).Namespace(resource.GetNamespace()).Create(t.Ctx(), resource, metav1.CreateOptions{})
+		data, err := json.Marshal(resource)
 		if err != nil {
-			if !apierrors.IsAlreadyExists(err) {
-				return cleanup, err
-			}
-			data, err := json.Marshal(resource)
-			if err != nil {
-				return cleanup, err
-			}
-			_, err = client.Resource(mapping.Resource).Namespace(resource.GetNamespace()).Patch(t.Ctx(), resource.GetName(), types.ApplyPatchType, data, ApplyOptions.ToPatchOptions())
-			if err != nil {
-				return cleanup, err
-			}
+			return cleanup, err
+		}
+		_, err = client.Resource(mapping.Resource).Namespace(resource.GetNamespace()).Patch(t.Ctx(), resource.GetName(), types.ApplyPatchType, data, ApplyOptions.ToPatchOptions())
+		if err != nil {
+			return cleanup, err
 		}
 		resources = append(resources, resource)
 	}
