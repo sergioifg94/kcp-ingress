@@ -164,7 +164,9 @@ func createWorkloadCluster(t Test, name string, options ...Option) (*workloadv1a
 }
 
 func deleteWorkloadCluster(t Test, workloadCluster *workloadv1alpha1.WorkloadCluster) {
-	propagationPolicy := metav1.DeletePropagationForeground
+	// It's not possible to use foreground propagation policy as kcp doesn't currently support
+	// garbage collection.
+	propagationPolicy := metav1.DeletePropagationBackground
 	err := t.Client().Kcp().Cluster(logicalcluster.From(workloadCluster)).WorkloadV1alpha1().WorkloadClusters().Delete(t.Ctx(), workloadCluster.Name, metav1.DeleteOptions{PropagationPolicy: &propagationPolicy})
 	t.Expect(err).NotTo(gomega.HaveOccurred())
 }
