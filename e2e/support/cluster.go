@@ -225,7 +225,8 @@ func applyKcpWorkloadSync(t Test, config *workloadClusterConfig) (func() error, 
 				errs = append(errs, err)
 				continue
 			}
-			err = client.Resource(mapping.Resource).Namespace(resource.GetNamespace()).Delete(t.Ctx(), resource.GetName(), metav1.DeleteOptions{})
+			propagationPolicy := metav1.DeletePropagationForeground
+			err = client.Resource(mapping.Resource).Namespace(resource.GetNamespace()).Delete(t.Ctx(), resource.GetName(), metav1.DeleteOptions{PropagationPolicy: &propagationPolicy})
 			if err != nil && !apierrors.IsNotFound(err) {
 				errs = append(errs, err)
 			}
