@@ -33,7 +33,6 @@ import (
 	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
 	networkingv1 "k8s.io/api/networking/v1"
-	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 
 	apisv1alpha1 "github.com/kcp-dev/kcp/pkg/apis/apis/v1alpha1"
@@ -149,22 +148,12 @@ func TestMetrics(t *testing.T) {
 		timer.Stop()
 	})
 
-	hostname := ""
-
 	// We pull the metrics aggressively as the certificate can be issued quickly when using the CA issuer.
 	// We may want to adjust the pull interval as well as the timeout based on the configured issuer.
 	test.Eventually(Metrics(test), TestTimeoutMedium, 10*time.Millisecond).Should(And(
 		HaveKey("glbc_tls_certificate_pending_request_count"),
 		WithTransform(Metric("glbc_tls_certificate_pending_request_count"), Satisfy(
 			func(m *prometheus.MetricFamily) bool {
-				ingress, err := test.Client().Core().Cluster(logicalcluster.From(namespace)).NetworkingV1().Ingresses(namespace.Name).Get(test.Ctx(), name, metav1.GetOptions{})
-				if err != nil {
-					if apierrors.IsNotFound(err) {
-						return false
-					}
-					t.Fatal(err)
-				}
-				hostname = ingress.Annotations[kuadrantcluster.ANNOTATION_HCG_HOST]
 				match, _ := EqualP(certificatePendingRequestCount(issuer, 1)).Match(m)
 				return match
 			},
@@ -180,26 +169,24 @@ func TestMetrics(t *testing.T) {
 			HaveKey(kuadrantcluster.ANNOTATION_HCG_HOST),
 			HaveKey(kuadrantcluster.ANNOTATION_HCG_CUSTOM_HOST_REPLACED)),
 		),
+		// Rules spec
 		Satisfy(HostsEqualsToGeneratedHost),
 		// TLS certificate spec
-		WithTransform(IngressTLS, ConsistOf(networkingv1.IngressTLS{
-			Hosts:      []string{hostname},
-			SecretName: secretName,
-		})),
+		Satisfy(HasTLSSecretForGeneratedHost(secretName)),
 		// Load balancer status
 		WithTransform(LoadBalancerIngresses, HaveLen(1)),
 	))
+
+	ingress := GetIngress(test, namespace, name)
 
 	// Check the TLS Secret
 	test.Eventually(Secret(test, namespace, secretName)).WithTimeout(TestTimeoutMedium).Should(
 		WithTransform(Certificate, PointTo(
 			MatchFields(IgnoreExtras, map[string]types.GomegaMatcher{
-				"DNSNames": ConsistOf(hostname),
+				"DNSNames": ConsistOf(ingress.Annotations[kuadrantcluster.ANNOTATION_HCG_HOST]),
 			}),
 		)),
 	)
-
-	ingress := GetIngress(test, namespace, name)
 
 	zoneID := os.Getenv("AWS_DNS_PUBLIC_ZONE_ID")
 	test.Expect(zoneID).NotTo(BeNil())

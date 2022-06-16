@@ -72,3 +72,15 @@ func HostsEqualsToGeneratedHost(ingress *networkingv1.Ingress) bool {
 	}
 	return equals
 }
+
+func HasTLSSecretForGeneratedHost(secret string) func(ingress *networkingv1.Ingress) bool {
+	return func(ingress *networkingv1.Ingress) bool {
+		hostname := ingress.Annotations[kuadrantcluster.ANNOTATION_HCG_HOST]
+		for _, tls := range ingress.Spec.TLS {
+			if len(tls.Hosts) == 1 && tls.Hosts[0] == hostname && tls.SecretName == secret {
+				return true
+			}
+		}
+		return false
+	}
+}
