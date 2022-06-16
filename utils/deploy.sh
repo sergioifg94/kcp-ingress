@@ -139,11 +139,16 @@ create_workload_cluster() {
 }
 
 deploy_cert_manager() {
+  if [ -z ${KUBECONFIG} ]; then
+      KUBECONFIG=${GLBC_KUSTOMIZATION}/kcp.kubeconfig
+  fi
   echo "Deploying Cert Manager"
   create_ns "cert-manager"
   kubectl apply -f ${KCP_GLBC_DIR}/config/cert-manager/cert-manager.yaml
   echo "Waiting for Cert Manager deployments to be ready..."
   kubectl -n cert-manager wait --timeout=300s --for=condition=Available deployments --all
+  echo "Creating issuer"
+  go run ${DEPLOY_SCRIPT_DIR}/certman-issuer/ --glbc-kubeconfig ${KUBECONFIG}
 }
 
 deploy_glbc() {
