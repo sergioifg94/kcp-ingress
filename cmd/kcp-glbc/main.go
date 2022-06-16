@@ -115,7 +115,14 @@ func init() {
 var controllersGroup = sync.WaitGroup{}
 
 func main() {
+	// start listening on the metrics endpoint
+	metricsServer, err := metrics.NewServer(options.MonitoringPort)
+	exitOnError(err, "Failed to create metrics server")
+
 	ctx := genericapiserver.SetupSignalContext()
+	g, gCtx := errgroup.WithContext(ctx)
+
+	g.Go(metricsServer.Start)
 
 	defaultClientConfig, err := clientcmd.NewNonInteractiveDeferredLoadingClientConfig(
 		clientcmd.NewDefaultClientConfigLoadingRules(),
@@ -256,14 +263,6 @@ func main() {
 		glbcKubeInformerFactory.Start(ctx.Done())
 		glbcKubeInformerFactory.WaitForCacheSync(ctx.Done())
 	}
-
-	// start listening on the metrics endpoint
-	metricsServer, err := metrics.NewServer(options.MonitoringPort)
-	exitOnError(err, "Failed to create metrics server")
-
-	g, gCtx := errgroup.WithContext(ctx)
-
-	g.Go(metricsServer.Start)
 
 	start(gCtx, ingressController)
 	start(gCtx, dnsRecordController)
