@@ -15,7 +15,6 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 
 	apisv1alpha1 "github.com/kcp-dev/kcp/pkg/apis/apis/v1alpha1"
-	conditionsapi "github.com/kcp-dev/kcp/pkg/apis/third_party/conditions/apis/conditions/v1alpha1"
 	"github.com/kcp-dev/logicalcluster"
 
 	. "github.com/kuadrant/kcp-glbc/e2e/support"
@@ -25,8 +24,7 @@ import (
 
 func TestIngress(t *testing.T) {
 	test := With(t)
-	// Tests cannot be run in parallel as of kcp 0.5.0
-	// test.T().Parallel()
+	test.T().Parallel()
 
 	// Create the test workspace
 	workspace := test.NewTestWorkspace()
@@ -41,15 +39,6 @@ func TestIngress(t *testing.T) {
 	// And check the APIs are imported into the test workspace
 	test.Expect(HasImportedAPIs(test, workspace, kuadrantv1.SchemeGroupVersion.WithKind("DNSRecord"))(test)).
 		Should(BeTrue())
-
-	// Register workload cluster 1 into the compute-service workspace
-	cluster1 := test.NewWorkloadCluster("kcp-cluster-1", InWorkspace(ComputeWorkspace), WithKubeConfigByName, Syncer().ResourcesToSync(GLBCResources...))
-
-	// Wait until cluster 1 is ready
-	test.Eventually(WorkloadCluster(test, cluster1.ClusterName, cluster1.Name)).WithTimeout(TestTimeoutShort).Should(WithTransform(
-		ConditionStatus(conditionsapi.ReadyCondition),
-		Equal(corev1.ConditionTrue),
-	))
 
 	// Bind compute workspace APIs
 	binding = test.NewAPIBinding("kubernetes", WithComputeServiceExport(ComputeWorkspace), InWorkspace(workspace))

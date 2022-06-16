@@ -152,9 +152,14 @@ jobs:
           echo "KUBECONFIG=${KUBECONFIG}" >> $GITHUB_ENV
 
           echo "Creating Compute Service Workspace"
-          ./bin/kubectl-kcp workspace create kcp-glbc-user-compute
+          ./bin/kubectl-kcp workspace create kcp-glbc-user-compute --enter
+          kubectl create ns kcp-syncer
+          export KCP_SYNCER_IMAGE=ghcr.io/kcp-dev/kcp/syncer:release-0.5
+          ./bin/kubectl-kcp workload sync kcp-cluster-1 --kcp-namespace kcp-syncer --syncer-image=${KCP_SYNCER_IMAGE} --resources=ingresses.networking.k8s.io,services | kubectl --kubeconfig="${CLUSTERS_KUBECONFIG_DIR}"/kcp-cluster-1.kubeconfig apply -f -
+          ./bin/kubectl-kcp workload sync kcp-cluster-2 --kcp-namespace kcp-syncer --syncer-image=${KCP_SYNCER_IMAGE} --resources=ingresses.networking.k8s.io,services | kubectl --kubeconfig="${CLUSTERS_KUBECONFIG_DIR}"/kcp-cluster-2.kubeconfig apply -f -
 
           echo "Creating GLBC Workspace"
+          ./bin/kubectl-kcp workspace ..
           ./bin/kubectl-kcp workspace create kcp-glbc --enter
 
           echo "Waiting 15 seconds..."
