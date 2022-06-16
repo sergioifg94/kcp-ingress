@@ -4,6 +4,7 @@
 package e2e
 
 import (
+	"os"
 	"testing"
 
 	. "github.com/onsi/gomega"
@@ -87,6 +88,9 @@ func TestIngress(t *testing.T) {
 	// Retrieve the Ingress
 	ingress := GetIngress(test, namespace, name)
 
+	zoneID := os.Getenv("AWS_DNS_PUBLIC_ZONE_ID")
+	test.Expect(zoneID).NotTo(BeNil())
+
 	// Check a DNSRecord for the Ingress is created with the expected Spec
 	test.Eventually(DNSRecord(test, namespace, name)).Should(And(
 		WithTransform(DNSRecordEndpoints, HaveLen(1)),
@@ -100,6 +104,12 @@ func TestIngress(t *testing.T) {
 				"ProviderSpecific": ConsistOf(kuadrantv1.ProviderSpecific{{Name: "aws/weight", Value: "120"}}),
 			})),
 		),
+		WithTransform(DNSRecordCondition(zoneID, kuadrantv1.DNSRecordFailedConditionType), MatchFieldsP(IgnoreExtras,
+			Fields{
+				"Status":  Equal("False"),
+				"Reason":  Equal("ProviderSuccess"),
+				"Message": Equal("The DNS provider succeeded in ensuring the record"),
+			})),
 	))
 
 	// Finally, delete the resources

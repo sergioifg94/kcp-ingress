@@ -217,13 +217,12 @@ func TestMetrics(t *testing.T) {
 				"ProviderSpecific": ConsistOf(kuadrantv1.ProviderSpecific{{Name: "aws/weight", Value: "120"}}),
 			})),
 		),
-		// TODO: Reactivate when kcp is migrated to version 0.5.0
-		// WithTransform(DNSRecordCondition(zoneID, kuadrantv1.DNSRecordFailedConditionType), MatchFieldsP(IgnoreExtras,
-		// 	Fields{
-		// 		"Status":  Equal("False"),
-		// 		"Reason":  Equal("ProviderSuccess"),
-		// 		"Message": Equal("The DNS provider succeeded in ensuring the record"),
-		// 	})),
+		WithTransform(DNSRecordCondition(zoneID, kuadrantv1.DNSRecordFailedConditionType), MatchFieldsP(IgnoreExtras,
+			Fields{
+				"Status":  Equal("False"),
+				"Reason":  Equal("ProviderSuccess"),
+				"Message": Equal("The DNS provider succeeded in ensuring the record"),
+			})),
 	))
 
 	secret := GetSecret(test, namespace, ingress.Spec.TLS[0].SecretName)
