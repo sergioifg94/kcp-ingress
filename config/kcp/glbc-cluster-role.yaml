@@ -17,14 +17,6 @@ rules:
   verbs:
   - "*"
 - apiGroups:
-  - ""
-  resources:
-  - namespaces
-  verbs:
-  - get
-  - list
-  - watch
-- apiGroups:
   - "networking.k8s.io"
   resources:
   - ingresses
@@ -38,4 +30,10 @@ rules:
   - dnsrecords/status
   verbs:
   - "*"
-
+- apiGroups:
+  - "cert-manager.io"
+  resources:
+  - issuers
+  - certificates
+  verbs:
+  - "*"

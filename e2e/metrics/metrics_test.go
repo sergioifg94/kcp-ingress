@@ -1,5 +1,4 @@
 //go:build e2e
-// +build e2e
 
 /*
 Licensed under the Apache License, Version 2.0 (the "License");
@@ -34,12 +33,10 @@ import (
 	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
 	networkingv1 "k8s.io/api/networking/v1"
-	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 
-	"github.com/kcp-dev/apimachinery/pkg/logicalcluster"
 	apisv1alpha1 "github.com/kcp-dev/kcp/pkg/apis/apis/v1alpha1"
-	conditionsapi "github.com/kcp-dev/kcp/third_party/conditions/apis/conditions/v1alpha1"
+	"github.com/kcp-dev/logicalcluster"
 
 	. "github.com/kuadrant/kcp-glbc/e2e/support"
 	kuadrantv1 "github.com/kuadrant/kcp-glbc/pkg/apis/kuadrant/v1"
@@ -99,27 +96,25 @@ func TestMetrics(t *testing.T) {
 	// Create the test workspace
 	workspace := test.NewTestWorkspace()
 
-	// Import the GLBC APIs
-	binding := test.NewGLBCAPIBinding(InWorkspace(workspace))
+	// Import GLBC APIs
+	binding := test.NewAPIBinding("glbc", WithExportReference(GLBCWorkspace, "glbc"), InWorkspace(workspace))
 
 	// Wait until the APIBinding is actually in bound phase
 	test.Eventually(APIBinding(test, binding.ClusterName, binding.Name)).
 		Should(WithTransform(APIBindingPhase, Equal(apisv1alpha1.APIBindingPhaseBound)))
 
-	// And check the APIs are imported into the workspace
+	// And check the APIs are imported into the test workspace
 	test.Expect(HasImportedAPIs(test, workspace, kuadrantv1.SchemeGroupVersion.WithKind("DNSRecord"))(test)).
 		Should(BeTrue())
 
-	// Register workload cluster 1 into the test workspace
-	cluster1 := test.NewWorkloadCluster("kcp-cluster-1", InWorkspace(workspace), WithKubeConfigByName, Syncer().ResourcesToSync(GLBCResources...))
+	// Import compute workspace APIs
+	binding = test.NewAPIBinding("kubernetes", WithComputeServiceExport(ComputeWorkspace), InWorkspace(workspace))
 
-	// Wait until cluster 1 is ready
-	test.Eventually(WorkloadCluster(test, cluster1.ClusterName, cluster1.Name)).WithTimeout(time.Minute * 3).Should(WithTransform(
-		ConditionStatus(conditionsapi.ReadyCondition),
-		Equal(corev1.ConditionTrue),
-	))
+	// Wait until the APIBinding is actually in bound phase
+	test.Eventually(APIBinding(test, binding.ClusterName, binding.Name)).
+		Should(WithTransform(APIBindingPhase, Equal(apisv1alpha1.APIBindingPhaseBound)))
 
-	// Wait until the APIs are imported into the workspace
+	// Wait until the APIs are imported into the test workspace
 	test.Eventually(HasImportedAPIs(test, workspace,
 		corev1.SchemeGroupVersion.WithKind("Service"),
 		appsv1.SchemeGroupVersion.WithKind("Deployment"),
@@ -153,22 +148,12 @@ func TestMetrics(t *testing.T) {
 		timer.Stop()
 	})
 
-	hostname := ""
-
 	// We pull the metrics aggressively as the certificate can be issued quickly when using the CA issuer.
 	// We may want to adjust the pull interval as well as the timeout based on the configured issuer.
 	test.Eventually(Metrics(test), TestTimeoutMedium, 10*time.Millisecond).Should(And(
 		HaveKey("glbc_tls_certificate_pending_request_count"),
 		WithTransform(Metric("glbc_tls_certificate_pending_request_count"), Satisfy(
 			func(m *prometheus.MetricFamily) bool {
-				ingress, err := test.Client().Core().Cluster(logicalcluster.From(namespace)).NetworkingV1().Ingresses(namespace.Name).Get(test.Ctx(), name, metav1.GetOptions{})
-				if err != nil {
-					if apierrors.IsNotFound(err) {
-						return false
-					}
-					t.Fatal(err)
-				}
-				hostname = ingress.Annotations[kuadrantcluster.ANNOTATION_HCG_HOST]
 				match, _ := EqualP(certificatePendingRequestCount(issuer, 1)).Match(m)
 				return match
 			},
@@ -184,26 +169,24 @@ func TestMetrics(t *testing.T) {
 			HaveKey(kuadrantcluster.ANNOTATION_HCG_HOST),
 			HaveKey(kuadrantcluster.ANNOTATION_HCG_CUSTOM_HOST_REPLACED)),
 		),
+		// Rules spec
 		Satisfy(HostsEqualsToGeneratedHost),
 		// TLS certificate spec
-		WithTransform(IngressTLS, ConsistOf(networkingv1.IngressTLS{
-			Hosts:      []string{hostname},
-			SecretName: secretName,
-		})),
+		Satisfy(HasTLSSecretForGeneratedHost(secretName)),
 		// Load balancer status
 		WithTransform(LoadBalancerIngresses, HaveLen(1)),
 	))
+
+	ingress := GetIngress(test, namespace, name)
 
 	// Check the TLS Secret
 	test.Eventually(Secret(test, namespace, secretName)).WithTimeout(TestTimeoutMedium).Should(
 		WithTransform(Certificate, PointTo(
 			MatchFields(IgnoreExtras, map[string]types.GomegaMatcher{
-				"DNSNames": ConsistOf(hostname),
+				"DNSNames": ConsistOf(ingress.Annotations[kuadrantcluster.ANNOTATION_HCG_HOST]),
 			}),
 		)),
 	)
-
-	ingress := GetIngress(test, namespace, name)
 
 	zoneID := os.Getenv("AWS_DNS_PUBLIC_ZONE_ID")
 	test.Expect(zoneID).NotTo(BeNil())
@@ -221,13 +204,12 @@ func TestMetrics(t *testing.T) {
 				"ProviderSpecific": ConsistOf(kuadrantv1.ProviderSpecific{{Name: "aws/weight", Value: "120"}}),
 			})),
 		),
-		// TODO: Reactivate when kcp is migrated to version 0.5.0
-		// WithTransform(DNSRecordCondition(zoneID, kuadrantv1.DNSRecordFailedConditionType), MatchFieldsP(IgnoreExtras,
-		// 	Fields{
-		// 		"Status":  Equal("False"),
-		// 		"Reason":  Equal("ProviderSuccess"),
-		// 		"Message": Equal("The DNS provider succeeded in ensuring the record"),
-		// 	})),
+		WithTransform(DNSRecordCondition(zoneID, kuadrantv1.DNSRecordFailedConditionType), MatchFieldsP(IgnoreExtras,
+			Fields{
+				"Status":  Equal("False"),
+				"Reason":  Equal("ProviderSuccess"),
+				"Message": Equal("The DNS provider succeeded in ensuring the record"),
+			})),
 	))
 
 	secret := GetSecret(test, namespace, ingress.Spec.TLS[0].SecretName)

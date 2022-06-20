@@ -17,7 +17,7 @@ import (
 	"k8s.io/client-go/tools/cache"
 	"k8s.io/utils/pointer"
 
-	"github.com/kcp-dev/apimachinery/pkg/logicalcluster"
+	"github.com/kcp-dev/logicalcluster"
 
 	v1 "github.com/kuadrant/kcp-glbc/pkg/apis/kuadrant/v1"
 	"github.com/kuadrant/kcp-glbc/pkg/cluster"
@@ -70,10 +70,6 @@ func (c *Controller) reconcile(ctx context.Context, ingress *networkingv1.Ingres
 		if err != nil {
 			return err
 		}
-	}
-
-	if err := c.ensurePlacement(ctx, ingress); err != nil {
-		return err
 	}
 
 	// setup certificates
@@ -309,21 +305,6 @@ func (c *Controller) getServices(ctx context.Context, ingress *networkingv1.Ingr
 		}
 	}
 	return services, nil
-}
-
-func (c *Controller) ensurePlacement(ctx context.Context, ingress *networkingv1.Ingress) error {
-	svcs, err := c.getServices(ctx, ingress)
-	if err != nil {
-		return err
-	}
-	if err := c.ingressPlacer.PlaceRoutingObj(svcs, ingress); err != nil {
-		return err
-	}
-	if _, err := c.kubeClient.Cluster(logicalcluster.From(ingress)).NetworkingV1().Ingresses(ingress.Namespace).Update(ctx, ingress, metav1.UpdateOptions{}); err != nil {
-		return err
-	}
-	return nil
-
 }
 
 func (c *Controller) patchIngress(ctx context.Context, ingress *networkingv1.Ingress, data []byte) (*networkingv1.Ingress, error) {

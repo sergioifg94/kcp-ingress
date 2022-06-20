@@ -1,9 +1,9 @@
 
 SHELL := /usr/bin/env bash
 
-NUM_CLUSTERS := 1
+NUM_CLUSTERS := 2
 DO_BREW := true
-KCP_BRANCH := v0.4.0-alpha.0
+KCP_BRANCH := release-0.5
 
 IMAGE_TAG_BASE ?= quay.io/kuadrant/kcp-glbc
 IMAGE_TAG ?= latest
