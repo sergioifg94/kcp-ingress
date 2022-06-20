@@ -347,17 +347,18 @@ func (c *Controller) processCustomHostValidation(ctx context.Context, ingress *n
 	}
 
 	dvs, err := c.kuadrantClient.Cluster(logicalcluster.From(ingress)).KuadrantV1().DomainVerifications().List(ctx, metav1.ListOptions{})
-
 	if err != nil {
 		return err
 	}
+
 	var unverifiedRules []networkingv1.IngressRule
 	var hosts []string
 
 	var preservedRules []networkingv1.IngressRule
-	//find any rules in the spec that are for hosts that are not verified
+
+	// find any rules in the spec that are for hosts that are not verified
 	for _, rule := range ingress.Spec.Rules {
-		//ignore any rules for generated hosts (these are recalculated later)
+		// ignore any rules for generated hosts (these are recalculated later)
 		if rule.Host == generatedHost {
 			continue
 		}
@@ -366,7 +367,8 @@ func (c *Controller) processCustomHostValidation(ctx context.Context, ingress *n
 		if err != nil {
 			return err
 		}
-		//check against domainverification status
+
+		// check against domainverification status
 		if dv != nil && dv.Status.Verified == true {
 			preservedRules = append(preservedRules, rule)
 		} else {
@@ -375,20 +377,20 @@ func (c *Controller) processCustomHostValidation(ctx context.Context, ingress *n
 			hosts = append(hosts, rule.Host)
 		}
 
-		//recalculate the generatedhost rule in the spec
+		// recalculate the generatedhost rule in the spec
 		generatedHostRule := *rule.DeepCopy()
 		generatedHostRule.Host = generatedHost
 		preservedRules = append(preservedRules, generatedHostRule)
 	}
 	ingress.Spec.Rules = preservedRules
 
-	//test all the rules in the pending rules annotation to see if they are verified now
+	// test all the rules in the pending rules annotation to see if they are verified now
 	pendingRulesRaw := ingress.Annotations[PendingCustomHostsAnnotation]
 	pending := &Pending{}
 	json.Unmarshal([]byte(pendingRulesRaw), pending)
 	var preservedPendingRules []networkingv1.IngressRule
 	for _, pendingRule := range pending.Rules {
-		//recalculate the generatedhost rule in the spec
+		// recalculate the generatedhost rule in the spec
 		generatedHostRule := *pendingRule.DeepCopy()
 		generatedHostRule.Host = generatedHost
 		ingress.Spec.Rules = append(ingress.Spec.Rules, generatedHostRule)
@@ -399,9 +401,9 @@ func (c *Controller) processCustomHostValidation(ctx context.Context, ingress *n
 			return err
 		}
 
-		//check against domainverification status
+		// check against domainverification status
 		if dv != nil && dv.Status.Verified == true {
-			//add the rule to the spec
+			// add the rule to the spec
 			ingress.Spec.Rules = append(ingress.Spec.Rules, pendingRule)
 		} else {
 			preservedPendingRules = append(preservedPendingRules, pendingRule)
@@ -411,7 +413,7 @@ func (c *Controller) processCustomHostValidation(ctx context.Context, ingress *n
 	// clean up replaced hosts from the tls list
 	removeHostsFromTLS(hosts, ingress)
 
-	//put the new unverified rules in the list of pending rules and update the annotation
+	// put the new unverified rules in the list of pending rules and update the annotation
 	pending.Rules = append(preservedPendingRules, unverifiedRules...)
 	newAnnotation, err := json.Marshal(pending)
 	if err != nil {
@@ -424,7 +426,7 @@ func (c *Controller) processCustomHostValidation(ctx context.Context, ingress *n
 
 func findDomainVerification(ctx context.Context, ingress *networkingv1.Ingress, host string, dvs []v1.DomainVerification) (*v1.DomainVerification, error) {
 	parentHostParts := strings.SplitN(host, ".", 2)
-	//we've run out of sub-domains
+	// we've run out of sub-domains
 	if len(parentHostParts) < 2 {
 		return nil, nil
 	}
@@ -437,7 +439,7 @@ func findDomainVerification(ctx context.Context, ingress *networkingv1.Ingress, 
 		}
 	}
 
-	//recurse up the subdomains
+	// recurse up the subdomains
 	return findDomainVerification(ctx, ingress, parentHost, dvs)
 }
 

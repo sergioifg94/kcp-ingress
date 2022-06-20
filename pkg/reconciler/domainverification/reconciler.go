@@ -4,12 +4,12 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"strings"
 	"time"
 
 	"github.com/hashicorp/go-multierror"
 	"github.com/kcp-dev/logicalcluster"
 	v1 "github.com/kuadrant/kcp-glbc/pkg/apis/kuadrant/v1"
+	"github.com/kuadrant/kcp-glbc/pkg/dns"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	utilserrors "k8s.io/apimachinery/pkg/util/errors"
 )
@@ -46,10 +46,10 @@ func (dsr *domainVerificationStatus) reconcile(ctx context.Context, dv *v1.Domai
 	var status = reconcileStatusContinue
 	var errs error
 	verified, ensureErr := dsr.ensureDomainVerificationStatus(ctx, dv)
-	if ensureErr != nil && !strings.Contains(ensureErr.Error(), "no such host") {
+	if ensureErr != nil && !dns.IsNoSuchHost(ensureErr) {
 		errs = multierror.Append(errs, errors.New(fmt.Sprintf("error ensuring domain verification: %v", ensureErr)))
 		status = reconcileStatusStop
-	} else if ensureErr != nil && strings.Contains(ensureErr.Error(), "no such host") {
+	} else if ensureErr != nil && dns.IsNoSuchHost(ensureErr) {
 		//don't return error if host does not exist, returning errors here causes an immediate requeue of the resource
 		status = reconcileStatusStop
 	}
@@ -66,6 +66,7 @@ func (dsr *domainVerificationStatus) reconcile(ctx context.Context, dv *v1.Domai
 
 	return status, errs
 }
+
 func (dsr *domainVerificationStatus) ensureDomainVerificationStatus(ctx context.Context, domainVerification *v1.DomainVerification) (bool, error) {
 	// default status
 	domainVerification.Status.Verified = false
@@ -79,6 +80,7 @@ func (dsr *domainVerificationStatus) ensureDomainVerificationStatus(ctx context.
 	if domainVerification.Status.Verified {
 		return true, nil
 	}
+
 	domainVerification.Status.LastChecked = metav1.Now()
 	// check DNS to see can we validate
 	exists, err := dsr.dnsVerifier.TxtRecordExists(ctx, domainVerification.Spec.Domain, domainVerification.Status.Token)
@@ -91,6 +93,7 @@ func (dsr *domainVerificationStatus) ensureDomainVerificationStatus(ctx context.
 		domainVerification.Status.NextCheck = metav1.NewTime(time.Now().Add(recheckDefault))
 		return false, nil
 	}
+
 	domainVerification.Status.Message = "domain verification was successful"
 	domainVerification.Status.Verified = true
 

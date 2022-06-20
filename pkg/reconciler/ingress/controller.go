@@ -89,9 +89,9 @@ func NewController(config *ControllerConfig) *Controller {
 	})
 
 	c.kuadrantSharedInformerFactory.Kuadrant().V1().DomainVerifications().Informer().AddEventHandler(cache.ResourceEventHandlerFuncs{
-		AddFunc:    func(obj interface{}) { c.ingressesFromDomainVerification(obj) },
+		AddFunc:    c.ingressesFromDomainVerification,
 		UpdateFunc: func(_, obj interface{}) { c.ingressesFromDomainVerification(obj) },
-		DeleteFunc: func(obj interface{}) { c.ingressesFromDomainVerification(obj) },
+		DeleteFunc: c.ingressesFromDomainVerification,
 	})
 
 	c.indexer = c.sharedInformerFactory.Networking().V1().Ingresses().Informer().GetIndexer()
@@ -181,13 +181,14 @@ func (c *Controller) ingressesFromDomainVerification(obj interface{}) {
 	dv := obj.(*v1.DomainVerification)
 	domain := strings.ToLower(strings.TrimSpace(dv.Spec.Domain))
 	c.Logger.Info("finding ingresses based on dv", "domain", domain)
-	//no actions to take on ingresses if domains is still not verified yet
+
+	// no actions to take on ingresses if domains is still not verified yet
 	if !dv.Status.Verified {
 		c.Logger.Info("dv not verified, exiting", "verified", dv.Status.Verified)
 		return
 	}
 
-	//find all ingresses with pending hosts that contain this domains
+	// find all ingresses with pending hosts that contain this domains
 	ingressList, err := c.lister.Ingresses("").List(labels.Everything())
 	if err != nil {
 		runtime.HandleError(err)
@@ -197,21 +198,29 @@ func (c *Controller) ingressesFromDomainVerification(obj interface{}) {
 	for _, ingress := range ingressList {
 		ingressNamespaceName := ingress.Namespace + "/" + ingress.Name
 		c.Logger.Info("checking for pending  host", "ingress", ingressNamespaceName)
-		if v, ok := ingress.Annotations[PendingCustomHostsAnnotation]; ok {
-			pendingHosts := strings.Split(strings.ToLower(v), ";")
-			c.Logger.Info("got pending hosts", "pendingHosts", pendingHosts)
-			for _, pendingHost := range pendingHosts {
-				if strings.Contains(strings.TrimSpace(pendingHost), domain) {
-					c.Logger.Info("Enqueuing Ingress reconciliation via domains verification", "ingress", ingressNamespaceName, "domain", domain)
-					ingressKey, err := cache.MetaNamespaceKeyFunc(ingress)
-					if err != nil {
-						c.Logger.Error(err, "error queueing ingress", "ingress", ingressNamespaceName)
-					}
-					c.Queue.Add(ingressKey)
-				} else {
-					c.Logger.Info("not enqueueing ingress", "ingress", ingressNamespaceName)
-				}
+
+		var pendingCustomHosts string
+		ok := false
+		if pendingCustomHosts, ok = ingress.Annotations[PendingCustomHostsAnnotation]; !ok {
+			continue
+		}
+
+		pendingHosts := strings.Split(strings.ToLower(pendingCustomHosts), ";")
+		c.Logger.Info("got pending hosts", "pendingHosts", pendingHosts)
+		for _, pendingHost := range pendingHosts {
+			if !strings.Contains(strings.TrimSpace(pendingHost), domain) {
+				c.Logger.Info("not enqueueing ingress", "ingress", ingressNamespaceName)
+				continue
 			}
+
+			c.Logger.Info("Enqueuing Ingress reconciliation via domains verification", "ingress", ingressNamespaceName, "domain", domain)
+			ingressKey, err := cache.MetaNamespaceKeyFunc(ingress)
+			if err != nil {
+				c.Logger.Error(err, "error queueing ingress", "ingress", ingressNamespaceName)
+				continue
+			}
+
+			c.Queue.Add(ingressKey)
 		}
 	}
 }
