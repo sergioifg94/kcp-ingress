@@ -23,22 +23,31 @@ make local-setup
 This script will:
 
 - build all the binaries
-- deploy two kubernetes 1.22 clusters locally using `kind`.
+- deploy three kubernetes 1.22 clusters locally using `kind`.
 - deploy and configure the ingress controllers in each cluster.
 - start the KCP server.
+- create KCP workspaces for glbc and user resources:
+  - kcp-glbc
+  - kcp-glbc-compute
+  - kcp-glbc-user
+  - kcp-glbc-user-compute
+- add workload clusters to the *-compute workspaces
+  - kcp-glbc-compute: 1x  kind cluster
+  - kcp-glbc-user-compute: 2x kind clusters
+- deploy glbc dependencies (cert-manager) into kcp-glbc workspace.
+    
 
-Once the script is done, copy the `Run locally:` command from the output.
-Open a new terminal, and from the root of the project, run the copied command.
+Once the script is done, copy the `Run locally:` commands from the output.
+Open a new terminal, and from the root of the project, run the copied commands.
 
 Now you can create a new ingress resource from the root of the project:
 
 ```bash 
 export KUBECONFIG=.kcp/admin.kubeconfig
-kubectl create namespace default
-
-# Single cluster
-kubectl apply -n default -f samples/echo-service/echo.yaml
+./bin/kubectl-kcp workspace use root:default:kcp-glbc-user
+kubectl apply -f samples/echo-service/echo.yaml
 ```
+N.B. It's important that you use the `.kcp/admin.kubeconfig` kube config and switch to the `root:default:kcp-glbc-user` workspace.
 
 To verify the resources were created successfully, check the output of the following:
 
@@ -67,7 +76,7 @@ Please check the script comments for any version requirements.
 
 ## Development
 
-### Interacting directly with WorkloadClusters
+###Interacting directly with WorkloadClusters
 
 Prefix `kubectl` with the appropriate kubeconfig file from the tmp directory.
 For example:
@@ -83,8 +92,11 @@ The e2e tests can be executed locally by running the following commands:
 ```bash
 # Start KCP and the KinD clusters
 $ make local-setup
+export KUBECONFIG=config/deploy/local/kcp.kubeconfig
+./bin/kubectl-kcp workspace use root:default:kcp-glbc
+./bin/kcp-glbc --kubeconfig .kcp/admin.kubeconfig --context system:admin
 # Start KCP GLBC
-$ ./bin/kcp-glbc --kubeconfig .kcp/admin.kubeconfig --context admin --dns-provider fake --glbc-kubeconfig tmp/kcp-cluster-glbc-control.kubeconfig
+$ ./bin/kcp-glbc --kubeconfig .kcp/admin.kubeconfig --context system:admin --dns-provider fake
 # Run the e2e test suite
 $ make e2e
 ```

@@ -217,10 +217,10 @@ ${KUBECTL_KCP_BIN} workspace list > /dev/null || (echo "You must be targeting a 
 caData=$(kubectl config view --raw -o json | jq -r '.clusters[0].cluster."certificate-authority-data"' | tr -d '"')
 
 ############################################################
-# GLBC Compute Negotiating Workspace (kcp-glbc-compute)    #
+# GLBC Compute Service Workspace (kcp-glbc-compute)        #
 ############################################################
 
-## Create glbc compute workspace(negotiating) if it doesn't already exist
+## Create glbc compute service workspace if it doesn't already exist
 ${KUBECTL_KCP_BIN} workspace use ${ORG_WORKSPACE}
 ${KUBECTL_KCP_BIN} workspace create ${GLBC_WORKSPACE_COMPUTE} --enter || ${KUBECTL_KCP_BIN} workspace use ${GLBC_WORKSPACE_COMPUTE}
 
@@ -258,11 +258,11 @@ create_api_binding "cert-manager" "cert-manager-stable" "${ORG_WORKSPACE}:${GLBC
 ## Create cluster scoped SA for glbc to use (Currently watches a single workspace)
 ${DEPLOY_SCRIPT_DIR}/create_glbc_ns.sh -a ${caData} -n "default" -c ${GLBC_WORKSPACE} -C
 
-############################################################
-# GLBC User Negotiating Workspace (kcp-glbc-user-compute)  #
-############################################################
+###############################################################
+# GLBC User Compute Service Workspace (kcp-glbc-user-compute) #
+###############################################################
 
-## Create glbc user compute workspace(negotiating) if it doesn't already exist
+## Create glbc user compute service workspace if it doesn't already exist
 ${KUBECTL_KCP_BIN} workspace use ${ORG_WORKSPACE}
 ${KUBECTL_KCP_BIN} workspace create ${GLBC_WORKSPACE_USER_COMPUTE} --enter || ${KUBECTL_KCP_BIN} workspace use ${GLBC_WORKSPACE_USER_COMPUTE}
 
