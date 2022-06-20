@@ -19,7 +19,6 @@
 LOCAL_SETUP_DIR="$(dirname "${BASH_SOURCE[0]}")"
 KCP_GLBC_DIR="${LOCAL_SETUP_DIR}/.."
 source "${LOCAL_SETUP_DIR}"/.setupEnv
-source "${LOCAL_SETUP_DIR}"/.startUtils
 
 DO_BREW="false"
 
@@ -46,6 +45,8 @@ if [[ "$DO_BREW" == "true" ]]; then
 else
   echo "skipping brew"
 fi
+
+source "${LOCAL_SETUP_DIR}"/.startUtils
 
 if [ -z "${NUM_CLUSTERS}" ]; then
     usage
