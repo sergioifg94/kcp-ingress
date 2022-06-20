@@ -287,6 +287,7 @@ func (c *Controller) targetsFromIngressStatus(ctx context.Context, status networ
 	return targets, nil
 }
 
+//nolint
 // getServices will parse the ingress object and return a list of the services.
 func (c *Controller) getServices(ctx context.Context, ingress *networkingv1.Ingress) ([]*corev1.Service, error) {
 	var services []*corev1.Service
