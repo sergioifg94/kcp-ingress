@@ -168,6 +168,8 @@ KUBECONFIG=.kcp/admin.kubeconfig kubectl wait --timeout=300s --for=condition=Rea
 
 #4. Deploy GLBC components
 KUBECONFIG=.kcp/admin.kubeconfig ${SCRIPT_DIR}/deploy.sh -c ${GLBC_DEPLOY_COMPONENTS}
+# When using Run Option 1(Local), the `kcp-glbc` ns won't exist. Create it here so that we can always use `kcp-glbc` for NAMESPACE
+kubectl create namespace kcp-glbc --dry-run=client -o yaml | kubectl apply -f -
 
 #5. Create User workload clusters and wait for them to be ready
 KUBECONFIG=.kcp/admin.kubeconfig ${KUBECTL_KCP_BIN} workspace use "root:default:kcp-glbc-user-compute"
