@@ -128,7 +128,7 @@ func main() {
 		clientcmd.NewDefaultClientConfigLoadingRules(),
 		&clientcmd.ConfigOverrides{}).ClientConfig()
 	exitOnError(err, "Failed to create K8S config")
-
+	// defaultKubeClient the client to the GLBC workspace, that uses the kcp TMC feature that rewrites the service account so the in-cluster client connects back to kcp
 	defaultKubeClient, err := kubernetes.NewForConfig(defaultClientConfig)
 	exitOnError(err, "Failed to create K8S core client")
 
@@ -144,6 +144,7 @@ func main() {
 	computeClientConfig := rest.CopyConfig(kcpClientConfig)
 	computeClientConfig.Host = getAPIExportVirtualWorkspaceURL(kcpClientConfig, "kubernetes", options.ComputeWorkspace)
 	log.Logger.Info(fmt.Sprintf("computeClientConfig.Host: %s", computeClientConfig.Host))
+	// kcpKubeClient the client configured with the compute APIExport virtual workspace URL, that consumes APIs that are provided by the compute (Service, Deployment, Ingress)
 	kcpKubeClient, err := kubernetes.NewClusterForConfig(computeClientConfig)
 	exitOnError(err, "Failed to create KCP core client")
 	kcpKubeInformerFactory := informers.NewSharedInformerFactory(kcpKubeClient.Cluster(logicalcluster.New(options.LogicalClusterTarget)), resyncPeriod)
@@ -158,7 +159,7 @@ func main() {
 	glbcClientConfig := rest.CopyConfig(kcpClientConfig)
 	glbcClientConfig.Host = getAPIExportVirtualWorkspaceURL(kcpClientConfig, "glbc", options.GLBCWorkspace)
 	log.Logger.Info(fmt.Sprintf("glbcClientConfig.Host: %s", glbcClientConfig.Host))
-
+	// kcpKuadrantClient the client configured with the GLBC APIExport virtual workspace URL, that consumes the DNSRecord API
 	kcpKuadrantClient, err := kuadrantv1.NewClusterForConfig(glbcClientConfig)
 	exitOnError(err, "Failed to create KCP kuadrant client")
 	kcpKuadrantInformerFactory := externalversions.NewSharedInformerFactory(kcpKuadrantClient.Cluster(logicalcluster.New(options.LogicalClusterTarget)), resyncPeriod)
