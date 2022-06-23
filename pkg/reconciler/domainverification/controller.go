@@ -8,7 +8,6 @@ import (
 	v1 "github.com/kuadrant/kcp-glbc/pkg/apis/kuadrant/v1"
 	kuadrantv1 "github.com/kuadrant/kcp-glbc/pkg/client/kuadrant/clientset/versioned"
 	"github.com/kuadrant/kcp-glbc/pkg/client/kuadrant/informers/externalversions"
-	kuadrantv1list "github.com/kuadrant/kcp-glbc/pkg/client/kuadrant/listers/kuadrant/v1"
 
 	// Dont really like we import reconciler into a lower reconciler package
 	basereconcile "github.com/kuadrant/kcp-glbc/pkg/reconciler"
@@ -49,7 +48,6 @@ func NewController(config *ControllerConfig) (*Controller, error) {
 type Controller struct {
 	*basereconcile.Controller
 	indexer                  cache.Indexer
-	domainVerificationLister kuadrantv1list.DomainVerificationLister
 	domainVerificationClient kuadrantv1.ClusterInterface
 	sharedInformerFactory    externalversions.SharedInformerFactory
 	dnsVerifier              dnsVerifier

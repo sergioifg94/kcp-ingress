@@ -3,7 +3,6 @@ package ingress
 import (
 	"context"
 	"encoding/json"
-	"errors"
 	"fmt"
 	"strconv"
 	"strings"
@@ -343,7 +342,7 @@ func (c *Controller) processCustomHostValidation(ctx context.Context, ingress *n
 	}
 	generatedHost, ok := ingress.Annotations[cluster.ANNOTATION_HCG_HOST]
 	if !ok || generatedHost == "" {
-		return errors.New(fmt.Sprintf("generated host is empty for ingress: '%v/%v'", ingress.Namespace, ingress.Name))
+		return fmt.Errorf("generated host is empty for ingress: '%v/%v'", ingress.Namespace, ingress.Name)
 	}
 
 	dvs, err := c.kuadrantClient.Cluster(logicalcluster.From(ingress)).KuadrantV1().DomainVerifications().List(ctx, metav1.ListOptions{})
@@ -369,7 +368,7 @@ func (c *Controller) processCustomHostValidation(ctx context.Context, ingress *n
 		}
 
 		// check against domainverification status
-		if dv != nil && dv.Status.Verified == true {
+		if dv != nil && dv.Status.Verified {
 			preservedRules = append(preservedRules, rule)
 		} else {
 			//remove rule from ingress and mark it as awaiting verification
@@ -387,7 +386,12 @@ func (c *Controller) processCustomHostValidation(ctx context.Context, ingress *n
 	// test all the rules in the pending rules annotation to see if they are verified now
 	pendingRulesRaw := ingress.Annotations[PendingCustomHostsAnnotation]
 	pending := &Pending{}
-	json.Unmarshal([]byte(pendingRulesRaw), pending)
+
+	err = json.Unmarshal([]byte(pendingRulesRaw), pending)
+	if err != nil {
+		return err
+	}
+
 	var preservedPendingRules []networkingv1.IngressRule
 	for _, pendingRule := range pending.Rules {
 		// recalculate the generatedhost rule in the spec
@@ -402,7 +406,7 @@ func (c *Controller) processCustomHostValidation(ctx context.Context, ingress *n
 		}
 
 		// check against domainverification status
-		if dv != nil && dv.Status.Verified == true {
+		if dv != nil && dv.Status.Verified {
 			// add the rule to the spec
 			ingress.Spec.Rules = append(ingress.Spec.Rules, pendingRule)
 		} else {

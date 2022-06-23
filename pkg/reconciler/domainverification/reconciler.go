@@ -2,7 +2,6 @@ package domainverification
 
 import (
 	"context"
-	"errors"
 	"fmt"
 	"time"
 
@@ -47,7 +46,7 @@ func (dsr *domainVerificationStatus) reconcile(ctx context.Context, dv *v1.Domai
 	var errs error
 	verified, ensureErr := dsr.ensureDomainVerificationStatus(ctx, dv)
 	if ensureErr != nil && !dns.IsNoSuchHost(ensureErr) {
-		errs = multierror.Append(errs, errors.New(fmt.Sprintf("error ensuring domain verification: %v", ensureErr)))
+		errs = multierror.Append(errs, fmt.Errorf("error ensuring domain verification: %v", ensureErr))
 		status = reconcileStatusStop
 	} else if ensureErr != nil && dns.IsNoSuchHost(ensureErr) {
 		//don't return error if host does not exist, returning errors here causes an immediate requeue of the resource
@@ -56,7 +55,7 @@ func (dsr *domainVerificationStatus) reconcile(ctx context.Context, dv *v1.Domai
 
 	updateErr := dsr.updateStatus(ctx, dv)
 	if updateErr != nil {
-		errs = multierror.Append(errs, errors.New(fmt.Sprintf("error from provided updateStatus: %v", updateErr)))
+		errs = multierror.Append(errs, fmt.Errorf("error from provided updateStatus: %v", updateErr))
 		status = reconcileStatusStop
 	}
 	if !verified {
@@ -87,9 +86,9 @@ func (dsr *domainVerificationStatus) ensureDomainVerificationStatus(ctx context.
 	if err != nil {
 		domainVerification.Status.Message = fmt.Sprintf("domain verification was not successful: %v", err)
 		domainVerification.Status.NextCheck = metav1.NewTime(time.Now().Add(recheckDefault))
-		return false, errors.New(fmt.Sprintf("error checking for text record: %v", err))
+		return false, fmt.Errorf("error checking for text record: %v", err)
 	} else if !exists {
-		domainVerification.Status.Message = fmt.Sprintf("domain verification was not successful: TXT record does not exist")
+		domainVerification.Status.Message = fmt.Sprintf("domain verification was not successful: TXT record %s does not exist", domainVerification.Spec.Domain)
 		domainVerification.Status.NextCheck = metav1.NewTime(time.Now().Add(recheckDefault))
 		return false, nil
 	}
@@ -115,7 +114,7 @@ func (c *Controller) reconcile(ctx context.Context, domainVerfication *v1.Domain
 	for _, r := range reconcilers {
 		status, err := r.reconcile(ctx, domainVerfication)
 		if err != nil {
-			errs = append(errs, errors.New(fmt.Sprintf("error from reconciler '%v': %v", r.Name(), err)))
+			errs = append(errs, fmt.Errorf("error from reconciler '%v': %v", r.Name(), err))
 		}
 		if status == reconcileStatusStop {
 			break
@@ -127,7 +126,7 @@ func (c *Controller) reconcile(ctx context.Context, domainVerfication *v1.Domain
 func (c *Controller) updateStatus(ctx context.Context, dv *v1.DomainVerification) error {
 	_, err := c.domainVerificationClient.Cluster(logicalcluster.From(dv)).KuadrantV1().DomainVerifications().UpdateStatus(ctx, dv, metav1.UpdateOptions{})
 	if err != nil {
-		return errors.New(fmt.Sprintf("error updating domain verification status: %v", err))
+		return fmt.Errorf("error updating domain verification status: %v", err)
 	}
 	return nil
 }
