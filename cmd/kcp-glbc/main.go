@@ -262,6 +262,12 @@ func main() {
 		DomainVerificationClient: kcpKuadrantClient,
 		SharedInformerFactory:    kcpKuadrantInformerFactory,
 		DNSVerifier:              dns.NewVerifier(gonet.DefaultResolver),
+		// For testing. TODO: Make configurable through flags/env variable
+		// DNSVerifier: &net.ConfigMapHostResolver{
+		// 	Name:      "hosts",
+		// 	Namespace: "default",
+		// 	Client:    kcpKubeClient.Cluster(logicalcluster.New(options.GLBCWorkspace)),
+		// },
 	})
 
 	exitOnError(err, "Failed to create DomainVerification controller")
