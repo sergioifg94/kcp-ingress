@@ -199,16 +199,18 @@ func (c *Controller) ingressesFromDomainVerification(obj interface{}) {
 		ingressNamespaceName := ingress.Namespace + "/" + ingress.Name
 		c.Logger.Info("checking for pending  host", "ingress", ingressNamespaceName)
 
-		var pendingCustomHosts string
-		ok := false
-		if pendingCustomHosts, ok = ingress.Annotations[PendingCustomHostsAnnotation]; !ok {
+		pending, ok, err := getPendingHosts(ingress)
+		if err != nil {
+			c.Logger.Info("error retrieving pending hosts. Skipping", err)
+			continue
+		}
+		if !ok || pending.Rules == nil {
 			continue
 		}
 
-		pendingHosts := strings.Split(strings.ToLower(pendingCustomHosts), ";")
-		c.Logger.Info("got pending hosts", "pendingHosts", pendingHosts)
-		for _, pendingHost := range pendingHosts {
-			if !strings.Contains(strings.TrimSpace(pendingHost), domain) {
+		c.Logger.Info("got pending hosts", "pendingHosts", pending.Rules)
+		for _, pendingHost := range pending.Rules {
+			if !hostMatches(pendingHost.Host, domain) {
 				c.Logger.Info("not enqueueing ingress", "ingress", ingressNamespaceName)
 				continue
 			}

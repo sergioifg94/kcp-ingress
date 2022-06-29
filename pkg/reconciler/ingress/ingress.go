@@ -28,8 +28,7 @@ import (
 const (
 	manager                      = "kcp-ingress"
 	cascadeCleanupFinalizer      = "kcp.dev/cascade-cleanup"
-	PendingCustomHostsAnnotation = "pendingCustomHosts"
-	PendingCustomHostsSeparator  = ";"
+	PendingCustomHostsAnnotation = "kuadrant.dev/custom-hosts.pending"
 )
 
 type Pending struct {
@@ -70,16 +69,12 @@ func (c *Controller) reconcile(ctx context.Context, ingress *networkingv1.Ingres
 
 	// if custom hosts are not enabled all the hosts in the ingress
 	// will be replaced to the generated host
-	if !c.customHostsEnabled {
-		err := c.replaceCustomHosts(ingress)
-		if err != nil {
-			return err
-		}
-	} else {
-		err := c.processCustomHostValidation(ctx, ingress)
-		if err != nil {
-			return err
-		}
+	customHostsLogic := c.replaceCustomHosts
+	if c.customHostsEnabled {
+		customHostsLogic = c.processCustomHostValidation
+	}
+	if err := customHostsLogic(ctx, ingress); err != nil {
+		return err
 	}
 
 	// setup certificates
@@ -311,7 +306,7 @@ func ingressKey(ingress *networkingv1.Ingress) interface{} {
 	return cache.ExplicitKey(key)
 }
 
-func (c *Controller) replaceCustomHosts(ingress *networkingv1.Ingress) error {
+func (c *Controller) replaceCustomHosts(_ context.Context, ingress *networkingv1.Ingress) error {
 	if ingress.Annotations == nil {
 		ingress.Annotations = map[string]string{}
 	}
@@ -340,6 +335,11 @@ func (c *Controller) processCustomHostValidation(ctx context.Context, ingress *n
 	if ingress.Annotations == nil {
 		ingress.Annotations = map[string]string{}
 	}
+
+	// Ensure the custom hosts replaced annotation is deleted, in case
+	// the custom hosts feature was previously disabled
+	delete(ingress.Annotations, cluster.ANNOTATION_HCG_CUSTOM_HOST_REPLACED)
+
 	generatedHost, ok := ingress.Annotations[cluster.ANNOTATION_HCG_HOST]
 	if !ok || generatedHost == "" {
 		return fmt.Errorf("generated host is empty for ingress: '%v/%v'", ingress.Namespace, ingress.Name)
@@ -362,16 +362,13 @@ func (c *Controller) processCustomHostValidation(ctx context.Context, ingress *n
 			continue
 		}
 
-		dv, err := findDomainVerification(ctx, ingress, rule.Host, dvs.Items)
-		if err != nil {
-			return err
-		}
+		dv := findDomainVerification(ingress, rule.Host, dvs.Items)
 
 		// check against domainverification status
 		if dv != nil && dv.Status.Verified {
 			preservedRules = append(preservedRules, rule)
 		} else {
-			//remove rule from ingress and mark it as awaiting verification
+			// remove rule from ingress and mark it as awaiting verification
 			unverifiedRules = append(unverifiedRules, rule)
 			hosts = append(hosts, rule.Host)
 		}
@@ -384,10 +381,7 @@ func (c *Controller) processCustomHostValidation(ctx context.Context, ingress *n
 	ingress.Spec.Rules = preservedRules
 
 	// test all the rules in the pending rules annotation to see if they are verified now
-	pendingRulesRaw := ingress.Annotations[PendingCustomHostsAnnotation]
-	pending := &Pending{}
-
-	err = json.Unmarshal([]byte(pendingRulesRaw), pending)
+	pending, _, err := getPendingHosts(ingress)
 	if err != nil {
 		return err
 	}
@@ -400,10 +394,7 @@ func (c *Controller) processCustomHostValidation(ctx context.Context, ingress *n
 		ingress.Spec.Rules = append(ingress.Spec.Rules, generatedHostRule)
 
 		c.Logger.Info("getting domain verification", "host", pendingRule.Host)
-		dv, err := findDomainVerification(ctx, ingress, pendingRule.Host, dvs.Items)
-		if err != nil {
-			return err
-		}
+		dv := findDomainVerification(ingress, pendingRule.Host, dvs.Items)
 
 		// check against domainverification status
 		if dv != nil && dv.Status.Verified {
@@ -419,32 +410,66 @@ func (c *Controller) processCustomHostValidation(ctx context.Context, ingress *n
 
 	// put the new unverified rules in the list of pending rules and update the annotation
 	pending.Rules = append(preservedPendingRules, unverifiedRules...)
-	newAnnotation, err := json.Marshal(pending)
-	if err != nil {
-		return err
+	return setPendingHosts(pending, ingress)
+}
+
+func findDomainVerification(ingress *networkingv1.Ingress, host string, dvs []v1.DomainVerification) *v1.DomainVerification {
+	for _, dv := range dvs {
+		if hostMatches(host, dv.Spec.Domain) {
+			return &dv
+		}
 	}
-	ingress.Annotations[PendingCustomHostsAnnotation] = string(newAnnotation)
 
 	return nil
 }
 
-func findDomainVerification(ctx context.Context, ingress *networkingv1.Ingress, host string, dvs []v1.DomainVerification) (*v1.DomainVerification, error) {
+func hostMatches(host, domain string) bool {
 	parentHostParts := strings.SplitN(host, ".", 2)
-	// we've run out of sub-domains
+
 	if len(parentHostParts) < 2 {
-		return nil, nil
+		return false
 	}
 
-	parentHost := parentHostParts[1]
-
-	for _, dv := range dvs {
-		if dv.Spec.Domain == parentHost {
-			return &dv, nil
-		}
+	if parentHostParts[1] == domain {
+		return true
 	}
 
-	// recurse up the subdomains
-	return findDomainVerification(ctx, ingress, parentHost, dvs)
+	return hostMatches(parentHostParts[1], domain)
+}
+
+func getPendingHosts(ingress *networkingv1.Ingress) (*Pending, bool, error) {
+	pendingRulesRaw, ok := ingress.Annotations[PendingCustomHostsAnnotation]
+	pending := &Pending{Rules: []networkingv1.IngressRule{}}
+
+	if !ok {
+		return nil, false, nil
+	}
+
+	err := json.Unmarshal([]byte(pendingRulesRaw), pending)
+	if err != nil {
+		return nil, false, fmt.Errorf("invalid format in annotation %s: %v", PendingCustomHostsAnnotation, err)
+	}
+
+	if pending.Rules == nil {
+		pending.Rules = make([]networkingv1.IngressRule, 0)
+	}
+
+	return pending, true, nil
+}
+
+func setPendingHosts(pending *Pending, ingress *networkingv1.Ingress) error {
+	if len(pending.Rules) == 0 {
+		delete(ingress.Annotations, PendingCustomHostsAnnotation)
+		return nil
+	}
+
+	newAnnotation, err := json.Marshal(pending)
+	if err != nil {
+		return err
+	}
+
+	ingress.Annotations[PendingCustomHostsAnnotation] = string(newAnnotation)
+	return nil
 }
 
 func removeHostsFromTLS(hostsToRemove []string, ingress *networkingv1.Ingress) {
