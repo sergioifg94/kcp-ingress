@@ -63,3 +63,4 @@ jobs:
           go-version: v1.17
       - run: make build
       - run: PATH="${PATH}:$(pwd)/bin/" make test
+      - run: make prometheus-rules-unit-test
