@@ -1,0 +1,18 @@
+[[monitoring-resources]]
+= Monitoring Resources
+
+The different montioring resources used are:
+
+- PodMonitors
+- PrometheusRules
+- GrafanaDashboards (or ConfigMaps in plain k8s)
+
+The source of truth for these resources is in `config/observability/monitoring_resources`.
+There is a make target called `gen-monitoring-resources` that takes the contents of that directory and outputs resources in the following locations:
+
+- `config/observability/kubernetes`
+- `config/observability/openshift`
+
+The output resources differ slightly to allow working with the different monitoring stack setups in plain kubernetes vs. openshift.
+This generation also allows for variable template if you want different values for things like alert thresholds.
+There is another make target called `verify-gen-monitoring-resources`, which runs in the CI job to ensure the generated files are up to date.

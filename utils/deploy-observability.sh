@@ -35,7 +35,7 @@ wait_for "./bin/kustomize build config/observability/kubernetes | kubectl apply 
 kubectl -n ${PROMETHEUS_NAMESPACE} wait --timeout=300s --for=condition=Available deployments --all
 
 # Deploy Pod Monitor for kcp-glbc
-./bin/kustomize build config/observability/kubernetes/pod_monitors | kubectl -n ${GLBC_NAMESPACE} apply -f -
+kubectl -n ${GLBC_NAMESPACE} apply -f config/observability/kubernetes/monitoring_resources/podmonitor-kcp-glbc-controller-manager.yaml
 
 # Check kcp-glbc Prometheus config
 wait_for "kubectl -n ${PROMETHEUS_NAMESPACE} get secret prometheus-k8s -o json | jq -r '.data[\"prometheus.yaml.gz\"]'| base64 -d | gunzip | grep kcp-glbc" "kcp-glbc prometheus config" "1m" "10"

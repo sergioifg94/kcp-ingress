@@ -50,6 +50,8 @@ jobs:
           go-version: v1.17
       - name: Check generate
         run: make verify-generate
+      - name: Check monitoring resources generate
+        run: make verify-gen-monitoring-resources
 
   test:
     name: test
