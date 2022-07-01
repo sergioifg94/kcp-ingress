@@ -3,9 +3,11 @@ package ingress
 import (
 	"context"
 
+	kuadrantv1 "github.com/kuadrant/kcp-glbc/pkg/apis/kuadrant/v1"
 	corev1 "k8s.io/api/core/v1"
 	networkingv1 "k8s.io/api/networking/v1"
 	"k8s.io/apimachinery/pkg/api/equality"
+	"k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/util/runtime"
 	"k8s.io/client-go/informers"
@@ -17,13 +19,25 @@ import (
 	tenancyv1alpha1 "github.com/kcp-dev/kcp/pkg/apis/tenancy/v1alpha1"
 	"github.com/kcp-dev/logicalcluster"
 
-	kuadrantv1 "github.com/kuadrant/kcp-glbc/pkg/client/kuadrant/clientset/versioned"
+	certman "github.com/jetstack/cert-manager/pkg/apis/certmanager/v1"
+	certmaninformer "github.com/jetstack/cert-manager/pkg/client/informers/externalversions"
+	certmanlister "github.com/jetstack/cert-manager/pkg/client/listers/certmanager/v1"
+	kuadrantclientv1 "github.com/kuadrant/kcp-glbc/pkg/client/kuadrant/clientset/versioned"
+	dnsrecordinformer "github.com/kuadrant/kcp-glbc/pkg/client/kuadrant/informers/externalversions"
 	"github.com/kuadrant/kcp-glbc/pkg/net"
-	"github.com/kuadrant/kcp-glbc/pkg/reconciler"
+	basereconciler "github.com/kuadrant/kcp-glbc/pkg/reconciler"
 	"github.com/kuadrant/kcp-glbc/pkg/tls"
 )
 
-const controllerName = "kcp-glbc-ingress"
+const (
+	controllerName                      = "kcp-glbc-ingress"
+	annotationIngressKey                = "kuadarant.dev/ingress-key"
+	annotationCertificateState          = "kuadrant.dev/certificate-status"
+	ANNOTATION_HCG_HOST                 = "kuadrant.dev/host.generated"
+	ANNOTATION_HEALTH_CHECK_PREFIX      = "kuadrant.experimental/health-"
+	ANNOTATION_HCG_CUSTOM_HOST_REPLACED = "kuadrant.dev/custom-hosts.replaced"
+	LABEL_HCG_MANAGED                   = "kuadrant.dev/hcg.managed"
+)
 
 // NewController returns a new Controller which reconciles Ingress.
 func NewController(config *ControllerConfig) *Controller {
@@ -36,21 +50,27 @@ func NewController(config *ControllerConfig) *Controller {
 	}
 	hostResolver = net.NewSafeHostResolver(hostResolver)
 
-	base := reconciler.NewController(controllerName, queue)
+	base := basereconciler.NewController(controllerName, queue)
 	c := &Controller{
-		Controller:            base,
-		kubeClient:            config.KubeClient,
-		certProvider:          config.CertProvider,
-		sharedInformerFactory: config.SharedInformerFactory,
-		dnsRecordClient:       config.DnsRecordClient,
-		domain:                config.Domain,
-		tracker:               newTracker(&base.Logger),
-		hostResolver:          hostResolver,
-		hostsWatcher:          net.NewHostsWatcher(&base.Logger, hostResolver, net.DefaultInterval),
-		customHostsEnabled:    config.CustomHostsEnabled,
+		Controller:               base,
+		kubeClient:               config.KubeClient,
+		certProvider:             config.CertProvider,
+		sharedInformerFactory:    config.KCPSharedInformerFactory,
+		glbcInformerFactory:      config.GlbcInformerFactory,
+		dnsRecordClient:          config.DnsRecordClient,
+		domain:                   config.Domain,
+		tracker:                  newTracker(&base.Logger),
+		hostResolver:             hostResolver,
+		hostsWatcher:             net.NewHostsWatcher(&base.Logger, hostResolver, net.DefaultInterval),
+		customHostsEnabled:       config.CustomHostsEnabled,
+		certInformerFactory:      config.CertificateInformer,
+		dnsRecordInformerFactory: config.DNSRecordInformer,
 	}
 	c.Process = c.process
 	c.hostsWatcher.OnChange = c.Enqueue
+	c.certificateLister = c.certInformerFactory.Certmanager().V1().Certificates().Lister()
+	c.indexer = c.sharedInformerFactory.Networking().V1().Ingresses().Informer().GetIndexer()
+	c.ingressLister = c.sharedInformerFactory.Networking().V1().Ingresses().Lister()
 
 	// Watch for events related to Ingresses
 	c.sharedInformerFactory.Networking().V1().Ingresses().Informer().AddEventHandler(cache.ResourceEventHandlerFuncs{
@@ -81,46 +101,163 @@ func NewController(config *ControllerConfig) *Controller {
 			c.ingressesFromService(obj)
 		},
 	})
+	// watch for certificates being addded and updated
+	c.certInformerFactory.Certmanager().V1().Certificates().Informer().AddEventHandler(cache.FilteringResourceEventHandler{
+		FilterFunc: func(obj interface{}) bool {
+			certificate, ok := obj.(*certman.Certificate)
+			if !ok {
+				return false
+			}
+			if certificate.Labels == nil {
+				return false
+			}
+			if _, ok := certificate.Labels[LABEL_HCG_MANAGED]; !ok {
+				return false
+			}
+			if _, ok := certificate.Annotations[annotationIngressKey]; ok {
+				return true
+			}
+			return true
+		},
+		Handler: cache.ResourceEventHandlerFuncs{
+			AddFunc: func(obj interface{}) {
+				certificate := obj.(*certman.Certificate)
+				certificateAddedHandler(certificate)
+			},
+			UpdateFunc: func(oldObj, newObj interface{}) {
+				oldCert := oldObj.(*certman.Certificate)
+				newCert := newObj.(*certman.Certificate)
+				if oldCert.ResourceVersion == newCert.ResourceVersion {
+					return
+				}
 
-	c.indexer = c.sharedInformerFactory.Networking().V1().Ingresses().Informer().GetIndexer()
-	c.lister = c.sharedInformerFactory.Networking().V1().Ingresses().Lister()
+				enq := certificateUpdatedHandler(oldCert, newCert)
+				if enq == enqueue(true) {
+					ingressKey := newCert.Annotations[annotationIngressKey]
+					c.enqueueIngressByKey(ingressKey)
+				}
+			},
+			DeleteFunc: func(obj interface{}) {
+				certificate := obj.(*certman.Certificate)
+				// handle metric requeue ingress if the cert is deleted and the ingress still exists
+				// covers a manual deletion of cert and will ensure a new cert is created
+				certificateDeletedHandler(certificate)
+				ingressKey := certificate.Annotations[annotationIngressKey]
+				c.enqueueIngressByKey(ingressKey)
+			},
+		},
+	})
+
+	// watch for secrets in glbc namespace.
+	// increment secret metric enqueue ingress
+	c.glbcInformerFactory.Core().V1().Secrets().Informer().AddEventHandler(cache.FilteringResourceEventHandler{
+		FilterFunc: certificateSecretFilter,
+		Handler: cache.ResourceEventHandlerFuncs{
+			AddFunc: func(obj interface{}) {
+				secret := obj.(*corev1.Secret)
+				issuer := secret.Annotations[tls.TlsIssuerAnnotation]
+				tlsCertificateSecretCount.WithLabelValues(issuer).Inc()
+				ingressKey := secret.Annotations[annotationIngressKey]
+				c.enqueueIngressByKey(ingressKey)
+			},
+			UpdateFunc: func(old, obj interface{}) {
+				secret := obj.(*corev1.Secret)
+				if old.(*corev1.Secret).ResourceVersion != obj.(*corev1.Secret).ResourceVersion {
+					ingressKey := secret.Annotations[annotationIngressKey]
+					c.enqueueIngressByKey(ingressKey)
+				}
+			},
+			DeleteFunc: func(obj interface{}) {
+				secret := obj.(*corev1.Secret)
+				issuer := secret.Annotations[tls.TlsIssuerAnnotation]
+				tlsCertificateSecretCount.WithLabelValues(issuer).Dec()
+				ingressKey := secret.Annotations[annotationIngressKey]
+				c.enqueueIngressByKey(ingressKey)
+			},
+		},
+	})
+
+	//watch for DNSRecords
+	c.dnsRecordInformerFactory.Kuadrant().V1().DNSRecords().Informer().AddEventHandler(cache.ResourceEventHandlerFuncs{
+		DeleteFunc: func(obj interface{}) {
+			//when a dns record is deleted we requeue the ingress (currently owner refs don't work in KCP)
+			dns := obj.(*kuadrantv1.DNSRecord)
+			if dns.Annotations == nil {
+				return
+			}
+			// if we have a ingress key stored we can re queue the ingresss
+			if ingressKey, ok := dns.Annotations[annotationIngressKey]; ok {
+				c.enqueueIngressByKey(ingressKey)
+			}
+		},
+		UpdateFunc: func(oldObj, newObj interface{}) {
+			if oldObj.(*kuadrantv1.DNSRecord).ResourceVersion != newObj.(*kuadrantv1.DNSRecord).ResourceVersion {
+				ingressKey := newObj.(*kuadrantv1.DNSRecord).Annotations[annotationIngressKey]
+				c.enqueueIngressByKey(ingressKey)
+			}
+		},
+	})
 
 	return c
 }
 
 type ControllerConfig struct {
-	KubeClient            kubernetes.ClusterInterface
-	DnsRecordClient       kuadrantv1.ClusterInterface
-	SharedInformerFactory informers.SharedInformerFactory
-	Domain                string
-	CertProvider          tls.Provider
-	HostResolver          net.HostResolver
-	CustomHostsEnabled    bool
+	KubeClient      kubernetes.ClusterInterface
+	DnsRecordClient kuadrantclientv1.ClusterInterface
+	// informer for
+	KCPSharedInformerFactory informers.SharedInformerFactory
+	CertificateInformer      certmaninformer.SharedInformerFactory
+	GlbcInformerFactory      informers.SharedInformerFactory
+	DNSRecordInformer        dnsrecordinformer.SharedInformerFactory
+	Domain                   string
+	CertProvider             tls.Provider
+	HostResolver             net.HostResolver
+	CustomHostsEnabled       bool
 }
 
 type Controller struct {
-	*reconciler.Controller
-	kubeClient            kubernetes.ClusterInterface
-	sharedInformerFactory informers.SharedInformerFactory
-	dnsRecordClient       kuadrantv1.ClusterInterface
-	indexer               cache.Indexer
-	lister                networkingv1lister.IngressLister
-	certProvider          tls.Provider
-	domain                string
-	tracker               *tracker
-	hostResolver          net.HostResolver
-	hostsWatcher          *net.HostsWatcher
-	customHostsEnabled    bool
+	*basereconciler.Controller
+	kubeClient               kubernetes.ClusterInterface
+	sharedInformerFactory    informers.SharedInformerFactory
+	dnsRecordClient          kuadrantclientv1.ClusterInterface
+	indexer                  cache.Indexer
+	ingressLister            networkingv1lister.IngressLister
+	certificateLister        certmanlister.CertificateLister
+	certProvider             tls.Provider
+	domain                   string
+	tracker                  *tracker
+	hostResolver             net.HostResolver
+	hostsWatcher             *net.HostsWatcher
+	customHostsEnabled       bool
+	certInformerFactory      certmaninformer.SharedInformerFactory
+	glbcInformerFactory      informers.SharedInformerFactory
+	dnsRecordInformerFactory dnsrecordinformer.SharedInformerFactory
+}
+
+func (c *Controller) enqueueIngressByKey(key string) {
+	ingress, err := c.getIngressByKey(key)
+	//no need to handle not found as the ingress is gone
+	if err != nil {
+		if errors.IsNotFound(err) {
+			return
+		}
+		runtime.HandleError(err)
+		return
+	}
+	c.Enqueue(ingress)
 }
 
 func (c *Controller) process(ctx context.Context, key string) error {
 	object, exists, err := c.indexer.GetByKey(key)
 	if err != nil {
+		if errors.IsNotFound(err) {
+			c.tracker.deleteIngress(key)
+			return nil
+		}
 		return err
 	}
 
 	if !exists {
-		c.Logger.Info("Ingress was deleted", "key", key)
 		// The Ingress has been deleted, so we remove any Ingress to Service tracking.
 		c.tracker.deleteIngress(key)
 		return nil
@@ -128,7 +265,6 @@ func (c *Controller) process(ctx context.Context, key string) error {
 
 	current := object.(*networkingv1.Ingress)
 	target := current.DeepCopy()
-
 	err = c.reconcile(ctx, target)
 	if err != nil {
 		return err
@@ -160,4 +296,15 @@ func (c *Controller) ingressesFromService(obj interface{}) {
 		c.Logger.Info("Enqueuing Ingress reconciliation via tracked Service", "ingress", ingress, "service", service)
 		c.Queue.Add(ingress)
 	}
+}
+
+func (c *Controller) getIngressByKey(key string) (*networkingv1.Ingress, error) {
+	i, exists, err := c.indexer.GetByKey(key)
+	if err != nil {
+		return nil, err
+	}
+	if !exists {
+		return nil, errors.NewNotFound(networkingv1.Resource("ingress"), key)
+	}
+	return i.(*networkingv1.Ingress), nil
 }

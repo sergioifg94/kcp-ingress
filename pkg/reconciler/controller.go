@@ -46,7 +46,7 @@ func NewController(name string, queue workqueue.RateLimitingInterface) *Controll
 }
 
 func (c *Controller) Enqueue(obj interface{}) {
-	key, err := cache.MetaNamespaceKeyFunc(obj)
+	key, err := cache.DeletionHandlingMetaNamespaceKeyFunc(obj)
 	if err != nil {
 		runtime.HandleError(err)
 		return

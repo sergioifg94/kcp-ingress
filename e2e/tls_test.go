@@ -33,7 +33,7 @@ import (
 
 	. "github.com/kuadrant/kcp-glbc/e2e/support"
 	kuadrantv1 "github.com/kuadrant/kcp-glbc/pkg/apis/kuadrant/v1"
-	kuadrantcluster "github.com/kuadrant/kcp-glbc/pkg/cluster"
+	ingressController "github.com/kuadrant/kcp-glbc/pkg/reconciler/ingress"
 	"github.com/kuadrant/kcp-glbc/pkg/util/env"
 )
 
@@ -92,8 +92,8 @@ func TestTLS(t *testing.T) {
 	// Wait until the Ingress is reconciled with the load balancer Ingresses
 	test.Eventually(Ingress(test, namespace, name)).WithTimeout(TestTimeoutMedium).Should(And(
 		WithTransform(Annotations, And(
-			HaveKey(kuadrantcluster.ANNOTATION_HCG_HOST),
-			HaveKey(kuadrantcluster.ANNOTATION_HCG_CUSTOM_HOST_REPLACED)),
+			HaveKey(ingressController.ANNOTATION_HCG_HOST),
+			HaveKey(ingressController.ANNOTATION_HCG_CUSTOM_HOST_REPLACED)),
 		),
 		WithTransform(LoadBalancerIngresses, HaveLen(1)),
 		Satisfy(HostsEqualsToGeneratedHost),
@@ -101,15 +101,14 @@ func TestTLS(t *testing.T) {
 
 	// Retrieve the Ingress
 	ingress := GetIngress(test, namespace, name)
-	hostname := ingress.Annotations[kuadrantcluster.ANNOTATION_HCG_HOST]
-	context, err := kuadrantcluster.NewControlObjectMapper(ingress)
-	test.Expect(err).NotTo(HaveOccurred())
+	hostname := ingress.Annotations[ingressController.ANNOTATION_HCG_HOST]
+	secretName := ingressController.CertificateName(ingress)
 
 	// Check the Ingress TLS spec
 	test.Expect(ingress).To(WithTransform(IngressTLS, ConsistOf(
 		networkingv1.IngressTLS{
 			Hosts:      []string{hostname},
-			SecretName: context.Name(),
+			SecretName: secretName,
 		}),
 	))
 
@@ -192,7 +191,7 @@ func TestTLS(t *testing.T) {
 		})
 	}
 
-	test.Eventually(Secret(test, namespace, context.Name())).
+	test.Eventually(Secret(test, namespace, secretName)).
 		WithTimeout(TestTimeoutMedium).
 		Should(WithTransform(Certificate, PointTo(MatchFields(IgnoreExtras, fields))))
 }

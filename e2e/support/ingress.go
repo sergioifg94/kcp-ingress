@@ -28,7 +28,7 @@ import (
 
 	"github.com/kcp-dev/logicalcluster"
 
-	kuadrantcluster "github.com/kuadrant/kcp-glbc/pkg/cluster"
+	ingressController "github.com/kuadrant/kcp-glbc/pkg/reconciler/ingress"
 )
 
 func GetIngress(t Test, namespace *corev1.Namespace, name string) *networkingv1.Ingress {
@@ -80,7 +80,7 @@ func IngressTLS(ingress *networkingv1.Ingress) []networkingv1.IngressTLS {
 func HostsEqualsToGeneratedHost(ingress *networkingv1.Ingress) bool {
 	equals := true
 	for _, rule := range ingress.Spec.Rules {
-		if rule.Host != Annotations(ingress)[kuadrantcluster.ANNOTATION_HCG_HOST] {
+		if rule.Host != Annotations(ingress)[ingressController.ANNOTATION_HCG_HOST] {
 			equals = false
 		}
 	}
@@ -89,7 +89,7 @@ func HostsEqualsToGeneratedHost(ingress *networkingv1.Ingress) bool {
 
 func HasTLSSecretForGeneratedHost(secret string) func(ingress *networkingv1.Ingress) bool {
 	return func(ingress *networkingv1.Ingress) bool {
-		hostname := ingress.Annotations[kuadrantcluster.ANNOTATION_HCG_HOST]
+		hostname := ingress.Annotations[ingressController.ANNOTATION_HCG_HOST]
 		for _, tls := range ingress.Spec.TLS {
 			if len(tls.Hosts) == 1 && tls.Hosts[0] == hostname && tls.SecretName == secret {
 				return true
