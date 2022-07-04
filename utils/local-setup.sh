@@ -118,7 +118,7 @@ createWorkloadCluster() {
   kubectl config use-context kind-${1}
 
   echo "Deploying Ingress controller to ${1}"
-  VERSION=$(curl https://raw.githubusercontent.com/kubernetes/ingress-nginx/master/stable.txt)
+  VERSION=controller-v1.2.1
   curl https://raw.githubusercontent.com/kubernetes/ingress-nginx/"${VERSION}"/deploy/static/provider/kind/deploy.yaml | sed "s/--publish-status-address=localhost/--report-node-internal-ip-address/g" | kubectl apply -f -
   kubectl annotate ingressclass nginx "ingressclass.kubernetes.io/is-default-class=true"
   echo "Waiting for deployments to be ready ..."
