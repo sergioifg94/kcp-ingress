@@ -45,7 +45,7 @@ spec:
 ### No hosts specified
 You can define an Ingress with a rule block that has an empty host field. When GLBC sees a rule block with an empty host field, a managed host will be generated and injected into the rule block. 
 
-There should be only be one rule block with an empty value. If there are multiple rules blocks with empty values, by default the same managed host will be injected into each rule block within a given Ingress that as no host specified. It is the responsibility of the end user to ensure any path rules within those blocks do not conflict. 
+There should be only one rule block with an empty value. If there are multiple rules blocks with empty values, by default the same managed host will be injected into each rule block within a given Ingress that has no host specified. It is the responsibility of the end user to ensure any path rules within those blocks do not conflict. 
 
 If you have a need for multiple rules blocks with no specified host, it is suggested you create multiple Ingress objects. Each Ingress object will receive its own unique managed host.
 
