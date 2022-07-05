@@ -109,4 +109,4 @@ You can define multiple backends just as you would for a regular Ingress with th
 ## TLS Support
 
 By default GLBC will generate a valid certificate for the managed host and inject this certificate via a secret into the Ingress object.
-If you have added a custom tls section for a custom domain, this will be removed initially pending a domain verification.Once your custom domain is verified, the tls section will be restored along side the managed domain rules block. GLBC wont do anything specific with the secret you created to contain the certificate, it will only work with the definition of the Ingress Spec
+If you have added a custom tls section for a custom domain, this will be removed initially pending a domain verification. Once your custom domain is verified, the tls section will be restored along side the managed domain rules block. GLBC wont do anything specific with the secret you created to contain the certificate, it will only work with the definition of the Ingress Spec.
