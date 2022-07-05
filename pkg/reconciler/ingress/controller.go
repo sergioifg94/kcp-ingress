@@ -58,7 +58,11 @@ func NewController(config *ControllerConfig) *Controller {
 			ingressObjectTotal.Inc()
 			c.Enqueue(obj)
 		},
-		UpdateFunc: func(_, obj interface{}) { c.Enqueue(obj) },
+		UpdateFunc: func(old, obj interface{}) {
+			if old.(metav1.Object).GetResourceVersion() != obj.(metav1.Object).GetResourceVersion() {
+				c.Enqueue(obj)
+			}
+		},
 		DeleteFunc: func(obj interface{}) {
 			ingressObjectTotal.Dec()
 			c.Enqueue(obj)
@@ -73,7 +77,9 @@ func NewController(config *ControllerConfig) *Controller {
 				c.ingressesFromService(obj)
 			}
 		},
-		DeleteFunc: func(obj interface{}) { c.ingressesFromService(obj) },
+		DeleteFunc: func(obj interface{}) {
+			c.ingressesFromService(obj)
+		},
 	})
 
 	c.indexer = c.sharedInformerFactory.Networking().V1().Ingresses().Informer().GetIndexer()
