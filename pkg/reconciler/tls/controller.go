@@ -11,6 +11,7 @@ import (
 	"k8s.io/client-go/tools/cache"
 	"k8s.io/client-go/util/workqueue"
 
+	"github.com/kuadrant/kcp-glbc/pkg/cluster"
 	"github.com/kuadrant/kcp-glbc/pkg/reconciler"
 )
 
@@ -45,6 +46,9 @@ func NewController(config *ControllerConfig) (*Controller, error) {
 	c.glbcSecretInformer.Informer().AddEventHandler(cache.ResourceEventHandlerFuncs{
 		AddFunc: func(obj interface{}) {
 			secret := obj.(*corev1.Secret)
+			if _, ok := secret.Labels[cluster.LABEL_HCG_MANAGED]; !ok {
+				return
+			}
 			issuer, hasIssuer := secret.Annotations[tlsIssuerAnnotation]
 			if hasIssuer {
 				tlsCertificateSecretCount.WithLabelValues(issuer).Inc()
@@ -52,12 +56,19 @@ func NewController(config *ControllerConfig) (*Controller, error) {
 			c.Enqueue(obj)
 		},
 		UpdateFunc: func(old, obj interface{}) {
+			secret := obj.(*corev1.Secret)
+			if _, ok := secret.Labels[cluster.LABEL_HCG_MANAGED]; !ok {
+				return
+			}
 			if old.(*corev1.Secret).ResourceVersion != obj.(*corev1.Secret).ResourceVersion {
 				c.Enqueue(obj)
 			}
 		},
 		DeleteFunc: func(obj interface{}) {
 			secret := obj.(*corev1.Secret)
+			if _, ok := secret.Labels[cluster.LABEL_HCG_MANAGED]; !ok {
+				return
+			}
 			issuer, hasIssuer := secret.Annotations[tlsIssuerAnnotation]
 			if hasIssuer {
 				tlsCertificateSecretCount.WithLabelValues(issuer).Dec()
