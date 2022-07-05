@@ -102,7 +102,7 @@ spec:
 
 ## Backends
 
-You can define multiple backends as just as you would for a regular Ingress with the following caveats. The limitation here is that in the context of KCP, each of these targeted backends within a single Ingress object have to be placed on the same cluster for an Ingress with  multiple backends to work as intended. This is the default with KCP scheduling currently. Scheduling happens at the namespace level. So there should be no issues. 
+You can define multiple backends just as you would for a regular Ingress with the following caveats. The limitation here is that in the context of KCP, each of these targeted backends within a single Ingress object have to be placed on the same cluster for an Ingress with multiple backends to work as intended. This is the default with KCP scheduling currently. Scheduling happens at the namespace level. So there should be no issues. 
 
 
 
