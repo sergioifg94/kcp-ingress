@@ -4,6 +4,8 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"github.com/kuadrant/kcp-glbc/pkg/util/slice"
+	"github.com/kuadrant/kcp-glbc/pkg/util/workloadMigration"
 	"strconv"
 	"strings"
 
@@ -22,7 +24,6 @@ import (
 	"github.com/kuadrant/kcp-glbc/pkg/cluster"
 	"github.com/kuadrant/kcp-glbc/pkg/dns/aws"
 	"github.com/kuadrant/kcp-glbc/pkg/util/metadata"
-	"github.com/kuadrant/kcp-glbc/pkg/util/slice"
 )
 
 const (
@@ -31,6 +32,7 @@ const (
 )
 
 func (c *Controller) reconcile(ctx context.Context, ingress *networkingv1.Ingress) error {
+	workloadMigration.Process(ingress, c.Queue)
 	if ingress.DeletionTimestamp != nil && !ingress.DeletionTimestamp.IsZero() {
 		c.Logger.Info("Deleting Ingress", "ingress", ingress)
 
@@ -137,11 +139,24 @@ func (c *Controller) ensureDNS(ctx context.Context, ingress *networkingv1.Ingres
 		return nil
 	}
 
-	if len(ingress.Status.LoadBalancer.Ingress) > 0 {
+	ingressStatus := &networkingv1.IngressStatus{}
+	var activeHosts []string
+	for k, v := range ingress.Annotations {
 		key := ingressKey(ingress)
-		var activeHosts []string
+		if !strings.Contains(k, workloadMigration.WorkloadStatusAnnotation) {
+			continue
+		}
+		annotationParts := strings.Split(k, "/")
+		//only add IP record if cluster is  targeted
+		if !metadata.HasLabel(ingress, workloadMigration.WorkloadTargetLabel+"/"+annotationParts[1]) {
+			continue
+		}
+		err := json.Unmarshal([]byte(v), ingressStatus)
+		if err != nil {
+			return err
+		}
 		// Start watching for address changes in the LBs hostnames
-		for _, lbs := range ingress.Status.LoadBalancer.Ingress {
+		for _, lbs := range ingressStatus.LoadBalancer.Ingress {
 			if lbs.Hostname != "" {
 				c.hostsWatcher.StartWatching(ctx, key, lbs.Hostname)
 				activeHosts = append(activeHosts, lbs.Hostname)
@@ -154,41 +169,43 @@ func (c *Controller) ensureDNS(ctx context.Context, ingress *networkingv1.Ingres
 				c.hostsWatcher.StopWatching(key, watcher.Host)
 			}
 		}
+	}
 
-		// Attempt to retrieve the existing DNSRecord for this Ingress
-		existing, err := c.dnsRecordClient.Cluster(logicalcluster.From(ingress)).KuadrantV1().DNSRecords(ingress.Namespace).Get(ctx, ingress.Name, metav1.GetOptions{})
-		// If it doesn't exist, create it
-		if err != nil && errors.IsNotFound(err) {
-			// Create the DNSRecord object
-			record := &v1.DNSRecord{}
-			if err := c.setDnsRecordFromIngress(ctx, ingress, record); err != nil {
-				return err
-			}
-			// Create the resource in the cluster
-			existing, err = c.dnsRecordClient.Cluster(logicalcluster.From(record)).KuadrantV1().DNSRecords(record.Namespace).Create(ctx, record, metav1.CreateOptions{})
-			if err != nil {
-				return err
-			}
-
-			// metric to observe the ingress admission time
-			ingressObjectTimeToAdmission.Observe(existing.CreationTimestamp.Time.Sub(ingress.CreationTimestamp.Time).Seconds())
-		} else if err == nil {
-			// If it does exist, update it
-			if err := c.setDnsRecordFromIngress(ctx, ingress, existing); err != nil {
-				return err
-			}
-
-			data, err := json.Marshal(existing)
-			if err != nil {
-				return err
-			}
-			_, err = c.dnsRecordClient.Cluster(logicalcluster.From(existing)).KuadrantV1().DNSRecords(existing.Namespace).Patch(ctx, existing.Name, types.ApplyPatchType, data, metav1.PatchOptions{FieldManager: manager, Force: pointer.Bool(true)})
-			if err != nil {
-				return err
-			}
-		} else {
+	// Attempt to retrieve the existing DNSRecord for this Ingress
+	existing, err := c.dnsRecordClient.Cluster(logicalcluster.From(ingress)).KuadrantV1().DNSRecords(ingress.Namespace).Get(ctx, ingress.Name, metav1.GetOptions{})
+	// If it doesn't exist, create it
+	if err != nil && errors.IsNotFound(err) {
+		// Create the DNSRecord object
+		record := &v1.DNSRecord{}
+		if err := c.setDnsRecordFromIngress(ctx, ingress, record); err != nil {
 			return err
 		}
+		// Create the resource in the cluster
+		existing, err = c.dnsRecordClient.Cluster(logicalcluster.From(record)).KuadrantV1().DNSRecords(record.Namespace).Create(ctx, record, metav1.CreateOptions{})
+		if err != nil {
+			return err
+		}
+
+		// metric to observe the ingress admission time
+		ingressObjectTimeToAdmission.
+			Observe(existing.CreationTimestamp.Time.Sub(ingress.CreationTimestamp.Time).Seconds())
+
+	} else if err == nil {
+		// If it does exist, update it
+		if err := c.setDnsRecordFromIngress(ctx, ingress, existing); err != nil {
+			return err
+		}
+
+		data, err := json.Marshal(existing)
+		if err != nil {
+			return err
+		}
+		_, err = c.dnsRecordClient.Cluster(logicalcluster.From(existing)).KuadrantV1().DNSRecords(existing.Namespace).Patch(ctx, existing.Name, types.ApplyPatchType, data, metav1.PatchOptions{FieldManager: manager, Force: pointer.Bool(true)})
+		if err != nil {
+			return err
+		}
+	} else {
+		return err
 	}
 
 	return nil
@@ -225,7 +242,7 @@ func (c *Controller) setDnsRecordFromIngress(ctx context.Context, ingress *netwo
 }
 
 func (c *Controller) setEndpointsFromIngress(ctx context.Context, ingress *networkingv1.Ingress, dnsRecord *v1.DNSRecord) error {
-	targets, err := c.targetsFromIngressStatus(ctx, ingress.Status)
+	targets, err := c.targetsFromIngress(ctx, ingress)
 	if err != nil {
 		return err
 	}
@@ -274,24 +291,43 @@ func (c *Controller) setEndpointsFromIngress(ctx context.Context, ingress *netwo
 }
 
 // targetsFromIngressStatus returns a map of all the IPs associated with a single ingress(cluster)
-func (c *Controller) targetsFromIngressStatus(ctx context.Context, status networkingv1.IngressStatus) (map[string][]string, error) {
-	var targets = make(map[string][]string, len(status.LoadBalancer.Ingress))
+func (c *Controller) targetsFromIngress(ctx context.Context, ingress *networkingv1.Ingress) (map[string][]string, error) {
+	targets := map[string][]string{}
 
-	for _, lb := range status.LoadBalancer.Ingress {
-		if lb.IP != "" {
-			targets[lb.IP] = []string{lb.IP}
+	ingressStatus := &networkingv1.IngressStatus{}
+	for k, v := range ingress.Annotations {
+		//skip non-status annotations
+		if !strings.Contains(k, workloadMigration.WorkloadStatusAnnotation) {
+			continue
 		}
-		if lb.Hostname != "" {
-			ips, err := c.hostResolver.LookupIPAddr(ctx, lb.Hostname)
-			if err != nil {
-				return nil, err
+		//only add targets for targeted cluster
+		annotationParts := strings.Split(k, "/")
+		c.Logger.Info("looking for cluster placement label", "cluster", annotationParts[1])
+		if !metadata.HasLabel(ingress, workloadMigration.WorkloadTargetLabel+"/"+annotationParts[1]) {
+			continue
+		}
+		err := json.Unmarshal([]byte(v), ingressStatus)
+		if err != nil {
+			return nil, err
+		}
+		for _, lb := range ingressStatus.LoadBalancer.Ingress {
+			if lb.IP != "" {
+				targets[lb.IP] = []string{lb.IP}
 			}
-			targets[lb.Hostname] = []string{}
-			for _, ip := range ips {
-				targets[lb.Hostname] = append(targets[lb.Hostname], ip.IP.String())
+			if lb.Hostname != "" {
+				ips, err := c.hostResolver.LookupIPAddr(ctx, lb.Hostname)
+				if err != nil {
+					return nil, err
+				}
+				targets[lb.Hostname] = []string{}
+				for _, ip := range ips {
+					targets[lb.Hostname] = append(targets[lb.Hostname], ip.IP.String())
+				}
 			}
 		}
+
 	}
+
 	return targets, nil
 }
 

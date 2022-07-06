@@ -55,7 +55,7 @@ func NewController(config *ControllerConfig) (*Controller, error) {
 	c.sharedInformerFactory.Kuadrant().V1().DNSRecords().Informer().AddEventHandler(cache.ResourceEventHandlerFuncs{
 		AddFunc: func(obj interface{}) { c.Enqueue(obj) },
 		UpdateFunc: func(old, obj interface{}) {
-			if old.(*v1.DNSRecord).Generation != obj.(*v1.DNSRecord).Generation {
+			if old.(*v1.DNSRecord).ResourceVersion != obj.(*v1.DNSRecord).ResourceVersion {
 				c.Enqueue(obj)
 			}
 		},
@@ -91,7 +91,6 @@ func (c *Controller) process(ctx context.Context, key string) error {
 	}
 
 	if !exists {
-		c.Logger.Info("DNSRecord was deleted", "key", key)
 		return nil
 	}
 
@@ -115,10 +114,8 @@ func (c *Controller) createDNSProvider(dnsProviderName string) (dns.Provider, er
 	var dnsError error
 	switch dnsProviderName {
 	case "aws":
-		c.Logger.Info("Creating DNS provider", "provider", "aws")
 		dnsProvider, dnsError = newAWSDNSProvider()
 	default:
-		c.Logger.Info("Creating DNS provider", "provider", "fake")
 		dnsProvider = &dns.FakeProvider{}
 	}
 	return dnsProvider, dnsError

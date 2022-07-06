@@ -193,20 +193,17 @@ for cluster in $CLUSTERS; do
   port443=$((port443 + 1))
 done
 KUBECONFIG=.kcp/admin.kubeconfig kubectl wait --timeout=300s --for=condition=Ready=true workloadclusters --all
-## ToDo Remove location, do we even need it?
-#KUBECONFIG=.kcp/admin.kubeconfig kubectl apply -f ./utils/kcp-contrib/location.yaml
 
 #6. Switch to user workspace
 KUBECONFIG=${KUBECONFIG_GLBC_USER} ${KUBECTL_KCP_BIN} workspace use "root:default:kcp-glbc-user"
 kubectl --kubeconfig=${KUBECONFIG_GLBC_USER} label namespace default experimental.workloads.kcp.dev/scheduling-disabled="true"
 
-#kubectl --kubeconfig=.kcp/admin.kubeconfig create namespace demo --dry-run=client -o yaml | kubectl --kubeconfig=.kcp/admin.kubeconfig apply -f -
-#kubectl --kubeconfig=.kcp/admin.kubeconfig label namespace demo experimental.workloads.kcp.dev/scheduling-disabled="true" --overwrite
+#disable automatic scheduling
+kubectl --kubeconfig=.kcp/admin.kubeconfig label namespace default experimental.workload.kcp.dev/scheduling-disabled="true"
+kubectl --kubeconfig=.kcp/admin.kubeconfig annotate namespace default scheduling.kcp.dev/placement-
 
-kubectl --kubeconfig=.kcp/admin.kubeconfig label secret $(kubectl --kubeconfig=.kcp/admin.kubeconfig get secrets -o=jsonpath='{.items[?(@..annotations.kubernetes\.io/service-account\.name=="default")].metadata.name}') state.internal.workload.kcp.dev/kcp-cluster-1=Sync state.internal.workload.kcp.dev/kcp-cluster-2=Sync --overwrite
-kubectl --kubeconfig=.kcp/admin.kubeconfig label configmap kube-root-ca.crt state.internal.workload.kcp.dev/kcp-cluster-1=Sync state.internal.workload.kcp.dev/kcp-cluster-2=Sync --overwrite
-kubectl --kubeconfig=.kcp/admin.kubeconfig label namespace default state.internal.workload.kcp.dev/kcp-cluster-1=Sync state.internal.workload.kcp.dev/kcp-cluster-2=Sync --overwrite
-
+#create DNS record CRD
+kubectl --kubeconfig=.kcp/admin.kubeconfig  create -f ${SCRIPT_DIR}/../config/crd/bases/kuadrant.dev_dnsrecords.yaml
 
 echo ""
 echo "KCP PID          : ${KCP_PID}"

@@ -192,7 +192,7 @@ func TestMetrics(t *testing.T) {
 	test.Expect(zoneID).NotTo(BeNil())
 
 	// Check a DNSRecord for the Ingress is updated with the expected Spec
-	test.Eventually(DNSRecord(test, namespace, name)).Should(And(
+	test.Eventually(DNSRecord(test, namespace, name)).WithTimeout(TestTimeoutLong).Should(And(
 		WithTransform(DNSRecordEndpoints, HaveLen(1)),
 		WithTransform(DNSRecordEndpoints, ContainElement(MatchFieldsP(IgnoreExtras,
 			Fields{
