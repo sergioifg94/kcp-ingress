@@ -1,3 +1,3 @@
-let AlertSeverity = ./../AlertSeverity/package.dhall
+let AlertSeverity = ../AlertSeverity/package.dhall
 
 in  { severity = AlertSeverity.Type.Critical }

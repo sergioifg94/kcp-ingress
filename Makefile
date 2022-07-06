@@ -236,6 +236,7 @@ $(DHALL):
 	curl -L $(DHALL_BINARY) | tar --exclude='./share' --extract --bzip2
 
 DHALL_SOURCE_DIR := config/observability/monitoring_resources
+DHALL_SOURCE_FILES=$(shell find $(DHALL_SOURCE_DIR) -type f -name "*.dhall")
 DHALL_COMMON_SOURCE_DIR := $(DHALL_SOURCE_DIR)/common
 DHALL_K8S_SOURCE_DIR := $(DHALL_SOURCE_DIR)/kubernetes
 DHALL_OPENSHIFT_SOURCE_DIR := $(DHALL_SOURCE_DIR)/openshift
@@ -244,9 +245,12 @@ DHALL_OPENSHIFT_TARGET_DIR := config/observability/openshift/monitoring_resource
 DHALL_K8S_TARGETS := $(addprefix $(DHALL_K8S_TARGET_DIR)/,$(patsubst %.dhall,%.yaml,$(shell ls $(DHALL_COMMON_SOURCE_DIR)/*.dhall | xargs -n 1 basename))) $(addprefix $(DHALL_K8S_TARGET_DIR)/,$(patsubst %.dhall,%.yaml,$(shell ls $(DHALL_K8S_SOURCE_DIR)/*.dhall | xargs -n 1 basename)))
 DHALL_OPENSHIFT_TARGETS := $(addprefix $(DHALL_OPENSHIFT_TARGET_DIR)/,$(patsubst %.dhall,%.yaml,$(shell ls $(DHALL_COMMON_SOURCE_DIR)/*.dhall | xargs -n 1 basename))) $(addprefix $(DHALL_OPENSHIFT_TARGET_DIR)/,$(patsubst %.dhall,%.yaml,$(shell ls $(DHALL_OPENSHIFT_SOURCE_DIR)/*.dhall | xargs -n 1 basename)))
 
+.PHONY: dhall-format
+dhall-format: dhall
+	$(DHALL) lint $(DHALL_SOURCE_FILES)
+	$(DHALL) format $(DHALL_SOURCE_FILES)
+
 define GENERATE_DHALL
-	$(DHALL) lint $<
-	$(DHALL) format $<
 	$(DHALL_TO_YAML) --generated-comment --file $< --output $@
 endef
 
@@ -281,7 +285,7 @@ touch-monitoring-files:
 
 # Generate monitoring resources for prometheus etc... 
 .PHONY: gen-monitoring-resources
-gen-monitoring-resources: touch-monitoring-files dhall ${DHALL_K8S_TARGETS} ${DHALL_OPENSHIFT_TARGETS}
+gen-monitoring-resources: touch-monitoring-files dhall dhall-format ${DHALL_K8S_TARGETS} ${DHALL_OPENSHIFT_TARGETS}
 
 # Ensure the generated monitoring resources are the latest
 .PHONY: verify-gen-monitoring-resources

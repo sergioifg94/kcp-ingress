@@ -1,4 +1,4 @@
-let TimeUnit = ./../TimeUnit/package.dhall
+let TimeUnit = ../TimeUnit/package.dhall
 
 let Duration
     : Type
