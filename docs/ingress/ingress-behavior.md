@@ -28,7 +28,7 @@ While there are some annotations created by GLBC, the main interaction points ar
 
 ### The Host Field
 
-This is the main field that the GLBC interacts with. By default for each defined rules block withn an Ingress, the GLBC will set the host field to be a managed host.
+This is the main field that the GLBC interacts with. By default for each defined rules block within an Ingress, the GLBC will set the host field to be a managed host.
 
 ```
 apiVersion: networking.k8s.io/v1
