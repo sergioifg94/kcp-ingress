@@ -2,6 +2,7 @@ package ingress
 
 import (
 	"context"
+	"encoding/json"
 	"strings"
 
 	v1 "github.com/kuadrant/kcp-glbc/pkg/apis/kuadrant/v1"
@@ -89,9 +90,9 @@ func NewController(config *ControllerConfig) *Controller {
 	})
 
 	c.kuadrantSharedInformerFactory.Kuadrant().V1().DomainVerifications().Informer().AddEventHandler(cache.ResourceEventHandlerFuncs{
-		AddFunc:    c.ingressesFromDomainVerification,
-		UpdateFunc: func(_, obj interface{}) { c.ingressesFromDomainVerification(obj) },
-		DeleteFunc: c.ingressesFromDomainVerification,
+		AddFunc:    c.enqueueIngresses(c.ingressesFromDomainVerification),
+		UpdateFunc: c.enqueueIngressesFromUpdate(c.ingressesFromDomainVerification),
+		DeleteFunc: c.enqueueIngresses(c.ingressesFromDomainVerification),
 	})
 
 	c.indexer = c.sharedInformerFactory.Networking().V1().Ingresses().Informer().GetIndexer()
@@ -176,53 +177,58 @@ func (c *Controller) ingressesFromService(obj interface{}) {
 	}
 }
 
-// ingressesFromService enqueues all the related ingresses for a given service when the service is changed.
-func (c *Controller) ingressesFromDomainVerification(obj interface{}) {
+func (c *Controller) ingressesFromDomainVerification(obj interface{}) ([]*networkingv1.Ingress, error) {
 	dv := obj.(*v1.DomainVerification)
 	domain := strings.ToLower(strings.TrimSpace(dv.Spec.Domain))
-	c.Logger.Info("finding ingresses based on dv", "domain", domain)
+	c.Logger.V(4).Info("finding ingresses based on dv", "domain", domain)
 
 	// no actions to take on ingresses if domains is still not verified yet
 	if !dv.Status.Verified {
-		c.Logger.Info("dv not verified, exiting", "verified", dv.Status.Verified)
-		return
+		c.Logger.V(4).Info("dv not verified, exiting", "verified", dv.Status.Verified)
+		return nil, nil
 	}
 
 	// find all ingresses with pending hosts that contain this domains
 	ingressList, err := c.lister.Ingresses("").List(labels.Everything())
 	if err != nil {
-		runtime.HandleError(err)
-		return
+		return nil, err
 	}
+
+	ingressesToEnqueue := []*networkingv1.Ingress{}
 
 	for _, ingress := range ingressList {
 		ingressNamespaceName := ingress.Namespace + "/" + ingress.Name
-		c.Logger.Info("checking for pending  host", "ingress", ingressNamespaceName)
+		c.Logger.V(4).Info("checking for pending  host", "ingress", ingressNamespaceName)
 
-		pending, ok, err := getPendingHosts(ingress)
-		if err != nil {
-			c.Logger.Info("error retrieving pending hosts. Skipping", err)
-			continue
-		}
-		if !ok || pending.Rules == nil {
+		generatedRulesAnnotation, ok := ingress.Annotations[GeneratedRulesAnnotation]
+		if !ok {
 			continue
 		}
 
-		c.Logger.Info("got pending hosts", "pendingHosts", pending.Rules)
-		for _, pendingHost := range pending.Rules {
-			if !hostMatches(pendingHost.Host, domain) {
-				c.Logger.Info("not enqueueing ingress", "ingress", ingressNamespaceName)
+		var generatedRules map[string]int
+		if err := json.Unmarshal([]byte(generatedRulesAnnotation), &generatedRules); err != nil {
+			return nil, err
+		}
+
+	PotentialPendingHost:
+		for potentialPending := range generatedRules {
+			if !hostMatches(potentialPending, domain) {
 				continue
+			}
+
+			// If the ingress already has a rule with this domain,
+			// it means it has been already verified. Do not
+			// enqueue
+			for _, rule := range ingress.Spec.Rules {
+				if rule.Host == potentialPending {
+					continue PotentialPendingHost
+				}
 			}
 
 			c.Logger.Info("Enqueuing Ingress reconciliation via domains verification", "ingress", ingressNamespaceName, "domain", domain)
-			ingressKey, err := cache.MetaNamespaceKeyFunc(ingress)
-			if err != nil {
-				c.Logger.Error(err, "error queueing ingress", "ingress", ingressNamespaceName)
-				continue
-			}
-
-			c.Queue.Add(ingressKey)
+			ingressesToEnqueue = append(ingressesToEnqueue, ingress)
 		}
 	}
+
+	return ingressesToEnqueue, nil
 }

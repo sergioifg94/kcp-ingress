@@ -26,9 +26,9 @@ import (
 )
 
 const (
-	manager                      = "kcp-ingress"
-	cascadeCleanupFinalizer      = "kcp.dev/cascade-cleanup"
-	PendingCustomHostsAnnotation = "kuadrant.dev/custom-hosts.pending"
+	manager                  = "kcp-ingress"
+	cascadeCleanupFinalizer  = "kcp.dev/cascade-cleanup"
+	GeneratedRulesAnnotation = "kuadrant.dev/custom-hosts.generated"
 )
 
 type Pending struct {
@@ -350,12 +350,31 @@ func (c *Controller) processCustomHostValidation(ctx context.Context, ingress *n
 		return err
 	}
 
-	var unverifiedRules []networkingv1.IngressRule
 	var hosts []string
 
-	var preservedRules []networkingv1.IngressRule
+	preservedRules := make([]networkingv1.IngressRule, 0)
 
-	// find any rules in the spec that are for hosts that are not verified
+	// map[Custom domain] => Index of the generated rule for the domain
+	generatedRules := map[string]int{}
+	i := 0
+
+	currentGeneratedRules := map[string]int{}
+	// If the annotation has already been set, start by preserving the
+	// current generated rules
+	if annotationValue, ok := ingress.Annotations[GeneratedRulesAnnotation]; ok {
+		if err := json.Unmarshal([]byte(annotationValue), &currentGeneratedRules); err != nil {
+			return err
+		}
+
+		for host, ruleIndex := range currentGeneratedRules {
+			rule := ingress.Spec.Rules[ruleIndex].DeepCopy()
+			preservedRules = append(preservedRules, *rule)
+			generatedRules[host] = i
+			i++
+		}
+	}
+
+	// Create a generated rule from each custom domain
 	for _, rule := range ingress.Spec.Rules {
 		// ignore any rules for generated hosts (these are recalculated later)
 		if rule.Host == generatedHost {
@@ -367,53 +386,73 @@ func (c *Controller) processCustomHostValidation(ctx context.Context, ingress *n
 		// check against domainverification status
 		if dv != nil && dv.Status.Verified {
 			preservedRules = append(preservedRules, rule)
-		} else {
-			// remove rule from ingress and mark it as awaiting verification
-			unverifiedRules = append(unverifiedRules, rule)
+			i++
+		} else if strings.TrimSpace(rule.Host) != "" {
 			hosts = append(hosts, rule.Host)
 		}
 
-		// recalculate the generatedhost rule in the spec
+		// if the host already has a generated rule, skip it
+		if _, ok := generatedRules[rule.Host]; ok {
+			continue
+		}
+
+		// Duplicate the rule and keep the association host => index
 		generatedHostRule := *rule.DeepCopy()
 		generatedHostRule.Host = generatedHost
 		preservedRules = append(preservedRules, generatedHostRule)
+		generatedRules[rule.Host] = i
+		i++
 	}
 	ingress.Spec.Rules = preservedRules
 
-	// test all the rules in the pending rules annotation to see if they are verified now
-	pending, _, err := getPendingHosts(ingress)
+	// Save the generated rules association in the annotation
+	generatedHosts, err := json.Marshal(generatedRules)
 	if err != nil {
 		return err
 	}
+	ingress.Annotations[GeneratedRulesAnnotation] = string(generatedHosts)
 
-	var preservedPendingRules []networkingv1.IngressRule
-	for _, pendingRule := range pending.Rules {
-		// recalculate the generatedhost rule in the spec
-		generatedHostRule := *pendingRule.DeepCopy()
-		generatedHostRule.Host = generatedHost
-		ingress.Spec.Rules = append(ingress.Spec.Rules, generatedHostRule)
-
-		c.Logger.Info("getting domain verification", "host", pendingRule.Host)
-		dv := findDomainVerification(ingress, pendingRule.Host, dvs.Items)
-
-		// check against domainverification status
-		if dv != nil && dv.Status.Verified {
-			// add the rule to the spec
-			ingress.Spec.Rules = append(ingress.Spec.Rules, pendingRule)
-		} else {
-			preservedPendingRules = append(preservedPendingRules, pendingRule)
+	// Ensure that every custom domain that has been verified is preserved
+GeneratedRulesLoop:
+	for host, generatedIndex := range generatedRules {
+		// Validate the index hasn't been corrupted
+		if generatedIndex < 0 || generatedIndex >= len(ingress.Spec.Rules) {
+			c.Logger.Info(fmt.Sprintf("invalid index for domain %s in %s annotation", host, GeneratedRulesAnnotation))
+			continue
 		}
+
+		// If the domain hasn't been verified, do not include the rule
+		dv := findDomainVerification(ingress, host, dvs.Items)
+		if dv == nil || !dv.Status.Verified {
+			continue
+		}
+
+		// If the rule already has been included, skip it
+		for _, rule := range ingress.Spec.Rules {
+			if rule.Host == host {
+				continue GeneratedRulesLoop
+			}
+		}
+
+		// Create a copy of the generated rule and set the custom host
+		generatedRule := ingress.Spec.Rules[generatedIndex]
+		customDomainRule := generatedRule.DeepCopy()
+		customDomainRule.Host = host
+
+		ingress.Spec.Rules = append(ingress.Spec.Rules, *customDomainRule)
 	}
 
 	// clean up replaced hosts from the tls list
 	removeHostsFromTLS(hosts, ingress)
 
-	// put the new unverified rules in the list of pending rules and update the annotation
-	pending.Rules = append(preservedPendingRules, unverifiedRules...)
-	return setPendingHosts(pending, ingress)
+	return nil
 }
 
 func findDomainVerification(ingress *networkingv1.Ingress, host string, dvs []v1.DomainVerification) *v1.DomainVerification {
+	if strings.TrimSpace(host) == "" {
+		return nil
+	}
+
 	for _, dv := range dvs {
 		if hostMatches(host, dv.Spec.Domain) {
 			return &dv
@@ -435,41 +474,6 @@ func hostMatches(host, domain string) bool {
 	}
 
 	return hostMatches(parentHostParts[1], domain)
-}
-
-func getPendingHosts(ingress *networkingv1.Ingress) (*Pending, bool, error) {
-	pendingRulesRaw, ok := ingress.Annotations[PendingCustomHostsAnnotation]
-	pending := &Pending{Rules: []networkingv1.IngressRule{}}
-
-	if !ok {
-		return nil, false, nil
-	}
-
-	err := json.Unmarshal([]byte(pendingRulesRaw), pending)
-	if err != nil {
-		return nil, false, fmt.Errorf("invalid format in annotation %s: %v", PendingCustomHostsAnnotation, err)
-	}
-
-	if pending.Rules == nil {
-		pending.Rules = make([]networkingv1.IngressRule, 0)
-	}
-
-	return pending, true, nil
-}
-
-func setPendingHosts(pending *Pending, ingress *networkingv1.Ingress) error {
-	if len(pending.Rules) == 0 {
-		delete(ingress.Annotations, PendingCustomHostsAnnotation)
-		return nil
-	}
-
-	newAnnotation, err := json.Marshal(pending)
-	if err != nil {
-		return err
-	}
-
-	ingress.Annotations[PendingCustomHostsAnnotation] = string(newAnnotation)
-	return nil
 }
 
 func removeHostsFromTLS(hostsToRemove []string, ingress *networkingv1.Ingress) {
