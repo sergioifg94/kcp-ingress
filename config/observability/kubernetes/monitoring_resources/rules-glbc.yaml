@@ -24,7 +24,7 @@ groups:
           description: "The GLBC Prometheus Target is down. Either the GLBC component is not running, is misconfigured, or the metrics endpoint is not responding."
           runbook_url: https://github.com/Kuadrant/kcp-glbc/blob/main/docs/observability/runbooks/glbctargetdown.adoc
           summary: GLBC Prometheus Target is down
-        expr: "absent(up{container=\"manager\",job=~\".*/kcp-glbc-controller-manager\"}) or up{container=\"manager\",job=~\".*/kcp-glbc-controller-manager\"} != 1"
+        expr: "absent(up{container=\"manager\",job=~\".*kcp-glbc-controller-manager\"}) or up{container=\"manager\",job=~\".*kcp-glbc-controller-manager\"} != 1"
         for: "5m"
         labels:
           severity: critical
