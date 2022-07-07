@@ -167,8 +167,8 @@ func TestMetrics(t *testing.T) {
 		// Host spec
 		WithTransform(Annotations, And(
 			HaveKey(kuadrantcluster.ANNOTATION_HCG_HOST),
-			HaveKey(kuadrantcluster.ANNOTATION_HCG_CUSTOM_HOST_REPLACED)),
-		),
+			HaveKey(kuadrantcluster.ANNOTATION_HCG_CUSTOM_HOST_REPLACED),
+		)),
 		// Rules spec
 		Satisfy(HostsEqualsToGeneratedHost),
 		// TLS certificate spec
@@ -256,7 +256,34 @@ func TestMetrics(t *testing.T) {
 	// And check no reconciliation occurred over a reasonable period of time
 	test.Consistently(Metrics(test), 30*time.Second).Should(And(
 		HaveKey("glbc_controller_reconcile_total"),
-		WithTransform(Metric("glbc_controller_reconcile_total"), Equal(reconcileTotal)),
+		WithTransform(Metric("glbc_controller_reconcile_total"), Or(
+			Equal(reconcileTotal),
+			// A final reconciliation of the Ingress object may happen once the system has converged,
+			// and there is currently no way to predictably wait for it. So options are either to wait
+			// for an arbitrary period of time, or to accommodate the assertion, and tolerate an extra
+			// reconciliation by the Ingress controller. The below code implements the later option.
+			Satisfy(func(metric *prometheus.MetricFamily) bool {
+				if len(metric.Metric) != len(reconcileTotal.Metric) {
+					return false
+				}
+				for i, m := range metric.Metric {
+					if hasLabels(m,
+						&prometheus.LabelPair{Name: stringP("controller"), Value: stringP("kcp-glbc-ingress")},
+						&prometheus.LabelPair{Name: stringP("result"), Value: stringP("success")},
+					) {
+						if *m.Counter.Value != *reconcileTotal.Metric[i].Counter.Value+1 {
+							return false
+						}
+					} else {
+						match, _ := Equal(reconcileTotal.Metric[i]).Match(m)
+						if !match {
+							return false
+						}
+					}
+				}
+				return true
+			})),
+		),
 	))
 
 	// Finally, delete the Ingress and assert the metrics to cover the entire lifecycle
