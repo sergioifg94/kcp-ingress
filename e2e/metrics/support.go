@@ -97,7 +97,7 @@ func label(name, value string) *prometheus.LabelPair {
 
 func bucket(value float64, upperBound float64) *prometheus.Bucket {
 	var count uint64
-	if value > 0 && value <= upperBound {
+	if value >= 0 && value <= upperBound {
 		count++
 	}
 	return &prometheus.Bucket{
@@ -127,5 +127,12 @@ func uint64P(i uint64) *uint64 {
 }
 
 func float64P(f float64) *float64 {
+	return &f
+}
+
+func positiveFloat64P(f float64) *float64 {
+	if f < 0 {
+		return float64P(0)
+	}
 	return &f
 }
