@@ -57,7 +57,7 @@ func TestMetrics(t *testing.T) {
 		// glbc_ingress_managed_object_time_to_admission
 		HaveKey("glbc_ingress_managed_object_time_to_admission"),
 		WithTransform(Metric("glbc_ingress_managed_object_time_to_admission"), EqualP(
-			ingressManagedObjectTimeToAdmission(0, 0),
+			ingressManagedObjectTimeToAdmission(0, -1),
 		)),
 		// glbc_tls_certificate_pending_request_count
 		HaveKey("glbc_tls_certificate_pending_request_count"),
@@ -326,7 +326,7 @@ func ingressManagedObjectTimeToAdmission(count uint64, duration float64) prometh
 			{
 				Histogram: &prometheus.Histogram{
 					SampleCount: uint64P(count),
-					SampleSum:   float64P(duration),
+					SampleSum:   positiveFloat64P(duration),
 					Bucket: buckets(duration, []float64{
 						1 * time.Second.Seconds(),
 						5 * time.Second.Seconds(),
@@ -422,7 +422,7 @@ func certificateIssuanceDurationSeconds(issuer string, count uint64, duration fl
 				},
 				Histogram: &prometheus.Histogram{
 					SampleCount: uint64P(count),
-					SampleSum:   float64P(duration),
+					SampleSum:   positiveFloat64P(duration),
 					Bucket: buckets(duration, []float64{
 						1 * time.Second.Seconds(),
 						5 * time.Second.Seconds(),
