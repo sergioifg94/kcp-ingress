@@ -9,7 +9,6 @@ import (
 
 	"github.com/rs/xid"
 
-	corev1 "k8s.io/api/core/v1"
 	networkingv1 "k8s.io/api/networking/v1"
 	"k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -52,21 +51,21 @@ func (c *Controller) reconcile(ctx context.Context, ingress *networkingv1.Ingres
 	}
 	metadata.AddFinalizer(ingress, cascadeCleanupFinalizer)
 
-	if ingress.Annotations == nil || ingress.Annotations[cluster.ANNOTATION_HCG_HOST] == "" {
-		// Let's assign it a global hostname if any
-		generatedHost := fmt.Sprintf("%s.%s", xid.New(), c.domain)
-		patch := fmt.Sprintf(`{"metadata":{"annotations":{%q:%q}}}`, cluster.ANNOTATION_HCG_HOST, generatedHost)
-		i, err := c.patchIngress(ctx, ingress, []byte(patch))
-		if err != nil {
-			return err
-		}
-		ingress = i
+	// Let's assign it a global hostname if any
+	if ingress.Annotations == nil {
+		ingress.Annotations = make(map[string]string)
+	}
+	if _, ok := ingress.Annotations[cluster.ANNOTATION_HCG_HOST]; !ok {
+		ingress.Annotations[cluster.ANNOTATION_HCG_HOST] = fmt.Sprintf("%s.%s", xid.New(), c.domain)
+		// Return to update the Ingress with the host annotation atomically, so it's always taken into account
+		// for the TLS certificate creation.
+		return nil
 	}
 
 	// if custom hosts are not enabled all the hosts in the ingress
 	// will be replaced to the generated host
 	if !c.customHostsEnabled {
-		err := c.replaceCustomHosts(ctx, ingress)
+		err := c.replaceCustomHosts(ingress)
 		if err != nil {
 			return err
 		}
@@ -107,14 +106,25 @@ func (c *Controller) ensureCertificate(ctx context.Context, ingress *networkingv
 		return err
 	}
 
-	c.Logger.Info("Patching Ingress with TLS Secret", "ingress", ingress)
-	patch := fmt.Sprintf(`{"spec":{"tls":[{"hosts":[%q],"secretName":%q}]}}`, controlClusterContext.Host(), controlClusterContext.Name())
-	if _, err := c.patchIngress(ctx, ingress, []byte(patch)); err != nil {
-		c.Logger.Error(err, "Failed to patch Ingress", "ingress", ingress)
-		return err
-	}
+	upsertTLS(ingress, controlClusterContext.Host(), controlClusterContext.Name())
 
 	return nil
+}
+
+func upsertTLS(ingress *networkingv1.Ingress, host, secretName string) {
+	for i, tls := range ingress.Spec.TLS {
+		if slice.ContainsString(tls.Hosts, host) {
+			ingress.Spec.TLS[i] = networkingv1.IngressTLS{
+				Hosts:      []string{host},
+				SecretName: secretName,
+			}
+			return
+		}
+	}
+	ingress.Spec.TLS = append(ingress.Spec.TLS, networkingv1.IngressTLS{
+		Hosts:      []string{host},
+		SecretName: secretName,
+	})
 }
 
 func (c *Controller) ensureDNS(ctx context.Context, ingress *networkingv1.Ingress) error {
@@ -161,9 +171,7 @@ func (c *Controller) ensureDNS(ctx context.Context, ingress *networkingv1.Ingres
 			}
 
 			// metric to observe the ingress admission time
-			ingressObjectTimeToAdmission.
-				Observe(existing.CreationTimestamp.Time.Sub(ingress.CreationTimestamp.Time).Seconds())
-
+			ingressObjectTimeToAdmission.Observe(existing.CreationTimestamp.Time.Sub(ingress.CreationTimestamp.Time).Seconds())
 		} else if err == nil {
 			// If it does exist, update it
 			if err := c.setDnsRecordFromIngress(ctx, ingress, existing); err != nil {
@@ -287,38 +295,12 @@ func (c *Controller) targetsFromIngressStatus(ctx context.Context, status networ
 	return targets, nil
 }
 
-//nolint
-// getServices will parse the ingress object and return a list of the services.
-func (c *Controller) getServices(ctx context.Context, ingress *networkingv1.Ingress) ([]*corev1.Service, error) {
-	var services []*corev1.Service
-	for _, rule := range ingress.Spec.Rules {
-		for _, path := range rule.HTTP.Paths {
-			service, err := c.kubeClient.Cluster(logicalcluster.From(ingress)).CoreV1().Services(ingress.Namespace).Get(ctx, path.Backend.Service.Name, metav1.GetOptions{})
-			if err == nil {
-				c.tracker.add(ingress, service)
-				services = append(services, service)
-			} else if !errors.IsNotFound(err) {
-				return nil, err
-			} else {
-				// ignore service not found errors
-				continue
-			}
-		}
-	}
-	return services, nil
-}
-
-func (c *Controller) patchIngress(ctx context.Context, ingress *networkingv1.Ingress, data []byte) (*networkingv1.Ingress, error) {
-	return c.kubeClient.Cluster(logicalcluster.From(ingress)).NetworkingV1().Ingresses(ingress.Namespace).
-		Patch(ctx, ingress.Name, types.MergePatchType, data, metav1.PatchOptions{FieldManager: manager})
-}
-
 func ingressKey(ingress *networkingv1.Ingress) interface{} {
 	key, _ := cache.MetaNamespaceKeyFunc(ingress)
 	return cache.ExplicitKey(key)
 }
 
-func (c *Controller) replaceCustomHosts(ctx context.Context, ingress *networkingv1.Ingress) error {
+func (c *Controller) replaceCustomHosts(ingress *networkingv1.Ingress) error {
 	generatedHost := ingress.Annotations[cluster.ANNOTATION_HCG_HOST]
 	var hosts []string
 	for i, rule := range ingress.Spec.Rules {
@@ -334,9 +316,6 @@ func (c *Controller) replaceCustomHosts(ctx context.Context, ingress *networking
 	if len(hosts) > 0 {
 		ingress.Annotations[cluster.ANNOTATION_HCG_CUSTOM_HOST_REPLACED] = fmt.Sprintf(" replaced custom hosts %v to the glbc host due to custom host policy not being allowed",
 			hosts)
-		if _, err := c.kubeClient.Cluster(logicalcluster.From(ingress)).NetworkingV1().Ingresses(ingress.Namespace).Update(ctx, ingress, metav1.UpdateOptions{}); err != nil {
-			return err
-		}
 	}
 
 	return nil
