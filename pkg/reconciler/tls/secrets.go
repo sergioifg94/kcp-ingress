@@ -113,13 +113,13 @@ func (c *Controller) ensureMirrored(ctx context.Context, kctx cluster.ObjectMapp
 		if !k8errors.IsAlreadyExists(err) {
 			return err
 		}
-		s, err := secretClient.Get(ctx, mirror.Name, metav1.GetOptions{})
+		mirrored, err = secretClient.Get(ctx, mirror.Name, metav1.GetOptions{})
 		if err != nil {
 			return err
 		}
-		mirror.ResourceVersion = s.ResourceVersion
-		mirror.UID = s.UID
-		if _, err := secretClient.Update(ctx, mirror, metav1.UpdateOptions{}); err != nil {
+		mirror.ResourceVersion = mirrored.ResourceVersion
+		mirror.UID = mirrored.UID
+		if _, err = secretClient.Update(ctx, mirror, metav1.UpdateOptions{}); err != nil {
 			return err
 		}
 	}
