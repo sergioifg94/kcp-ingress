@@ -22,7 +22,7 @@ When this alert fires, it usually means the GLBC component is not running, metri
 == Prerequisites
 
 // Include the following steps in every alert SOP
-* Access to the physical cluster where GBLC should be running
+* Access to the physical cluster where GLBC should be running
 
 == Execute/Resolution
 
