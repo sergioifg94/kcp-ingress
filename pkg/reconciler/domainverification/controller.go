@@ -71,14 +71,14 @@ func (c *Controller) process(ctx context.Context, key string) error {
 	}
 
 	current := domainVerfication.(*v1.DomainVerification)
-	previous := current.DeepCopy()
+	target := current.DeepCopy()
 
-	if err = c.reconcile(ctx, current); err != nil {
+	if err = c.reconcile(ctx, target); err != nil {
 		return err
 	}
 
-	if !equality.Semantic.DeepEqual(previous, current) {
-		_, err := c.domainVerificationClient.Cluster(logicalcluster.From(current)).KuadrantV1().DomainVerifications().Update(ctx, current, metav1.UpdateOptions{})
+	if !equality.Semantic.DeepEqual(current, target) {
+		_, err := c.domainVerificationClient.Cluster(logicalcluster.From(target)).KuadrantV1().DomainVerifications().Update(ctx, target, metav1.UpdateOptions{})
 		return err
 	}
 
