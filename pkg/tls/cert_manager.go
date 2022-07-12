@@ -99,7 +99,7 @@ func (cm *certManager) Initialize(ctx context.Context) error {
 	_, err := cm.certClient.Issuers(cm.certificateNS).Get(ctx, cm.IssuerID(), metav1.GetOptions{})
 	if err != nil {
 		if apierrors.IsNotFound(err) {
-			return fmt.Errorf("Issuer not %s found", cm.IssuerID())
+			return fmt.Errorf("Issuer %s not found", cm.IssuerID())
 		}
 		return err
 	}

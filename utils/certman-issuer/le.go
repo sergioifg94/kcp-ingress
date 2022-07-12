@@ -31,11 +31,12 @@ type LetsEncryptIssuer struct {
 	tlsProvider    string
 	server         string
 	providerRegion string
+	namespace      string
 }
 
 var _ Issuer = &LetsEncryptIssuer{}
 
-func NewLetsEncryptIssuer(tlsProvider string, providerRegion string) *LetsEncryptIssuer {
+func NewLetsEncryptIssuer(tlsProvider, providerRegion, namespace string) *LetsEncryptIssuer {
 	server := leStagingAPI
 	if tlsProvider == string(CertProviderLEProd) {
 		server = leProdAPI
@@ -45,6 +46,7 @@ func NewLetsEncryptIssuer(tlsProvider string, providerRegion string) *LetsEncryp
 		tlsProvider:    tlsProvider,
 		server:         server,
 		providerRegion: providerRegion,
+		namespace:      namespace,
 	}
 }
 
@@ -77,7 +79,7 @@ func (issuer *LetsEncryptIssuer) GetSecret() (*corev1.Secret, error) {
 func (issuer *LetsEncryptIssuer) GetIssuer() *certman.Issuer {
 	return &certman.Issuer{
 		ObjectMeta: metav1.ObjectMeta{
-			Namespace: defaultCertificateNS,
+			Namespace: issuer.namespace,
 			Name:      issuer.tlsProvider,
 		},
 		Spec: certman.IssuerSpec{

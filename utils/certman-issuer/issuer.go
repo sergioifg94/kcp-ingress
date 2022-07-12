@@ -30,13 +30,13 @@ type Issuer interface {
 	GetTLSProvider() string
 }
 
-func newIssuer(tlsProvider string, awsRegion string) Issuer {
+func newIssuer(tlsProvider, awsRegion, namespace string) Issuer {
 	var issuer Issuer
 	switch tlsProvider {
 	case CertProviderCA:
-		issuer = NewCAIssuer()
+		issuer = NewCAIssuer(namespace)
 	case CertProviderLEStaging, CertProviderLEProd:
-		issuer = NewLetsEncryptIssuer(tlsProvider, awsRegion)
+		issuer = NewLetsEncryptIssuer(tlsProvider, awsRegion, namespace)
 	default:
 		log.Fatalln(fmt.Errorf("unsupported TLS certificate issuer: %s", issuer.GetTLSProvider()))
 	}
@@ -48,14 +48,16 @@ func main() {
 	// Control cluster client options
 	var glbcKubeconfig string
 	var tlsProvider string = ""
+	var issuerNamespace string = ""
 	var awsRegion string = ""
 
 	flag.StringVar(&glbcKubeconfig, "glbc-kubeconfig", "", "Path to the physical GLBC cluster kubeconfig")
 	flag.StringVar(&tlsProvider, "glbc-tls-provider", env.GetEnvString("GLBC_TLS_PROVIDER", "glbc-ca"), "The TLS certificate issuer, one of [glbc-ca, le-staging, le-production]")
+	flag.StringVar(&issuerNamespace, "issuer-namespace", env.GetEnvString("NAMESPACE", defaultCertificateNS), "Define namespace where issuer will be created")
 	flag.StringVar(&awsRegion, "region", env.GetEnvString("AWS_REGION", "eu-central-1"), "the region we should target with AWS clients")
 	flag.Parse()
 
-	issuer := newIssuer(tlsProvider, awsRegion)
+	issuer := newIssuer(tlsProvider, awsRegion, issuerNamespace)
 	glbcClientConfig, err := clientcmd.NewNonInteractiveDeferredLoadingClientConfig(
 		&clientcmd.ClientConfigLoadingRules{ExplicitPath: glbcKubeconfig},
 		&clientcmd.ConfigOverrides{}).ClientConfig()
@@ -75,7 +77,7 @@ func main() {
 		log.Fatalln(fmt.Errorf("failed to create issuer for : %s %w", tlsProvider, err))
 	}
 
-	log.Printf("Issuer %s successfully created ", tlsProvider)
+	log.Printf("Issuer %s successfully created %s namespace ", tlsProvider, issuerNamespace)
 }
 
 func create(ctx context.Context, certManegerClient certmanclient.CertmanagerV1Interface, k8sClient kubernetes.Interface, issuerObject Issuer) error {
@@ -85,7 +87,9 @@ func create(ctx context.Context, certManegerClient certmanclient.CertmanagerV1In
 		return err
 	}
 
-	secretClientInterface := k8sClient.CoreV1().Secrets(defaultCertificateNS)
+	issuer := issuerObject.GetIssuer()
+
+	secretClientInterface := k8sClient.CoreV1().Secrets(issuer.GetNamespace())
 	secret, err := secretClientInterface.Get(ctx, issuerSecret.Name, metav1.GetOptions{})
 	if err != nil && !apierrors.IsNotFound(err) {
 		return err
@@ -102,8 +106,7 @@ func create(ctx context.Context, certManegerClient certmanclient.CertmanagerV1In
 		}
 	}
 
-	issuerClientInterface := certManegerClient.Issuers(defaultCertificateNS)
-	issuer := issuerObject.GetIssuer()
+	issuerClientInterface := certManegerClient.Issuers(issuer.GetNamespace())
 	issuerInstance, err := issuerClientInterface.Get(ctx, issuer.Name, metav1.GetOptions{})
 	if err != nil && !apierrors.IsNotFound(err) {
 		return err

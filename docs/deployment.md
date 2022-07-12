@@ -137,6 +137,7 @@ go run ./utils/certman-issuer/
 --glbc-kubeconfig <Path to GLBC kubeconfig> 
 --glbc-tls-provider <The TLS certificate issuer, one of [glbc-ca, le-staging, le-production]> 
 --region <the region we should target with AWS clients>
+--issuer-namespace <namespace where the issuer resource will be created, the namespace should match with the namespace where the glbc is deployed>
 ```
 
 ### GLBC Controller Options (Optional)

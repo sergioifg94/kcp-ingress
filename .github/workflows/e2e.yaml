@@ -182,6 +182,7 @@ jobs:
           echo "AWS_DNS_PUBLIC_ZONE_ID=FAKE_ZONE_ID" >> $GITHUB_ENV
           echo "Starting GLBC, sending logs to ${GLBC_LOG_FILE}"
           ./bin/kubectl-kcp workspace use root:default:kcp-glbc
+          go run ./utils/certman-issuer/ --glbc-kubeconfig .kcp/admin.kubeconfig
           ./bin/kcp-glbc --kubeconfig .kcp/admin.kubeconfig --context system:admin --dns-provider fake --glbc-tls-provided true > ${GLBC_LOG_FILE} 2>&1 &
           GLBC_PID=$!
           echo "GLBC_PID=${GLBC_PID}" >> $GITHUB_ENV
