@@ -280,8 +280,8 @@ $(DHALL_OPENSHIFT_TARGET_DIR):
 # TODO: regen prometheusrule crs when rules files have changed. 
 .PHONY: touch-monitoring-files
 touch-monitoring-files:
-	touch config/observability/monitoring_resources/kubernetes/dashboard-glbc.dhall config/observability/monitoring_resources/openshift/dashboard-glbc.dhall
-	touch config/observability/monitoring_resources/common/rules-glbc-prometheusrule.dhall
+	touch config/observability/monitoring_resources/kubernetes/*.dhall config/observability/monitoring_resources/openshift/*.dhall
+	touch config/observability/monitoring_resources/common/*.dhall
 
 # Generate monitoring resources for prometheus etc... 
 .PHONY: gen-monitoring-resources

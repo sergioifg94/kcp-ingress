@@ -8,7 +8,7 @@ tests:
     input_series:
       # 0m - 5m container is up
       # 5m - 20m container is down
-      - series: up{container="manager",job="test/kcp-glbc-controller-manager"}
+      - series: up{container="manager",job="observability-operator/podmonitor-kcp-glbc-controller-manager"}
         values: "1+0x5 0+0x15"
     alert_rule_test:
       - eval_time: 5m
@@ -20,7 +20,7 @@ tests:
           - exp_labels:
               severity: critical
               container: manager
-              job: test/kcp-glbc-controller-manager
+              job: observability-operator/podmonitor-kcp-glbc-controller-manager
             exp_annotations:
               summary: 'GLBC Prometheus Target is down'
               description: 'The GLBC Prometheus Target is down. Either the GLBC component is not running, is misconfigured, or the metrics endpoint is not responding.'
@@ -30,7 +30,7 @@ tests:
     input_series:
       # 0m - 5m container is up
       # 5m - 20m no time series exists
-      - series: up{container="manager",job="test/kcp-glbc-controller-manager"}
+      - series: up{container="manager",job="observability-operator/podmonitor-kcp-glbc-controller-manager"}
         values: "1+0x5 stale"
     alert_rule_test:
       - eval_time: 5m

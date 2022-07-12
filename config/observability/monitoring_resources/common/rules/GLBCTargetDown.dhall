@@ -17,7 +17,7 @@ in  PrometheusOperator.Rule::{
     , alert = Some "GLBCTargetDown"
     , expr =
         K8s.IntOrString.String
-          "absent(up{container=\"manager\",job=~\".*/kcp-glbc-controller-manager\"}) or up{container=\"manager\",job=~\".*/kcp-glbc-controller-manager\"} != 1"
+          "absent(up{container=\"manager\",job=~\".*kcp-glbc-controller-manager\"}) or up{container=\"manager\",job=~\".*kcp-glbc-controller-manager\"} != 1"
     , for = Some (Duration.show { amount = 5, unit = TimeUnit.Type.Minutes })
     , labels = Some
         (toMap { severity = AlertSeverity.show AlertSeverity.Type.Critical })
