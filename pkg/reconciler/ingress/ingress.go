@@ -7,6 +7,7 @@ import (
 	"strconv"
 	"strings"
 
+	"github.com/go-logr/logr"
 	"github.com/rs/xid"
 
 	networkingv1 "k8s.io/api/networking/v1"
@@ -332,6 +333,19 @@ func (c *Controller) replaceCustomHosts(_ context.Context, ingress *networkingv1
 }
 
 func (c *Controller) processCustomHostValidation(ctx context.Context, ingress *networkingv1.Ingress) error {
+	dvs, err := c.kuadrantClient.Cluster(logicalcluster.From(ingress)).KuadrantV1().DomainVerifications().List(ctx, metav1.ListOptions{})
+	if err != nil {
+		return err
+	}
+
+	if err != nil {
+		return err
+	}
+
+	return doProcessCustomHostValidation(c.Logger, dvs, ingress)
+}
+
+func doProcessCustomHostValidation(logger logr.Logger, dvs *v1.DomainVerificationList, ingress *networkingv1.Ingress) error {
 	if ingress.Annotations == nil {
 		ingress.Annotations = map[string]string{}
 	}
@@ -343,11 +357,6 @@ func (c *Controller) processCustomHostValidation(ctx context.Context, ingress *n
 	generatedHost, ok := ingress.Annotations[cluster.ANNOTATION_HCG_HOST]
 	if !ok || generatedHost == "" {
 		return fmt.Errorf("generated host is empty for ingress: '%v/%v'", ingress.Namespace, ingress.Name)
-	}
-
-	dvs, err := c.kuadrantClient.Cluster(logicalcluster.From(ingress)).KuadrantV1().DomainVerifications().List(ctx, metav1.ListOptions{})
-	if err != nil {
-		return err
 	}
 
 	var hosts []string
@@ -417,7 +426,7 @@ GeneratedRulesLoop:
 	for host, generatedIndex := range generatedRules {
 		// Validate the index hasn't been corrupted
 		if generatedIndex < 0 || generatedIndex >= len(ingress.Spec.Rules) {
-			c.Logger.Info(fmt.Sprintf("invalid index for domain %s in %s annotation", host, GeneratedRulesAnnotation))
+			logger.Info(fmt.Sprintf("invalid index for domain %s in %s annotation", host, GeneratedRulesAnnotation))
 			continue
 		}
 
