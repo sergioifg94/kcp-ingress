@@ -169,7 +169,7 @@ deploy_glbc_observability() {
 # Script Start                                             #
 ############################################################
 
-while getopts "c:k:mn:hw:W:" arg; do
+while getopts "c:k:m:n:hw:W:" arg; do
   case "${arg}" in
     c)
       DEPLOY_COMPONENTS=${OPTARG}
@@ -178,7 +178,7 @@ while getopts "c:k:mn:hw:W:" arg; do
       GLBC_KUSTOMIZATION=${OPTARG}
       ;;
     m)
-      MULTI_WORKSPACE_AWARE=true
+      MULTI_WORKSPACE_AWARE=${OPTARG}
       ;;
     n)
       GLBC_NAMESPACE=${OPTARG}

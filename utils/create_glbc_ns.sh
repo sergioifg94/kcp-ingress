@@ -103,8 +103,6 @@ if [ "$CLUSTER_ROLE" = true ] ; then
   kubectl apply -f ${KCP_GLBC_DIR}/config/kcp/glbc-cluster-role.yaml
   kubectl apply -f ${KCP_GLBC_DIR}/config/kcp/glbc-cluster-role-binding.yaml
 else
-  kubectl delete -f ${KCP_GLBC_DIR}/config/kcp/glbc-cluster-role.yaml
-  kubectl delete -f ${KCP_GLBC_DIR}/config/kcp/glbc-cluster-role-binding.yaml
   ## Create ns/role/rolebinding and serviceAccount for user
   cd config/kcp/ || exit
   ../../bin/kustomize edit set namespace $namespace
