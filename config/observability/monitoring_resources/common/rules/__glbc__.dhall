@@ -1,5 +1,6 @@
 let rules =
       [ ./GLBCTargetDown.dhall
+      , ./HighDNSLatencyAlert.dhall
       , ./HighDNSProviderErrorRate.dhall
       ]
 
