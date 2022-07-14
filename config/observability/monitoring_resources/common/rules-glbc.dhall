@@ -11,7 +11,7 @@ in  PrometheusOperator.PrometheusRuleSpec::{
         }
       , PrometheusOperator.RuleGroup::{
         , name = "glbc"
-        , rules = Some [ ./rules/GLBCTargetDown.dhall ]
+        , rules = Some ./rules/__glbc__.dhall
         }
       ]
     }
