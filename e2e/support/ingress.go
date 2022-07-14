@@ -17,7 +17,10 @@ limitations under the License.
 package support
 
 import (
+	"encoding/json"
+	"github.com/kuadrant/kcp-glbc/pkg/util/workloadMigration"
 	"github.com/onsi/gomega"
+	"strings"
 
 	corev1 "k8s.io/api/core/v1"
 	networkingv1 "k8s.io/api/networking/v1"
@@ -55,7 +58,18 @@ func Ingresses(t Test, namespace *corev1.Namespace, labelSelector string) func(g
 }
 
 func LoadBalancerIngresses(ingress *networkingv1.Ingress) []corev1.LoadBalancerIngress {
-	return ingress.Status.LoadBalancer.Ingress
+	for a, v := range ingress.Annotations {
+		if strings.Contains(a, workloadMigration.WorkloadStatusAnnotation) {
+			ingressStatus := networkingv1.IngressStatus{}
+			err := json.Unmarshal([]byte(v), &ingressStatus)
+			if err != nil {
+				return []corev1.LoadBalancerIngress{}
+			}
+			return ingressStatus.LoadBalancer.Ingress
+		}
+	}
+	return []corev1.LoadBalancerIngress{}
+
 }
 
 func IngressTLS(ingress *networkingv1.Ingress) []networkingv1.IngressTLS {

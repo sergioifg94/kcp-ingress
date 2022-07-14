@@ -29,7 +29,7 @@ const (
 )
 
 func (c *Controller) reconcile(ctx context.Context, dnsRecord *v1.DNSRecord) error {
-	c.Logger.Info("Reconciling DNSRecord", "dnsRecord", dnsRecord)
+	c.Logger.Info("Reconciling DNSRecord", "dnsRecord", dnsRecord, "Spec", dnsRecord.Spec)
 
 	// If the DNS record was deleted, clean up and return.
 	if dnsRecord.DeletionTimestamp != nil && !dnsRecord.DeletionTimestamp.IsZero() {

@@ -12,6 +12,7 @@ import (
 
 const (
 	WorkloadTargetLabel      = "state.internal.workload.kcp.dev"
+	SyncerFinalizer          = "workload.kcp.dev/syncer-"
 	WorkloadClusterFinalizer = "finalizers.workload.kcp.dev"
 	WorkloadStatusAnnotation = "experimental.status.workload.kcp.dev/"
 	SoftFinalizer            = "kuadrant.dev/glbc-migration"

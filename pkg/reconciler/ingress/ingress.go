@@ -34,8 +34,6 @@ const (
 func (c *Controller) reconcile(ctx context.Context, ingress *networkingv1.Ingress) error {
 	workloadMigration.Process(ingress, c.Queue)
 	if ingress.DeletionTimestamp != nil && !ingress.DeletionTimestamp.IsZero() {
-		c.Logger.Info("Deleting Ingress", "ingress", ingress)
-
 		// delete any DNS records
 		if err := c.ensureDNS(ctx, ingress); err != nil {
 			return err
@@ -46,6 +44,12 @@ func (c *Controller) reconcile(ctx context.Context, ingress *networkingv1.Ingres
 		}
 
 		metadata.RemoveFinalizer(ingress, cascadeCleanupFinalizer)
+		//in 0.5.0 these are never cleaned up properly
+		for _, f := range ingress.Finalizers {
+			if strings.Contains(f, workloadMigration.SyncerFinalizer) {
+				metadata.RemoveFinalizer(ingress, f)
+			}
+		}
 
 		c.hostsWatcher.StopWatching(ingressKey(ingress), "")
 
@@ -302,7 +306,6 @@ func (c *Controller) targetsFromIngress(ctx context.Context, ingress *networking
 		}
 		//only add targets for targeted cluster
 		annotationParts := strings.Split(k, "/")
-		c.Logger.Info("looking for cluster placement label", "cluster", annotationParts[1])
 		if !metadata.HasLabel(ingress, workloadMigration.WorkloadTargetLabel+"/"+annotationParts[1]) {
 			continue
 		}

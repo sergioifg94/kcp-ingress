@@ -4,7 +4,10 @@
 package e2e
 
 import (
+	"encoding/json"
+	"github.com/kuadrant/kcp-glbc/pkg/util/workloadMigration"
 	"os"
+	"strings"
 	"testing"
 
 	. "github.com/onsi/gomega"
@@ -91,16 +94,24 @@ func TestIngress(t *testing.T) {
 	zoneID := os.Getenv("AWS_DNS_PUBLIC_ZONE_ID")
 	test.Expect(zoneID).NotTo(BeNil())
 
+	ingressStatus := &networkingv1.IngressStatus{}
+	for a, v := range ingress.Annotations {
+		if strings.Contains(a, workloadMigration.WorkloadStatusAnnotation) {
+			err = json.Unmarshal([]byte(v), &ingressStatus)
+			break
+		}
+	}
+
 	// Check a DNSRecord for the Ingress is created with the expected Spec
 	test.Eventually(DNSRecord(test, namespace, name)).Should(And(
 		WithTransform(DNSRecordEndpoints, HaveLen(1)),
 		WithTransform(DNSRecordEndpoints, ContainElement(MatchFieldsP(IgnoreExtras,
 			Fields{
 				"DNSName":          Equal(ingress.Annotations[kuadrantcluster.ANNOTATION_HCG_HOST]),
-				"Targets":          ConsistOf(ingress.Status.LoadBalancer.Ingress[0].IP),
+				"Targets":          ConsistOf(ingressStatus.LoadBalancer.Ingress[0].IP),
 				"RecordType":       Equal("A"),
 				"RecordTTL":        Equal(kuadrantv1.TTL(60)),
-				"SetIdentifier":    Equal(ingress.Status.LoadBalancer.Ingress[0].IP),
+				"SetIdentifier":    Equal(ingressStatus.LoadBalancer.Ingress[0].IP),
 				"ProviderSpecific": ConsistOf(kuadrantv1.ProviderSpecific{{Name: "aws/weight", Value: "120"}}),
 			})),
 		),

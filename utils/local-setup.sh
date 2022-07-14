@@ -131,12 +131,13 @@ createWorkloadCluster() {
 createUserWorkloadCluster() {
   createWorkloadCluster $1 $2 $3 $4
   echo "Deploying kcp syncer to ${1}"
-  kubectl --kubeconfig=${KUBECONFIG_GLBC} create namespace kcp-syncer --dry-run=client -o yaml | kubectl --kubeconfig=${KUBECONFIG_GLBC} apply -f -
+  KUBECONFIG=${KUBECONFIG_GLBC} kubectl create namespace kcp-syncer --dry-run=client -o yaml | kubectl --kubeconfig=${KUBECONFIG_GLBC} apply -f -
   KUBECONFIG=${KUBECONFIG_GLBC} ${KUBECTL_KCP_BIN} workload sync ${clusterName} --kcp-namespace kcp-syncer --syncer-image=${KCP_SYNCER_IMAGE} --resources=ingresses.networking.k8s.io,services >${TEMP_DIR}/${clusterName}-syncer.yaml
 
   # Enable advanced scheduling
-  kubectl --kubeconfig=.kcp/admin.kubeconfig annotate --overwrite workloadcluster ${clusterName} featuregates.experimental.workload.kcp.dev/advancedscheduling='true'
-  kubectl --kubeconfig=.kcp/admin.kubeconfig get workloadclusters ${clusterName} -o json | jq .metadata.annotations
+  echo "Enabling advanced scheduling"
+  KUBECONFIG=${KUBECONFIG_GLBC} kubectl annotate --overwrite workloadcluster ${clusterName} featuregates.experimental.workload.kcp.dev/advancedscheduling='true'
+  KUBECONFIG=${KUBECONFIG_GLBC} kubectl get workloadclusters ${clusterName} -o json | jq .metadata.annotations
 
   kubectl apply -f ${TEMP_DIR}/${clusterName}-syncer.yaml
 }
@@ -192,18 +193,15 @@ for cluster in $CLUSTERS; do
   port80=$((port80 + 1))
   port443=$((port443 + 1))
 done
-KUBECONFIG=.kcp/admin.kubeconfig kubectl wait --timeout=300s --for=condition=Ready=true workloadclusters --all
+
+KUBECONFIG=${KUBECONFIG_GLBC} kubectl wait --timeout=300s --for=condition=Ready=true workloadclusters --all
 
 #6. Switch to user workspace
 KUBECONFIG=${KUBECONFIG_GLBC_USER} ${KUBECTL_KCP_BIN} workspace use "root:default:kcp-glbc-user"
-kubectl --kubeconfig=${KUBECONFIG_GLBC_USER} label namespace default experimental.workloads.kcp.dev/scheduling-disabled="true"
 
 #disable automatic scheduling
-kubectl --kubeconfig=.kcp/admin.kubeconfig label namespace default experimental.workload.kcp.dev/scheduling-disabled="true"
-kubectl --kubeconfig=.kcp/admin.kubeconfig annotate namespace default scheduling.kcp.dev/placement-
-
-#create DNS record CRD
-kubectl --kubeconfig=.kcp/admin.kubeconfig  create -f ${SCRIPT_DIR}/../config/crd/bases/kuadrant.dev_dnsrecords.yaml
+kubectl --kubeconfig=${KUBECONFIG_GLBC_USER} label namespace default experimental.workload.kcp.dev/scheduling-disabled="true"
+kubectl --kubeconfig=${KUBECONFIG_GLBC_USER} annotate namespace default scheduling.kcp.dev/placement-
 
 echo ""
 echo "KCP PID          : ${KCP_PID}"
