@@ -139,6 +139,19 @@ Here is a quick and easy way of [installing kubectl on Fedora](https://snapcraft
 **Cannot connect to the Docker daemon at unix:///var/run/docker.sock. Is the docker daemon running?:**
 Run the following command to start Docker daemon:
 ```bash
-sudo systemctl start docker”
+sudo systemctl start docker
 ```
-
+<br><br>
+**Kind cluster failed to become ready - Check logs for errors:**
+Attempt the following to confirm if *kcp-cluster-1* and *kcp-cluster-2* are in a READY state:
+```bash
+KUBECONFIG=config/deploy/local/kcp.kubeconfig ./bin/kubectl-kcp workspace use root:default:kcp-glbc-user-compute
+Current workspace is "root:default:kcp-glbc-user-compute".
+```
+```bash
+kubectl get workloadclusters -o wide
+NAME            LOCATION        READY   SYNCED API RESOURCES
+kcp-cluster-1   kcp-cluster-1   True    
+kcp-cluster-2   kcp-cluster-2   False 
+```
+If a cluster is not in READY state, the following procedure might solve the issue: [Configure Linux for Many Watch Folders](https://www.ibm.com/docs/en/ahte/4.0?topic=wf-configuring-linux-many-watch-folders) (we want to bump up each of the limits).
