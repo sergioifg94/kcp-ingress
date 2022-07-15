@@ -147,8 +147,13 @@ deploy_cert_manager() {
 }
 
 deploy_glbc() {
-  echo "Deploying GLBC"
+  echo "Creating GLBC namespace"
   create_ns ${GLBC_NAMESPACE}
+  
+  echo "Creating issuer"
+  go run ${DEPLOY_SCRIPT_DIR}/certman-issuer/ --glbc-kubeconfig ${GLBC_KUSTOMIZATION}/kcp.kubeconfig --issuer-namespace ${GLBC_NAMESPACE}
+
+  echo "Deploying GLBC"
   ${KUSTOMIZE_BIN} build ${GLBC_KUSTOMIZATION} | kubectl apply -f -
   echo "Waiting for GLBC deployments to be ready..."
   kubectl -n ${GLBC_NAMESPACE} wait --timeout=300s --for=condition=Available deployments --all
