@@ -15,7 +15,7 @@ let PrometheusOperator =
 
 in  PrometheusOperator.Rule::{
     , alert = Some "${ALERT_NAME}"
-    , expr = K8s.IntOrString.String "vector(1)"
+    , expr = K8s.IntOrString.String "${ALERT_EXPR}"
     , for = Some (Duration.show { amount = 5, unit = TimeUnit.Type.Minutes })
     , labels = Some
         (toMap { severity = AlertSeverity.show AlertSeverity.Type.Critical })

@@ -88,8 +88,9 @@ export RUNBOOK_PATH := https://github.com/Kuadrant/kcp-glbc/blob/main/docs/obser
 RUNBOOKS_FOLDER := docs/observability/runbooks
 .PHONY: gen-alert-rule-file
 gen-alert-rule-file:
-	@if test -z "$(ALERT_NAME)"; then echo "ALERT_NAME is not set. e.g. make gen-new-alert-rule ALERT_NAME=GLBCDown"; exit 1; fi
-	@envsubst '$${RUNBOOK_PATH} $${ALERT_NAME}' < $(DHALL_RULES_SOURCE_DIR)/__template__.dhall > $(DHALL_RULES_SOURCE_DIR)/$(ALERT_NAME).dhall
+	@if test -z "$(ALERT_NAME)"; then echo "ALERT_NAME and ALERT_EXPR are not set. e.g. make gen-new-alert-rule ALERT_NAME=GLBCDown ALERT_EXPR=\"up\""; exit 1; fi
+	@if test -z "$(ALERT_EXPR)"; then echo "ALERT_EXPR is not set. e.g. make gen-new-alert-rule ALERT_NAME=GLBCDown ALERT_EXPR=\"up\""; exit 1; fi
+	@envsubst '$${RUNBOOK_PATH} $${ALERT_NAME} $${ALERT_EXPR}' < $(DHALL_RULES_SOURCE_DIR)/__template__.dhall > $(DHALL_RULES_SOURCE_DIR)/$(ALERT_NAME).dhall
 	@echo "Generated rule source file:"
 	@echo "  $(DHALL_RULES_SOURCE_DIR)/$(ALERT_NAME).dhall"
 	@echo "Modify the alert rule expression and other fields."
@@ -100,7 +101,7 @@ gen-alert-rule-file:
 .PHONY: gen-alert-rule-test
 gen-alert-rule-test:
 	@if test -z "$(ALERT_NAME)"; then echo "ALERT_NAME is not set. e.g. make gen-alert-rule-test ALERT_NAME=GLBCDown"; exit 1; fi
-	@envsubst '$${RUNBOOK_PATH} $${ALERT_NAME}' < $(DHALL_K8S_TARGET_RULES_DIR)/test.yaml.template > $(DHALL_K8S_TARGET_RULES_DIR)/$(ALERT_NAME)_test.yaml
+	@envsubst '$${RUNBOOK_PATH} $${ALERT_NAME} $${ALERT_EXPR}' < $(DHALL_K8S_TARGET_RULES_DIR)/test.yaml.template > $(DHALL_K8S_TARGET_RULES_DIR)/$(ALERT_NAME)_test.yaml
 	@echo "Generated rule unit test file:"
 	@echo "  $(DHALL_K8S_TARGET_RULES_DIR)/$(ALERT_NAME)_test.yaml"
 	@echo "Modify and extend the skeleton test case."
