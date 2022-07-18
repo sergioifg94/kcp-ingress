@@ -183,6 +183,9 @@ KUBECONFIG=${KUBECONFIG_GLBC} ${SCRIPT_DIR}/deploy.sh -c ${GLBC_DEPLOY_COMPONENT
 KUBECONFIG=${KUBECONFIG_GLBC} ${KUBECTL_KCP_BIN} workspace use "root:default:kcp-glbc"
 kubectl --kubeconfig=${KUBECONFIG_GLBC} create namespace kcp-glbc --dry-run=client -o yaml | kubectl --kubeconfig=${KUBECONFIG_GLBC} apply -f -
 
+# Set up glbc cert issuer
+go run ${SCRIPT_DIR}/certman-issuer/ --glbc-kubeconfig ${KUBECONFIG_GLBC}
+
 #5. Create User workload clusters and wait for them to be ready
 KUBECONFIG=${KUBECONFIG_GLBC} ${KUBECTL_KCP_BIN} workspace use "root:default:kcp-glbc-user-compute"
 echo "Creating $NUM_CLUSTERS kcp workload cluster(s)"
