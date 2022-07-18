@@ -86,10 +86,10 @@ gen-new-alert-rule: gen-alert-rule-file gen-alert-rule-test gen-alert-rule-runbo
 
 export RUNBOOK_PATH := https://github.com/Kuadrant/kcp-glbc/blob/main/docs/observability/runbooks/
 RUNBOOKS_FOLDER := docs/observability/runbooks
+export ALERT_EXPR := vector(1)
 .PHONY: gen-alert-rule-file
 gen-alert-rule-file:
-	@if test -z "$(ALERT_NAME)"; then echo "ALERT_NAME and ALERT_EXPR are not set. e.g. make gen-new-alert-rule ALERT_NAME=GLBCDown ALERT_EXPR=\"up\""; exit 1; fi
-	@if test -z "$(ALERT_EXPR)"; then echo "ALERT_EXPR is not set. e.g. make gen-new-alert-rule ALERT_NAME=GLBCDown ALERT_EXPR=\"up\""; exit 1; fi
+	@if test -z "$(ALERT_NAME)"; then echo "ALERT_NAME and ALERT_EXPR(optional) are not set. e.g. make gen-new-alert-rule ALERT_NAME=GLBCDown ALERT_EXPR=\"vector(1)\""; exit 1; fi
 	@envsubst '$${RUNBOOK_PATH} $${ALERT_NAME} $${ALERT_EXPR}' < $(DHALL_RULES_SOURCE_DIR)/__template__.dhall > $(DHALL_RULES_SOURCE_DIR)/$(ALERT_NAME).dhall
 	@echo "Generated rule source file:"
 	@echo "  $(DHALL_RULES_SOURCE_DIR)/$(ALERT_NAME).dhall"
