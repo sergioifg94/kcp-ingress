@@ -244,3 +244,48 @@ func Test_removeAnnotation(t *testing.T) {
 		})
 	}
 }
+
+func Test_hasAnnotation(t *testing.T) {
+	tests := []struct {
+		name       string
+		obj        metav1.Object
+		annotation string
+		expect     bool
+	}{
+		{
+			name: "existing annotation found",
+			obj: &v1.ConfigMap{
+				ObjectMeta: metav1.ObjectMeta{
+					Name: "test-object",
+					Annotations: map[string]string{
+						"test-key": "value",
+					},
+				},
+			},
+			annotation: "test-key",
+			expect:     true,
+		},
+		{
+			name: "existing annotation not found",
+			obj: &v1.ConfigMap{
+				ObjectMeta: metav1.ObjectMeta{
+					Name: "test-object",
+					Annotations: map[string]string{
+						"test-fail": "value",
+					},
+				},
+			},
+			annotation: "test-key",
+			expect:     false,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got := HasAnnotation(tt.obj, tt.annotation)
+			if !got == tt.expect {
+				t.Errorf("expected '%v' got '%v'", tt.expect, got)
+			}
+		})
+	}
+}

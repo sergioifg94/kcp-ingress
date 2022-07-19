@@ -173,9 +173,13 @@ jobs:
           ./bin/kubectl-kcp workload sync kcp-cluster-1 --kcp-namespace kcp-syncer --syncer-image=${KCP_SYNCER_IMAGE} --resources=ingresses.networking.k8s.io,services | kubectl --kubeconfig="${CLUSTERS_KUBECONFIG_DIR}"/kcp-cluster-1.kubeconfig apply -f -
           ./bin/kubectl-kcp workload sync kcp-cluster-2 --kcp-namespace kcp-syncer --syncer-image=${KCP_SYNCER_IMAGE} --resources=ingresses.networking.k8s.io,services | kubectl --kubeconfig="${CLUSTERS_KUBECONFIG_DIR}"/kcp-cluster-2.kubeconfig apply -f -
 
+          echo "Enabling advanced scheduling"
+          kubectl annotate --overwrite workloadcluster kcp-cluster-1 featuregates.experimental.workload.kcp.dev/advancedscheduling='true'
+          kubectl annotate --overwrite workloadcluster kcp-cluster-2 featuregates.experimental.workload.kcp.dev/advancedscheduling='true'
+          
           echo "Checking all workload clusters are ready"
-          kubectl wait --timeout=300s --for=condition=Ready=true workloadclusters --all
-
+          kubectl wait --timeout=300s --for=condition=Ready=true workloadclusters --all  
+          
           GLBC_LOG_FILE="${TEMP_DIR}"/glbc.log
           echo "GLBC_LOG_FILE=${GLBC_LOG_FILE}" >> $GITHUB_ENV
           export AWS_DNS_PUBLIC_ZONE_ID=FAKE_ZONE_ID
@@ -197,6 +201,9 @@ jobs:
 
           echo "Switching to kcp-glbc-user workspace"
           ./bin/kubectl-kcp workspace use root:default:kcp-glbc-user
+
+          kubectl --kubeconfig=${KUBECONFIG_GLBC_USER} label namespace default experimental.workload.kcp.dev/scheduling-disabled="true"
+          kubectl --kubeconfig=${KUBECONFIG_GLBC_USER} annotate namespace default scheduling.kcp.dev/placement-
 
       - name: Run e2e tests
         run: |

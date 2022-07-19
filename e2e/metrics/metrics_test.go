@@ -17,7 +17,9 @@ limitations under the License.
 package metrics
 
 import (
+	"encoding/json"
 	"fmt"
+	"github.com/kuadrant/kcp-glbc/pkg/util/workloadMigration"
 	"math"
 	"os"
 	"strings"
@@ -191,16 +193,25 @@ func TestMetrics(t *testing.T) {
 	zoneID := os.Getenv("AWS_DNS_PUBLIC_ZONE_ID")
 	test.Expect(zoneID).NotTo(BeNil())
 
+	ingressStatus := &networkingv1.IngressStatus{}
+	for a, v := range ingress.Annotations {
+		if strings.Contains(a, workloadMigration.WorkloadStatusAnnotation) {
+			err = json.Unmarshal([]byte(v), &ingressStatus)
+			break
+		}
+	}
+	test.Expect(err).NotTo(HaveOccurred())
+
 	// Check a DNSRecord for the Ingress is updated with the expected Spec
-	test.Eventually(DNSRecord(test, namespace, name)).Should(And(
+	test.Eventually(DNSRecord(test, namespace, name)).WithTimeout(TestTimeoutShort * 2).Should(And(
 		WithTransform(DNSRecordEndpoints, HaveLen(1)),
 		WithTransform(DNSRecordEndpoints, ContainElement(MatchFieldsP(IgnoreExtras,
 			Fields{
 				"DNSName":          Equal(ingress.Annotations[kuadrantcluster.ANNOTATION_HCG_HOST]),
-				"Targets":          ConsistOf(ingress.Status.LoadBalancer.Ingress[0].IP),
+				"Targets":          ConsistOf(ingressStatus.LoadBalancer.Ingress[0].IP),
 				"RecordType":       Equal("A"),
 				"RecordTTL":        Equal(kuadrantv1.TTL(60)),
-				"SetIdentifier":    Equal(ingress.Status.LoadBalancer.Ingress[0].IP),
+				"SetIdentifier":    Equal(ingressStatus.LoadBalancer.Ingress[0].IP),
 				"ProviderSpecific": ConsistOf(kuadrantv1.ProviderSpecific{{Name: "aws/weight", Value: "120"}}),
 			})),
 		),

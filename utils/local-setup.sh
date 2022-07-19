@@ -131,8 +131,14 @@ createWorkloadCluster() {
 createUserWorkloadCluster() {
   createWorkloadCluster $1 $2 $3 $4
   echo "Deploying kcp syncer to ${1}"
-  kubectl --kubeconfig=${KUBECONFIG_GLBC} create namespace kcp-syncer --dry-run=client -o yaml | kubectl --kubeconfig=${KUBECONFIG_GLBC} apply -f -
+  KUBECONFIG=${KUBECONFIG_GLBC} kubectl create namespace kcp-syncer --dry-run=client -o yaml | kubectl --kubeconfig=${KUBECONFIG_GLBC} apply -f -
   KUBECONFIG=${KUBECONFIG_GLBC} ${KUBECTL_KCP_BIN} workload sync ${clusterName} --kcp-namespace kcp-syncer --syncer-image=${KCP_SYNCER_IMAGE} --resources=ingresses.networking.k8s.io,services >${TEMP_DIR}/${clusterName}-syncer.yaml
+
+  # Enable advanced scheduling
+  echo "Enabling advanced scheduling"
+  KUBECONFIG=${KUBECONFIG_GLBC} kubectl annotate --overwrite workloadcluster ${clusterName} featuregates.experimental.workload.kcp.dev/advancedscheduling='true'
+  KUBECONFIG=${KUBECONFIG_GLBC} kubectl get workloadclusters ${clusterName} -o json | jq .metadata.annotations
+
   kubectl apply -f ${TEMP_DIR}/${clusterName}-syncer.yaml
 }
 
@@ -177,6 +183,9 @@ KUBECONFIG=${KUBECONFIG_GLBC} ${SCRIPT_DIR}/deploy.sh -c ${GLBC_DEPLOY_COMPONENT
 KUBECONFIG=${KUBECONFIG_GLBC} ${KUBECTL_KCP_BIN} workspace use "root:default:kcp-glbc"
 kubectl --kubeconfig=${KUBECONFIG_GLBC} create namespace kcp-glbc --dry-run=client -o yaml | kubectl --kubeconfig=${KUBECONFIG_GLBC} apply -f -
 
+# Set up glbc cert issuer
+go run ${SCRIPT_DIR}/certman-issuer/ --glbc-kubeconfig ${KUBECONFIG_GLBC}
+
 #5. Create User workload clusters and wait for them to be ready
 KUBECONFIG=${KUBECONFIG_GLBC} ${KUBECTL_KCP_BIN} workspace use "root:default:kcp-glbc-user-compute"
 echo "Creating $NUM_CLUSTERS kcp workload cluster(s)"
@@ -187,11 +196,15 @@ for cluster in $CLUSTERS; do
   port80=$((port80 + 1))
   port443=$((port443 + 1))
 done
+
 KUBECONFIG=${KUBECONFIG_GLBC} kubectl wait --timeout=300s --for=condition=Ready=true workloadclusters --all
-KUBECONFIG=${KUBECONFIG_GLBC} kubectl apply -f ./utils/kcp-contrib/location.yaml
 
 #6. Switch to user workspace
 KUBECONFIG=${KUBECONFIG_GLBC_USER} ${KUBECTL_KCP_BIN} workspace use "root:default:kcp-glbc-user"
+
+#disable automatic scheduling
+kubectl --kubeconfig=${KUBECONFIG_GLBC_USER} label namespace default experimental.workload.kcp.dev/scheduling-disabled="true"
+kubectl --kubeconfig=${KUBECONFIG_GLBC_USER} annotate namespace default scheduling.kcp.dev/placement-
 
 echo ""
 echo "KCP PID          : ${KCP_PID}"
