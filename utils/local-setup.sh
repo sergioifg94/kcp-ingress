@@ -183,8 +183,10 @@ KUBECONFIG=${KUBECONFIG_GLBC} ${SCRIPT_DIR}/deploy.sh -c ${GLBC_DEPLOY_COMPONENT
 KUBECONFIG=${KUBECONFIG_GLBC} ${KUBECTL_KCP_BIN} workspace use "root:default:kcp-glbc"
 kubectl --kubeconfig=${KUBECONFIG_GLBC} create namespace kcp-glbc --dry-run=client -o yaml | kubectl --kubeconfig=${KUBECONFIG_GLBC} apply -f -
 
-# Set up glbc cert issuer
+#ToDo This issuer should only need to be created in one ns
+# Currently, depending on how you are running glbc (local vs container), the expected location of the issuer differs
 go run ${SCRIPT_DIR}/certman-issuer/ --glbc-kubeconfig ${KUBECONFIG_GLBC}
+go run ${SCRIPT_DIR}/certman-issuer/ --glbc-kubeconfig ${KUBECONFIG_GLBC} --issuer-namespace=kcp-glbc
 
 #5. Create User workload clusters and wait for them to be ready
 KUBECONFIG=${KUBECONFIG_GLBC} ${KUBECTL_KCP_BIN} workspace use "root:default:kcp-glbc-user-compute"
@@ -216,7 +218,6 @@ echo ""
 echo "       cd ${PWD}"
 echo "       export KUBECONFIG=${KUBECONFIG_GLBC}"
 echo "       ./bin/kubectl-kcp workspace use root:default:kcp-glbc"
-echo "       go run ./utils/certman-issuer/ --glbc-kubeconfig ${KUBECONFIG_GLBC} "
 echo "       ./bin/kcp-glbc --kubeconfig ${KUBECONFIG_GLBC} --context system:admin"
 echo ""
 echo "Run Option 2 (Deploy latest in KCP with monitoring enabled):"
