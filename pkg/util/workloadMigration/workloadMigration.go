@@ -1,6 +1,8 @@
 package workloadMigration
 
 import (
+	"errors"
+	"github.com/go-logr/logr"
 	"github.com/kuadrant/kcp-glbc/pkg/util/metadata"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/client-go/tools/cache"
@@ -20,16 +22,20 @@ const (
 	TTL                      = 60
 )
 
-func Process(obj metav1.Object, queue workqueue.RateLimitingInterface) {
-	ensureSoftFinalizers(obj)
-	gracefulRemoveSoftFinalizers(obj, queue)
+func Process(obj metav1.Object, queue workqueue.RateLimitingInterface, logger logr.Logger) {
+	ensureSoftFinalizers(obj, logger)
+	gracefulRemoveSoftFinalizers(obj, queue, logger)
 }
 
 //ensureSoftFinalizers ensure all active workload clusters have a soft finalizer set
-func ensureSoftFinalizers(obj metav1.Object) {
+func ensureSoftFinalizers(obj metav1.Object, logger logr.Logger) {
 	for label := range obj.GetLabels() {
 		if strings.Contains(label, WorkloadTargetLabel) {
 			labelParts := strings.Split(label, "/")
+			if len(labelParts) < 2 {
+				logger.Error(errors.New("invalid workload target label"), "cannot process workload migration")
+				return
+			}
 			softFinalizer := WorkloadClusterFinalizer + "/" + labelParts[1]
 			metadata.AddAnnotation(obj, softFinalizer, SoftFinalizer)
 			//if delayed delete is active on this object, remove it
@@ -39,12 +45,16 @@ func ensureSoftFinalizers(obj metav1.Object) {
 }
 
 //gracefulRemoveSoftFinalizers any soft finalizers with no active workload cluster should trigger a delayed delete
-func gracefulRemoveSoftFinalizers(obj metav1.Object, queue workqueue.RateLimitingInterface) {
+func gracefulRemoveSoftFinalizers(obj metav1.Object, queue workqueue.RateLimitingInterface, logger logr.Logger) {
 	at := time.Now()
 	at = at.Add((TTL * time.Second) * 2)
 	for annotation := range obj.GetAnnotations() {
 		if strings.Contains(annotation, WorkloadClusterFinalizer) {
 			finalizerParts := strings.Split(annotation, "/")
+			if len(finalizerParts) < 2 {
+				logger.Error(errors.New("invalid workload cluster soft finalizer"), "cannot process workload migration")
+				return
+			}
 			//no label for this finalizer, set up graceful delete
 			if _, ok := obj.GetLabels()[WorkloadTargetLabel+"/"+finalizerParts[1]]; !ok {
 				clusterDeleteAtAnnotation := DeleteAtAnnotation + "-" + finalizerParts[1]

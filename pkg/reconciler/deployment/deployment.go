@@ -10,7 +10,7 @@ import (
 )
 
 func (c *Controller) reconcile(ctx context.Context, deployment *appsv1.Deployment) error {
-	workloadMigration.Process(deployment, c.Queue)
+	workloadMigration.Process(deployment, c.Queue, c.Logger)
 	if deployment.DeletionTimestamp != nil && !deployment.DeletionTimestamp.IsZero() {
 		//in 0.5.0 these are never cleaned up properly
 		for _, f := range deployment.Finalizers {

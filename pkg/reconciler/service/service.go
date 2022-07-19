@@ -9,7 +9,7 @@ import (
 )
 
 func (c *Controller) reconcile(ctx context.Context, service *corev1.Service) error {
-	workloadMigration.Process(service, c.Queue)
+	workloadMigration.Process(service, c.Queue, c.Logger)
 	if service.DeletionTimestamp != nil && !service.DeletionTimestamp.IsZero() {
 		//in 0.5.0 these are never cleaned up properly
 		for _, f := range service.Finalizers {

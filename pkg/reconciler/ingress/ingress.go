@@ -3,6 +3,7 @@ package ingress
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"github.com/kuadrant/kcp-glbc/pkg/util/slice"
 	"github.com/kuadrant/kcp-glbc/pkg/util/workloadMigration"
@@ -12,7 +13,7 @@ import (
 	"github.com/rs/xid"
 
 	networkingv1 "k8s.io/api/networking/v1"
-	"k8s.io/apimachinery/pkg/api/errors"
+	k8errors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/client-go/tools/cache"
@@ -32,7 +33,7 @@ const (
 )
 
 func (c *Controller) reconcile(ctx context.Context, ingress *networkingv1.Ingress) error {
-	workloadMigration.Process(ingress, c.Queue)
+	workloadMigration.Process(ingress, c.Queue, c.Logger)
 	if ingress.DeletionTimestamp != nil && !ingress.DeletionTimestamp.IsZero() {
 		// delete any DNS records
 		if err := c.ensureDNS(ctx, ingress); err != nil {
@@ -108,7 +109,7 @@ func (c *Controller) ensureCertificate(ctx context.Context, ingress *networkingv
 		return nil
 	}
 	err = c.certProvider.Create(ctx, controlClusterContext)
-	if err != nil && !errors.IsAlreadyExists(err) {
+	if err != nil && !k8errors.IsAlreadyExists(err) {
 		return err
 	}
 
@@ -137,7 +138,7 @@ func (c *Controller) ensureDNS(ctx context.Context, ingress *networkingv1.Ingres
 	if ingress.DeletionTimestamp != nil && !ingress.DeletionTimestamp.IsZero() {
 		// delete DNSRecord
 		err := c.dnsRecordClient.Cluster(logicalcluster.From(ingress)).KuadrantV1().DNSRecords(ingress.Namespace).Delete(ctx, ingress.Name, metav1.DeleteOptions{})
-		if err != nil && !errors.IsNotFound(err) {
+		if err != nil && !k8errors.IsNotFound(err) {
 			return err
 		}
 		return nil
@@ -151,6 +152,9 @@ func (c *Controller) ensureDNS(ctx context.Context, ingress *networkingv1.Ingres
 			continue
 		}
 		annotationParts := strings.Split(k, "/")
+		if len(annotationParts) < 2 {
+			return errors.New("invalid workloadStatus annotation format")
+		}
 		//only add IP record if cluster is  targeted
 		if !metadata.HasLabel(ingress, workloadMigration.WorkloadTargetLabel+"/"+annotationParts[1]) {
 			continue
@@ -178,7 +182,7 @@ func (c *Controller) ensureDNS(ctx context.Context, ingress *networkingv1.Ingres
 	// Attempt to retrieve the existing DNSRecord for this Ingress
 	existing, err := c.dnsRecordClient.Cluster(logicalcluster.From(ingress)).KuadrantV1().DNSRecords(ingress.Namespace).Get(ctx, ingress.Name, metav1.GetOptions{})
 	// If it doesn't exist, create it
-	if err != nil && errors.IsNotFound(err) {
+	if err != nil && k8errors.IsNotFound(err) {
 		// Create the DNSRecord object
 		record := &v1.DNSRecord{}
 		if err := c.setDnsRecordFromIngress(ctx, ingress, record); err != nil {
@@ -306,6 +310,10 @@ func (c *Controller) targetsFromIngress(ctx context.Context, ingress *networking
 		}
 		//only add targets for targeted cluster
 		annotationParts := strings.Split(k, "/")
+		if len(annotationParts) < 2 {
+			return targets, errors.New("invalid workloadStatus annotation format")
+		}
+
 		if !metadata.HasLabel(ingress, workloadMigration.WorkloadTargetLabel+"/"+annotationParts[1]) {
 			continue
 		}
