@@ -167,7 +167,7 @@ wait_for "grep 'Ready to start controllers' ${KCP_LOG_FILE}" "kcp" "1m" "5"
 (cd ${KCP_GLBC_DIR} && make generate-ld-config)
 
 #2. Setup workspaces (kcp-glbc, kcp-glbc-compute, kcp-glbc-user, kcp-glbc-user-compute)
-KUBECONFIG=${KUBECONFIG_GLBC} ${SCRIPT_DIR}/deploy.sh -c "none"
+KUBECONFIG=${KUBECONFIG_GLBC} GLBC_USER_WORKLOAD_CLUSTER_NAME=${KIND_CLUSTER_PREFIX}1 ${SCRIPT_DIR}/deploy.sh -c "none"
 
 #3. Create GLBC workload cluster and wait for it to be ready
 createWorkloadCluster $KCP_GLBC_CLUSTER_NAME 8081 8444 "glbc"
@@ -177,14 +177,16 @@ KUBECONFIG=${KUBECONFIG_GLBC} ${KUBECTL_KCP_BIN} workspace use "root:default:kcp
 KUBECONFIG=${KUBECONFIG_GLBC} kubectl wait --timeout=300s --for=condition=Ready=true workloadclusters "glbc"
 
 #4. Deploy GLBC components
-KUBECONFIG=${KUBECONFIG_GLBC} ${SCRIPT_DIR}/deploy.sh -c ${GLBC_DEPLOY_COMPONENTS}
+KUBECONFIG=${KUBECONFIG_GLBC} GLBC_USER_WORKLOAD_CLUSTER_NAME=${KIND_CLUSTER_PREFIX}1 ${SCRIPT_DIR}/deploy.sh -c ${GLBC_DEPLOY_COMPONENTS}
 # When using Run Option 1(Local), the `kcp-glbc` ns won't exist in the glcb workspace.
 # Create it here so that we can always use `kcp-glbc` for NAMESPACE (cert manager resources are created here)
 KUBECONFIG=${KUBECONFIG_GLBC} ${KUBECTL_KCP_BIN} workspace use "root:default:kcp-glbc"
 kubectl --kubeconfig=${KUBECONFIG_GLBC} create namespace kcp-glbc --dry-run=client -o yaml | kubectl --kubeconfig=${KUBECONFIG_GLBC} apply -f -
 
-# Set up glbc cert issuer
+#ToDo This issuer should only need to be created in one ns
+# Currently, depending on how you are running glbc (local vs container), the expected location of the issuer differs
 go run ${SCRIPT_DIR}/certman-issuer/ --glbc-kubeconfig ${KUBECONFIG_GLBC}
+go run ${SCRIPT_DIR}/certman-issuer/ --glbc-kubeconfig ${KUBECONFIG_GLBC} --issuer-namespace=kcp-glbc
 
 #5. Create User workload clusters and wait for them to be ready
 KUBECONFIG=${KUBECONFIG_GLBC} ${KUBECTL_KCP_BIN} workspace use "root:default:kcp-glbc-user-compute"
@@ -197,7 +199,7 @@ for cluster in $CLUSTERS; do
   port443=$((port443 + 1))
 done
 
-KUBECONFIG=${KUBECONFIG_GLBC} kubectl wait --timeout=300s --for=condition=Ready=true workloadclusters --all
+KUBECONFIG=${KUBECONFIG_GLBC} kubectl wait --timeout=300s --for=condition=Ready=true workloadclusters $CLUSTERS
 
 #6. Switch to user workspace
 KUBECONFIG=${KUBECONFIG_GLBC_USER} ${KUBECTL_KCP_BIN} workspace use "root:default:kcp-glbc-user"
@@ -216,7 +218,6 @@ echo ""
 echo "       cd ${PWD}"
 echo "       export KUBECONFIG=${KUBECONFIG_GLBC}"
 echo "       ./bin/kubectl-kcp workspace use root:default:kcp-glbc"
-echo "       go run ./utils/certman-issuer/ --glbc-kubeconfig ${KUBECONFIG_GLBC} "
 echo "       ./bin/kcp-glbc --kubeconfig ${KUBECONFIG_GLBC} --context system:admin"
 echo ""
 echo "Run Option 2 (Deploy latest in KCP with monitoring enabled):"

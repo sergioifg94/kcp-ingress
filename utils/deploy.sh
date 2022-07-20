@@ -29,8 +29,9 @@ GLBC_WORKSPACE_USER=${GLBC_WORKSPACE}-user
 GLBC_WORKSPACE_USER_COMPUTE=${GLBC_WORKSPACE_USER}-compute
 
 #Workload clusters
-GLBC_WORKLOAD_CLUSTER_NAME=glbc
-GLBC_USER_WORKLOAD_CLUSTER_NAME=glbc-user
+: ${GLBC_WORKLOAD_CLUSTER_NAME:=glbc}
+: ${GLBC_USER_WORKLOAD_CLUSTER_NAME:=glbc-user}
+
 : ${KCP_VERSION:="release-0.5"}
 KCP_SYNCER_IMAGE="ghcr.io/kcp-dev/kcp/syncer:${KCP_VERSION}"
 
@@ -43,8 +44,6 @@ MULTI_WORKSPACE_AWARE=true
 # Misc
 # Wait for workload clusters to be ready before continuing
 : ${WAIT_WC_READY:="false"}
-# Create user workload cluster
-: ${CREATE_USER_WC:="false"}
 
 ############################################################
 # Help                                                     #
@@ -75,28 +74,28 @@ print_env()
    echo
    echo "Workspaces:"
    echo
-   echo "  ORG_WORKSPACE:               ${ORG_WORKSPACE}"
-   echo "  GLBC_WORKSPACE:              ${GLBC_WORKSPACE}"
-   echo "  GLBC_WORKSPACE_USER:         ${GLBC_WORKSPACE_USER}"
-   echo "  GLBC_WORKSPACE_COMPUTE:      ${GLBC_WORKSPACE_COMPUTE}"
-   echo "  GLBC_WORKSPACE_USER_COMPUTE: ${GLBC_WORKSPACE_USER_COMPUTE}"
+   echo "  ORG_WORKSPACE:                    ${ORG_WORKSPACE}"
+   echo "  GLBC_WORKSPACE:                   ${GLBC_WORKSPACE}"
+   echo "  GLBC_WORKSPACE_USER:              ${GLBC_WORKSPACE_USER}"
+   echo "  GLBC_WORKSPACE_COMPUTE:           ${GLBC_WORKSPACE_COMPUTE}"
+   echo "  GLBC_WORKSPACE_USER_COMPUTE:      ${GLBC_WORKSPACE_USER_COMPUTE}"
    echo
    echo "Workload clusters:"
    echo
-   echo "  GLBC_WORKLOAD_CLUSTER_NAME:  ${GLBC_WORKLOAD_CLUSTER_NAME}"
-   echo "  KCP_SYNCER_IMAGE:            ${KCP_SYNCER_IMAGE}"
+   echo "  GLBC_WORKLOAD_CLUSTER_NAME:       ${GLBC_WORKLOAD_CLUSTER_NAME}"
+   echo "  GLBC_USER_WORKLOAD_CLUSTER_NAME:  ${GLBC_USER_WORKLOAD_CLUSTER_NAME}"
+   echo "  KCP_SYNCER_IMAGE:                 ${KCP_SYNCER_IMAGE}"
    echo
    echo "GLBC Deployment:"
    echo
-   echo "  GLBC_NAMESPACE:              ${GLBC_NAMESPACE}"
-   echo "  DEPLOY_COMPONENTS:           ${DEPLOY_COMPONENTS}"
-   echo "  GLBC_KUSTOMIZATION:          ${GLBC_KUSTOMIZATION}"
-   echo "  MULTI_WORKSPACE_AWARE:       ${MULTI_WORKSPACE_AWARE}"
+   echo "  GLBC_NAMESPACE:                   ${GLBC_NAMESPACE}"
+   echo "  DEPLOY_COMPONENTS:                ${DEPLOY_COMPONENTS}"
+   echo "  GLBC_KUSTOMIZATION:               ${GLBC_KUSTOMIZATION}"
+   echo "  MULTI_WORKSPACE_AWARE:            ${MULTI_WORKSPACE_AWARE}"
    echo
    echo "Misc:"
    echo
-   echo "  WAIT_WC_READY                ${WAIT_WC_READY}"
-   echo "  CREATE_USER_WC               ${CREATE_USER_WC}"
+   echo "  WAIT_WC_READY                     ${WAIT_WC_READY}"
    echo
 }
 
@@ -115,6 +114,7 @@ spec:
       path: ${path}
       exportName: ${exportName}
 EOF
+  kubectl wait --timeout=60s --for=condition=Ready=true apibinding $name
 }
 
 create_ns() {
@@ -131,6 +131,8 @@ create_workload_cluster() {
     echo "   kubectl apply -f ${GLBC_KUSTOMIZATION}/${1}-syncer.yaml"
     echo ""
   }
+  kubectl wait --timeout=60s --for=condition=VirtualWorkspaceURLsReady=true apiexport kubernetes
+
   if [[ $WAIT_WC_READY = "true" ]]; then
     echo "This script will automatically continue once the cluster is synced!"
     echo "Waiting for workload cluster ${1} to be ready ..."
@@ -149,7 +151,7 @@ deploy_cert_manager() {
 deploy_glbc() {
   echo "Creating GLBC namespace"
   create_ns ${GLBC_NAMESPACE}
-  
+
   echo "Creating issuer"
   go run ${DEPLOY_SCRIPT_DIR}/certman-issuer/ --glbc-kubeconfig ${GLBC_KUSTOMIZATION}/kcp.kubeconfig --issuer-namespace ${GLBC_NAMESPACE}
 
@@ -253,6 +255,9 @@ kubectl apply -f ${KCP_GLBC_DIR}/utils/kcp-contrib/crds/pods.yaml
 ## Register GLBC APIs
 kubectl apply -f ${KCP_GLBC_DIR}/utils/kcp-contrib/apiresourceschema.yaml
 kubectl apply -f ${KCP_GLBC_DIR}/utils/kcp-contrib/apiexport.yaml
+
+kubectl wait --timeout=60s --for=condition=VirtualWorkspaceURLsReady=true apiexport glbc
+
 create_api_binding "glbc" "glbc" "${ORG_WORKSPACE}:${GLBC_WORKSPACE}"
 
 ## Register CertManager APIs
@@ -271,11 +276,9 @@ ${DEPLOY_SCRIPT_DIR}/create_glbc_ns.sh -a ${caData} -n "default" -c ${GLBC_WORKS
 ${KUBECTL_KCP_BIN} workspace use ${ORG_WORKSPACE}
 ${KUBECTL_KCP_BIN} workspace create ${GLBC_WORKSPACE_USER_COMPUTE} --enter || ${KUBECTL_KCP_BIN} workspace use ${GLBC_WORKSPACE_USER_COMPUTE}
 
-if [[ $CREATE_USER_WC = "true" ]]; then
-  ## Create User workload cluster
-  kubectl create namespace kcp-syncer --dry-run=client -o yaml | kubectl apply -f -
-  create_workload_cluster ${GLBC_USER_WORKLOAD_CLUSTER_NAME}
-fi
+## Create User workload cluster
+kubectl create namespace kcp-syncer --dry-run=client -o yaml | kubectl apply -f -
+create_workload_cluster ${GLBC_USER_WORKLOAD_CLUSTER_NAME}
 
 ## Add location
 kubectl apply -f ${KCP_GLBC_DIR}/utils/kcp-contrib/location.yaml

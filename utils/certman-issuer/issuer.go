@@ -77,7 +77,7 @@ func main() {
 		log.Fatalln(fmt.Errorf("failed to create issuer for : %s %w", tlsProvider, err))
 	}
 
-	log.Printf("Issuer %s successfully created %s namespace ", tlsProvider, issuerNamespace)
+	log.Printf("Issuer %s successfully created in %s namespace ", tlsProvider, issuerNamespace)
 }
 
 func create(ctx context.Context, certManegerClient certmanclient.CertmanagerV1Interface, k8sClient kubernetes.Interface, issuerObject Issuer) error {
