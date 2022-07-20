@@ -19,7 +19,8 @@ tests:
         exp_alerts:
           - exp_labels:
               severity: warning
+              pod: glbc
             exp_annotations:
               summary: 'High DNS Provider Error Rate'
-              description: 'Excessive errors - more than 1% of requests are errors'
+              description: 'Excessive errors - The error rate is 0.02, which is greater than the threshold which is 1%'
               runbook_url: 'https://github.com/Kuadrant/kcp-glbc/blob/main/docs/observability/runbooks/HighDNSProviderErrorRate.adoc'

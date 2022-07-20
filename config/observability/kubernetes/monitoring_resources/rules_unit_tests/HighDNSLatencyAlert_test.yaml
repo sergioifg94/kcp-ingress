@@ -20,6 +20,6 @@ tests:
           - exp_labels:
               severity: warning
             exp_annotations:
-              summary: 'Summary of the alert'
-              description: 'More detailed description of the alert and cause of firing'
+              summary: 'High DNS Latency Rate Alert'
+              description: 'High latency rate when requesting DNS - The latency rate is 0.6000000000000001 seconds, which is greater than our threshold which is 0.5seconds.'
               runbook_url: 'https://github.com/Kuadrant/kcp-glbc/blob/main/docs/observability/runbooks/HighDNSLatencyAlert.adoc'
