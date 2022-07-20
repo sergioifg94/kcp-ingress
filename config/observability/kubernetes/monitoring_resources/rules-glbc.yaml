@@ -46,3 +46,113 @@ groups:
         for: "60m"
         labels:
           severity: warning
+  - name: SLOIngressAdmissionLatency
+    rules:
+      - alert: SLOIngressAdmissionLatency-ErrorBudgetBurn-5m1h
+        annotations:
+          description: "High error budget burn in namespace {{ $labels.namespace }} (current value: {{ $value }}). Check the runbook for how to resolve this."
+          runbook_url: https://github.com/Kuadrant/kcp-glbc/blob/main/docs/observability/runbooks/SLOIngressAdmissionLatency.adoc
+          summary: "At least 2.0% of the SLO error budget has been consumed over the past 5m and 1h windows"
+        expr: |
+          (
+            glbc_ingress_managed_object_time_to_admission:burnrate5m{container="manager",job=~".*kcp-glbc-controller-manager"} > (13.44 * (1-0.999))
+            and
+            glbc_ingress_managed_object_time_to_admission:burnrate1h{container="manager",job=~".*kcp-glbc-controller-manager"} > (13.44 * (1-0.999))
+          )
+        labels:
+          severity: critical
+      - alert: SLOIngressAdmissionLatency-ErrorBudgetBurn-30m6h
+        annotations:
+          description: "High error budget burn in namespace {{ $labels.namespace }} (current value: {{ $value }}). Check the runbook for how to resolve this."
+          runbook_url: https://github.com/Kuadrant/kcp-glbc/blob/main/docs/observability/runbooks/SLOIngressAdmissionLatency.adoc
+          summary: "At least 5.0% of the SLO error budget has been consumed over the past 30m and 6h windows"
+        expr: |
+          (
+            glbc_ingress_managed_object_time_to_admission:burnrate30m{container="manager",job=~".*kcp-glbc-controller-manager"} > (5.6 * (1-0.999))
+            and
+            glbc_ingress_managed_object_time_to_admission:burnrate6h{container="manager",job=~".*kcp-glbc-controller-manager"} > (5.6 * (1-0.999))
+          )
+        labels:
+          severity: critical
+      - alert: SLOIngressAdmissionLatency-ErrorBudgetBurn-2h1d
+        annotations:
+          description: "High error budget burn in namespace {{ $labels.namespace }} (current value: {{ $value }}). Check the runbook for how to resolve this."
+          runbook_url: https://github.com/Kuadrant/kcp-glbc/blob/main/docs/observability/runbooks/SLOIngressAdmissionLatency.adoc
+          summary: "At least 10.0% of the SLO error budget has been consumed over the past 2h and 1d windows"
+        expr: |
+          (
+            glbc_ingress_managed_object_time_to_admission:burnrate2h{container="manager",job=~".*kcp-glbc-controller-manager"} > (2.8 * (1-0.999))
+            and
+            glbc_ingress_managed_object_time_to_admission:burnrate1d{container="manager",job=~".*kcp-glbc-controller-manager"} > (2.8 * (1-0.999))
+          )
+        labels:
+          severity: warning
+      - alert: SLOIngressAdmissionLatency-ErrorBudgetBurn-6h3d
+        annotations:
+          description: "High error budget burn in namespace {{ $labels.namespace }} (current value: {{ $value }}). Check the runbook for how to resolve this."
+          runbook_url: https://github.com/Kuadrant/kcp-glbc/blob/main/docs/observability/runbooks/SLOIngressAdmissionLatency.adoc
+          summary: "At least 10.0% of the SLO error budget has been consumed over the past 6h and 3d windows"
+        expr: |
+          (
+            glbc_ingress_managed_object_time_to_admission:burnrate6h{container="manager",job=~".*kcp-glbc-controller-manager"} > (0.933 * (1-0.999))
+            and
+            glbc_ingress_managed_object_time_to_admission:burnrate3d{container="manager",job=~".*kcp-glbc-controller-manager"} > (0.933 * (1-0.999))
+          )
+        labels:
+          severity: warning
+      - expr: |
+          1 - (
+            sum by(container,job,namespace) (rate(glbc_ingress_managed_object_time_to_admission_bucket{container="manager",job=~".*kcp-glbc-controller-manager",le="120"}[5m]))
+            /
+            sum by(container,job,namespace) (rate(glbc_ingress_managed_object_time_to_admission_count{container="manager",job=~".*kcp-glbc-controller-manager"}[5m]))
+          )
+        record: glbc_ingress_managed_object_time_to_admission:burnrate5m
+      - expr: |
+          1 - (
+            sum by(container,job,namespace) (rate(glbc_ingress_managed_object_time_to_admission_bucket{container="manager",job=~".*kcp-glbc-controller-manager",le="120"}[30m]))
+            /
+            sum by(container,job,namespace) (rate(glbc_ingress_managed_object_time_to_admission_count{container="manager",job=~".*kcp-glbc-controller-manager"}[30m]))
+          )
+        record: glbc_ingress_managed_object_time_to_admission:burnrate30m
+      - expr: |
+          1 - (
+            sum by(container,job,namespace) (rate(glbc_ingress_managed_object_time_to_admission_bucket{container="manager",job=~".*kcp-glbc-controller-manager",le="120"}[2h]))
+            /
+            sum by(container,job,namespace) (rate(glbc_ingress_managed_object_time_to_admission_count{container="manager",job=~".*kcp-glbc-controller-manager"}[2h]))
+          )
+        record: glbc_ingress_managed_object_time_to_admission:burnrate2h
+      - expr: |
+          1 - (
+            sum by(container,job,namespace) (rate(glbc_ingress_managed_object_time_to_admission_bucket{container="manager",job=~".*kcp-glbc-controller-manager",le="120"}[6h]))
+            /
+            sum by(container,job,namespace) (rate(glbc_ingress_managed_object_time_to_admission_count{container="manager",job=~".*kcp-glbc-controller-manager"}[6h]))
+          )
+        record: glbc_ingress_managed_object_time_to_admission:burnrate6h
+      - expr: |
+          1 - (
+            sum by(container,job,namespace) (rate(glbc_ingress_managed_object_time_to_admission_bucket{container="manager",job=~".*kcp-glbc-controller-manager",le="120"}[1h]))
+            /
+            sum by(container,job,namespace) (rate(glbc_ingress_managed_object_time_to_admission_count{container="manager",job=~".*kcp-glbc-controller-manager"}[1h]))
+          )
+        record: glbc_ingress_managed_object_time_to_admission:burnrate1h
+      - expr: |
+          1 - (
+            sum by(container,job,namespace) (rate(glbc_ingress_managed_object_time_to_admission_bucket{container="manager",job=~".*kcp-glbc-controller-manager",le="120"}[6h]))
+            /
+            sum by(container,job,namespace) (rate(glbc_ingress_managed_object_time_to_admission_count{container="manager",job=~".*kcp-glbc-controller-manager"}[6h]))
+          )
+        record: glbc_ingress_managed_object_time_to_admission:burnrate6h
+      - expr: |
+          1 - (
+            sum by(container,job,namespace) (rate(glbc_ingress_managed_object_time_to_admission_bucket{container="manager",job=~".*kcp-glbc-controller-manager",le="120"}[1d]))
+            /
+            sum by(container,job,namespace) (rate(glbc_ingress_managed_object_time_to_admission_count{container="manager",job=~".*kcp-glbc-controller-manager"}[1d]))
+          )
+        record: glbc_ingress_managed_object_time_to_admission:burnrate1d
+      - expr: |
+          1 - (
+            sum by(container,job,namespace) (rate(glbc_ingress_managed_object_time_to_admission_bucket{container="manager",job=~".*kcp-glbc-controller-manager",le="120"}[3d]))
+            /
+            sum by(container,job,namespace) (rate(glbc_ingress_managed_object_time_to_admission_count{container="manager",job=~".*kcp-glbc-controller-manager"}[3d]))
+          )
+        record: glbc_ingress_managed_object_time_to_admission:burnrate3d
