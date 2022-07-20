@@ -16,22 +16,28 @@ toc::[]
 
 == Description
 
-The source of the alert is the `someAlertMetric` metric. It fires when the condition foo is true.
-
-Add other helpful information about the alert here if necessary.
+The source of the alert is the `glbc_route_53_*` metric. It fires when there is high latency rate on the requests made.
+The alert will be triggered if requests are taking longer than 0.5 seconds. This usually means, the DNS provider is not responding, metrics is misconfigured, or the metrics endpoint is not responding.
 
 == Prerequisites
 
-* Add any information that is needed or access to any system that is needed.
+* Access to the physical cluster where GLBC should be running
 
 == Execute/Resolution
 
-. Steps to troubleshoot & resolve
+. Check the DNS & namespace for indications of problems.
++
+[source,sh]
+----
+kubectl logs deployment/kcp-glbc-controller-manager
+kubectl get events
+----
+If found a _5xx_ type error, proceed to verify the https://health.aws.amazon.com/health/status[AWS Health Status] for any know outages or issues.
+
+. Check the configuration (aws key & secret) to ensure they are correct.
+
+. Verify the https://health.aws.amazon.com/health/status[AWS Health Status]
 
 == Validate
 
-What steps are required to verify that the procedure has been followed correctly and the required changes have been implemented correctly, with the desired outcome.
-
 . Check the alert is no longer firing.
-// Add any extra steps
-. Add more as necessary

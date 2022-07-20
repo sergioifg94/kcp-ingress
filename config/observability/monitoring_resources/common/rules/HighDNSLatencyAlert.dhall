@@ -25,7 +25,7 @@ in  PrometheusOperator.Rule::{
         ( toMap
             { summary = "High DNS Latency Rate Alert"
             , description =
-                "Less than 95% (0.95) of the requests are being served within 5 seconds. In the 95th percentile latency is {{ \$value }}"
+                "High latency rate when requesting DNS - The latency rate is {{ \$value }} seconds, which is greater than our threshold which is 0.5seconds."
             , runbook_url =
                 "https://github.com/Kuadrant/kcp-glbc/blob/main/docs/observability/runbooks/HighDNSLatencyAlert.adoc"
             }

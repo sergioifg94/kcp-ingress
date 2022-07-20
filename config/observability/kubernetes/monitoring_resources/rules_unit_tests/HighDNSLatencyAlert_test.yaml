@@ -7,9 +7,9 @@ tests:
   - interval: 1m
     input_series:
       - series: glbc_aws_route53_request_duration_seconds_sum{pod="glbc"}
-        values: "0+0x60 1+10x65"
+        values: "0+0x60 0+6x65"
       - series: glbc_aws_route53_request_duration_seconds_count{pod="glbc"}
-        values: "0+0x60 1+1x65"
+        values: "0+0x60 0+10x65"
     alert_rule_test:
       - eval_time: 60m
         alertname: HighDNSLatencyAlert

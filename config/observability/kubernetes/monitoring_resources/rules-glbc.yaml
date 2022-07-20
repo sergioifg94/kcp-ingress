@@ -30,7 +30,7 @@ groups:
           severity: critical
       - alert: HighDNSLatencyAlert
         annotations:
-          description: "Less than 95% (0.95) of the requests are being served within 5 seconds. In the 95th percentile latency is {{ $value }}"
+          description: "High latency rate when requesting DNS - The latency rate is {{ $value }} seconds, which is greater than our threshold which is 0.5seconds."
           runbook_url: https://github.com/Kuadrant/kcp-glbc/blob/main/docs/observability/runbooks/HighDNSLatencyAlert.adoc
           summary: High DNS Latency Rate Alert
         expr: "sum(rate(glbc_aws_route53_request_duration_seconds_sum[5m])) / sum(rate(glbc_aws_route53_request_duration_seconds_count[5m])) > 0.5"
