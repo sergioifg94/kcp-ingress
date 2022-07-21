@@ -1,10 +1,10 @@
-# KCP Global Load Balancer Controller
+# KCP Global Load Balancer
 
 ![build status badge](https://github.com/kuadrant/kcp-glbc/actions/workflows/ci.yaml/badge.svg)
 
 The KCP Global Load Balancer Controller (GLBC) solves multi cluster ingress use cases when leveraging KCP to provide transparent multi cluster deployments. 
 
-The main use case it solves currently is providing you with a single host that can be used to access your workload and bring traffic to the correct physical clusters. The GLBC manages the DNS for this host via Route53 (other providers will come later) and provides you with a valid TLS certificate. If your workload moves/is moved or expands contracts across clusters, GLBC will ensure that the DNS for this host is correct and traffic will continue to reach your workload.
+The main use case it solves currently is providing you with a single host that can be used to access your workload and bring traffic to the correct physical clusters. The GLBC manages the DNS for this host and provides you with a valid TLS certificate. If your workload moves/is moved or expands contracts across clusters, GLBC will ensure that the DNS for this host is correct and traffic will continue to reach your workload.
 
 It also offers the ability to setup a health check for your workload. When this health check fails for a particular cluster, the unhealthy cluster will be removed from the DNS response.
 
@@ -92,11 +92,12 @@ The e2e tests can be executed locally by running the following commands:
 ```bash
 # Start KCP and the KinD clusters
 $ make local-setup
-export KUBECONFIG=$(pwd)/.kcp/admin.kubeconfig
-export CLUSTERS_KUBECONFIG_DIR=$(pwd)/tmp
-export AWS_DNS_PUBLIC_ZONE_ID=YOUR_ZONE_ID
+export KUBECONFIG=config/deploy/local/kcp.kubeconfig
 ./bin/kubectl-kcp workspace use root:default:kcp-glbc
 ./bin/kcp-glbc --kubeconfig .kcp/admin.kubeconfig --context system:admin
+export CLUSTERS_KUBECONFIG_DIR=$(pwd)/tmp
+export AWS_DNS_PUBLIC_ZONE_ID=YOUR_ZONE_ID
+
 # Start KCP GLBC
 $ ./bin/kcp-glbc --kubeconfig .kcp/admin.kubeconfig --context system:admin --dns-provider fake
 # Run the e2e test suite

@@ -18,15 +18,14 @@ package support
 
 import (
 	"fmt"
-
 	"github.com/google/uuid"
+	tenancyv1alpha1 "github.com/kcp-dev/kcp/pkg/apis/tenancy/v1alpha1"
 	"github.com/onsi/gomega"
 
 	"k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime/schema"
 
-	tenancyv1alpha1 "github.com/kcp-dev/kcp/pkg/apis/tenancy/v1alpha1"
 	"github.com/kcp-dev/logicalcluster"
 )
 
@@ -110,9 +109,10 @@ func createTestWorkspace(t Test) *tenancyv1alpha1.ClusterWorkspace {
 		ObjectMeta: metav1.ObjectMeta{
 			Name: name,
 		},
-		Spec: tenancyv1alpha1.ClusterWorkspaceSpec{},
+		Spec: tenancyv1alpha1.ClusterWorkspaceSpec{
+			Type: tenancyv1alpha1.ClusterWorkspaceTypeReference{},
+		},
 	}
-
 	workspace, err := t.Client().Kcp().Cluster(TestOrganization).TenancyV1alpha1().ClusterWorkspaces().Create(t.Ctx(), workspace, metav1.CreateOptions{})
 	if err != nil {
 		t.Expect(err).NotTo(gomega.HaveOccurred())
