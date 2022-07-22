@@ -8,7 +8,6 @@ let AlertProperties
         burnRate : Double
       , longDuration : Duration.Type
       , shortDuration : Duration.Type
-      , for : Duration.Type
       , severity : AlertSeverity.Type
       , percentBurn : Double
       }

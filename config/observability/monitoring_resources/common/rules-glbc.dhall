@@ -13,5 +13,6 @@ in  PrometheusOperator.PrometheusRuleSpec::{
         , name = "glbc"
         , rules = Some ./rules/__glbc__.dhall
         }
+      , ./rules/SLOIngressAdmissionLatency.dhall
       ]
     }

@@ -119,7 +119,7 @@ gen-alert-rule-runbook:
 	@echo
 
 .PHONY: gen-rules-list
-gen-rules-list: RULES_FILES="$(shell echo $(addprefix "./", $(shell ls $(DHALL_RULES_SOURCE_DIR)|grep -v -E '__.*__.dhall|DeadMansSwitch.dhall')) | sed 's/ /, /g')"
+gen-rules-list: RULES_FILES="$(shell echo $(addprefix "./", $(shell ls $(DHALL_RULES_SOURCE_DIR)|grep -v -E '__.*__.dhall|DeadMansSwitch.dhall|SLOIngressAdmissionLatency.dhall')) | sed 's/ /, /g')"
 gen-rules-list:
 	@echo "let rules = [ $(RULES_FILES) ] in rules" > $(DHALL_RULES_SOURCE_DIR)/__glbc__.dhall
 
