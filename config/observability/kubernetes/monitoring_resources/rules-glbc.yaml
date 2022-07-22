@@ -28,3 +28,21 @@ groups:
         for: "5m"
         labels:
           severity: critical
+      - alert: HighDNSLatencyAlert
+        annotations:
+          description: "High latency rate when requesting DNS - The latency rate is {{ $value }} seconds, which is greater than our threshold which is 0.5seconds."
+          runbook_url: https://github.com/Kuadrant/kcp-glbc/blob/main/docs/observability/runbooks/HighDNSLatencyAlert.adoc
+          summary: High DNS Latency Rate Alert
+        expr: "sum(rate(glbc_aws_route53_request_duration_seconds_sum[5m])) / sum(rate(glbc_aws_route53_request_duration_seconds_count[5m])) > 0.5"
+        for: "60m"
+        labels:
+          severity: warning
+      - alert: HighDNSProviderErrorRate
+        annotations:
+          description: "Excessive errors - The error rate is {{ $value }}, which is greater than the threshold which is 1%"
+          runbook_url: https://github.com/Kuadrant/kcp-glbc/blob/main/docs/observability/runbooks/HighDNSProviderErrorRate.adoc
+          summary: High DNS Provider Error Rate
+        expr: "sum(rate(glbc_aws_route53_request_errors_total{}[5m])) by(pod) / sum(rate(glbc_aws_route53_request_total{}[5m])) by(pod) > 0.01"
+        for: "60m"
+        labels:
+          severity: warning
