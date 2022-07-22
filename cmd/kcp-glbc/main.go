@@ -16,7 +16,8 @@ import (
 	// Make sure our workqueue MetricsProvider is the first to register
 	_ "github.com/kuadrant/kcp-glbc/pkg/reconciler"
 
-	certmanclient "github.com/jetstack/cert-manager/pkg/client/clientset/versioned/typed/certmanager/v1"
+	certmanclient "github.com/jetstack/cert-manager/pkg/client/clientset/versioned"
+	certmaninformer "github.com/jetstack/cert-manager/pkg/client/informers/externalversions"
 
 	genericapiserver "k8s.io/apiserver/pkg/server"
 	"k8s.io/client-go/informers"
@@ -36,7 +37,6 @@ import (
 	"github.com/kuadrant/kcp-glbc/pkg/reconciler/dns"
 	"github.com/kuadrant/kcp-glbc/pkg/reconciler/ingress"
 	"github.com/kuadrant/kcp-glbc/pkg/reconciler/service"
-	tlsreconciler "github.com/kuadrant/kcp-glbc/pkg/reconciler/tls"
 	"github.com/kuadrant/kcp-glbc/pkg/tls"
 	"github.com/kuadrant/kcp-glbc/pkg/util/env"
 )
@@ -170,6 +170,10 @@ func main() {
 	kcpKuadrantClient, err = kuadrantv1.NewClusterForConfig(kcpClientConfig)
 	exitOnError(err, "Failed to create KCP kuadrant client")
 
+	// certificate client targeting the glbc workspace
+	certClient := certmanclient.NewForConfigOrDie(defaultClientConfig)
+
+	certificateInformerFactory := certmaninformer.NewSharedInformerFactory(certClient, resyncPeriod)
 	namespace := env.GetNamespace()
 
 	var certProvider tls.Provider
@@ -189,7 +193,7 @@ func main() {
 
 		certProvider, err = tls.NewCertManager(tls.CertManagerConfig{
 			DNSValidator:  tls.DNSValidatorRoute53,
-			CertClient:    certmanclient.NewForConfigOrDie(defaultClientConfig),
+			CertClient:    certClient,
 			CertProvider:  tlsCertProvider,
 			Region:        options.Region,
 			K8sClient:     defaultKubeClient,
@@ -198,29 +202,24 @@ func main() {
 		})
 		exitOnError(err, "Failed to create cert provider")
 
-		tlsreconciler.InitMetrics(certProvider)
+		ingress.InitMetrics(certProvider)
 
-		// ensure Issuer is setup at start up time
-		// TODO consider extracting out the setup to CRD
-		err = certProvider.Initialize(ctx)
-		exitOnError(err, "Failed to initialize cert provider")
 	}
 
 	glbcKubeInformerFactory := informers.NewSharedInformerFactoryWithOptions(defaultKubeClient, time.Minute, informers.WithNamespace(namespace))
-	tlsController, err := tlsreconciler.NewController(&tlsreconciler.ControllerConfig{
-		GlbcSecretInformer: glbcKubeInformerFactory.Core().V1().Secrets(),
-		GlbcKubeClient:     defaultKubeClient,
-		KcpKubeClient:      kcpKubeClient,
-	})
+
 	exitOnError(err, "Failed to create TLS certificate controller")
 
 	ingressController := ingress.NewController(&ingress.ControllerConfig{
-		KubeClient:            kcpKubeClient,
-		DnsRecordClient:       kcpKuadrantClient,
-		SharedInformerFactory: kcpKubeInformerFactory,
-		Domain:                options.Domain,
-		CertProvider:          certProvider,
-		HostResolver:          net.NewDefaultHostResolver(),
+		KubeClient:               kcpKubeClient,
+		DnsRecordClient:          kcpKuadrantClient,
+		DNSRecordInformer:        kcpKuadrantInformerFactory,
+		KCPSharedInformerFactory: kcpKubeInformerFactory,
+		CertificateInformer:      certificateInformerFactory,
+		GlbcInformerFactory:      glbcKubeInformerFactory,
+		Domain:                   options.Domain,
+		CertProvider:             certProvider,
+		HostResolver:             net.NewDefaultHostResolver(),
 		// For testing. TODO: Make configurable through flags/env variable
 		// HostResolver: &net.ConfigMapHostResolver{
 		// 	Name:      "hosts",
@@ -255,16 +254,15 @@ func main() {
 	kcpKuadrantInformerFactory.WaitForCacheSync(ctx.Done())
 
 	if options.TLSProviderEnabled {
-		// the control cluster Kube informer is only used when TLS certificate issuance is enabled
+		certificateInformerFactory.Start(ctx.Done())
+		certificateInformerFactory.WaitForCacheSync(ctx.Done())
 		glbcKubeInformerFactory.Start(ctx.Done())
 		glbcKubeInformerFactory.WaitForCacheSync(ctx.Done())
 	}
 
 	start(gCtx, ingressController)
 	start(gCtx, dnsRecordController)
-	if options.TLSProviderEnabled {
-		start(gCtx, tlsController)
-	}
+
 	start(gCtx, serviceController)
 	start(gCtx, deploymentController)
 

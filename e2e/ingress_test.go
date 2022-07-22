@@ -5,10 +5,11 @@ package e2e
 
 import (
 	"encoding/json"
-	"github.com/kuadrant/kcp-glbc/pkg/util/workloadMigration"
 	"os"
 	"strings"
 	"testing"
+
+	"github.com/kuadrant/kcp-glbc/pkg/util/workloadMigration"
 
 	. "github.com/onsi/gomega"
 	. "github.com/onsi/gomega/gstruct"
@@ -23,7 +24,7 @@ import (
 
 	. "github.com/kuadrant/kcp-glbc/e2e/support"
 	kuadrantv1 "github.com/kuadrant/kcp-glbc/pkg/apis/kuadrant/v1"
-	kuadrantcluster "github.com/kuadrant/kcp-glbc/pkg/cluster"
+	ingressController "github.com/kuadrant/kcp-glbc/pkg/reconciler/ingress"
 )
 
 func TestIngress(t *testing.T) {
@@ -81,8 +82,8 @@ func TestIngress(t *testing.T) {
 	// Wait until the Ingress is reconciled with the load balancer Ingresses
 	test.Eventually(Ingress(test, namespace, name)).WithTimeout(TestTimeoutMedium).Should(And(
 		WithTransform(Annotations, And(
-			HaveKey(kuadrantcluster.ANNOTATION_HCG_HOST),
-			HaveKey(kuadrantcluster.ANNOTATION_HCG_CUSTOM_HOST_REPLACED)),
+			HaveKey(ingressController.ANNOTATION_HCG_HOST),
+			HaveKey(ingressController.ANNOTATION_HCG_CUSTOM_HOST_REPLACED)),
 		),
 		WithTransform(LoadBalancerIngresses, HaveLen(1)),
 		Satisfy(HostsEqualsToGeneratedHost),
@@ -107,7 +108,7 @@ func TestIngress(t *testing.T) {
 		WithTransform(DNSRecordEndpoints, HaveLen(1)),
 		WithTransform(DNSRecordEndpoints, ContainElement(MatchFieldsP(IgnoreExtras,
 			Fields{
-				"DNSName":          Equal(ingress.Annotations[kuadrantcluster.ANNOTATION_HCG_HOST]),
+				"DNSName":          Equal(ingress.Annotations[ingressController.ANNOTATION_HCG_HOST]),
 				"Targets":          ConsistOf(ingressStatus.LoadBalancer.Ingress[0].IP),
 				"RecordType":       Equal("A"),
 				"RecordTTL":        Equal(kuadrantv1.TTL(60)),
