@@ -109,7 +109,7 @@ func TestIngress(t *testing.T) {
 		WithTransform(DNSRecordEndpoints, ContainElement(MatchFieldsP(IgnoreExtras,
 			Fields{
 				"DNSName":          Equal(ingress.Annotations[ingressController.ANNOTATION_HCG_HOST]),
-				"Targets":          ConsistOf(ingress.Status.LoadBalancer.Ingress[0].IP),
+				"Targets":          ConsistOf(ingressStatus.LoadBalancer.Ingress[0].IP),
 				"RecordType":       Equal("A"),
 				"RecordTTL":        Equal(kuadrantv1.TTL(60)),
 				"SetIdentifier":    Equal(ingressStatus.LoadBalancer.Ingress[0].IP),

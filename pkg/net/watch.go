@@ -116,7 +116,7 @@ func (w *RecordWatcher) watch(ctx context.Context) {
 			ttl := w.records[0].TTL
 			refreshInterval := w.watchInterval(ttl)
 			time.Sleep(refreshInterval)
-			w.logger.V(4).Info("Refreshing records for host", "TTL", int(ttl.Seconds()), "interval", int(refreshInterval.Seconds()))
+			w.logger.V(3).Info("Refreshing records for host", "TTL", int(ttl.Seconds()), "interval", int(refreshInterval.Seconds()))
 		}
 	}()
 }

@@ -15,7 +15,6 @@ import (
 type reconcileStatus int
 
 const (
-	manager                             = "kcp-glbc"
 	reconcileStatusStop reconcileStatus = iota
 	reconcileStatusContinue
 	cascadeCleanupFinalizer = "kcp.dev/cascade-cleanup"
@@ -26,15 +25,9 @@ type reconciler interface {
 }
 
 func (c *Controller) reconcile(ctx context.Context, ingress *networkingv1.Ingress) error {
-	c.Logger.V(10).Info("starting reconcile of ingress ", ingress.Name, ingress.Namespace)
+	c.Logger.V(3).Info("starting reconcile of ingress ", ingress.Name, ingress.Namespace)
 	if ingress.DeletionTimestamp == nil {
 		metadata.AddFinalizer(ingress, cascadeCleanupFinalizer)
-		//in 0.5.0 these are never cleaned up properly
-		for _, f := range ingress.Finalizers {
-			if strings.Contains(f, workloadMigration.SyncerFinalizer) {
-				metadata.RemoveFinalizer(ingress, f)
-			}
-		}
 	}
 	//TODO evaluate where this actually belongs
 	workloadMigration.Process(ingress, c.Queue, c.Logger)
@@ -83,9 +76,15 @@ func (c *Controller) reconcile(ctx context.Context, ingress *networkingv1.Ingres
 		if ingress.DeletionTimestamp != nil && !ingress.DeletionTimestamp.IsZero() {
 			metadata.RemoveFinalizer(ingress, cascadeCleanupFinalizer)
 			c.hostsWatcher.StopWatching(ingressKey(ingress), "")
+			//in 0.5.0 these are never cleaned up properly
+			for _, f := range ingress.Finalizers {
+				if strings.Contains(f, workloadMigration.SyncerFinalizer) {
+					metadata.RemoveFinalizer(ingress, f)
+				}
+			}
 		}
 	}
-	c.Logger.V(10).Info("ingress reconcile complete", len(errs), ingress.Namespace, ingress.Name)
+	c.Logger.V(3).Info("ingress reconcile complete", len(errs), ingress.Namespace, ingress.Name)
 	return utilserrors.NewAggregate(errs)
 }
 

@@ -102,7 +102,7 @@ func TestTLS(t *testing.T) {
 	// Retrieve the Ingress
 	ingress := GetIngress(test, namespace, name)
 	hostname := ingress.Annotations[ingressController.ANNOTATION_HCG_HOST]
-	secretName := ingressController.CertificateName(ingress)
+	secretName := ingressController.TLSSecretName(ingress)
 
 	// Check the Ingress TLS spec
 	test.Expect(ingress).To(WithTransform(IngressTLS, ConsistOf(

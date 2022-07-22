@@ -59,7 +59,6 @@ func NewController(config *ControllerConfig) *Controller {
 		glbcInformerFactory:      config.GlbcInformerFactory,
 		dnsRecordClient:          config.DnsRecordClient,
 		domain:                   config.Domain,
-		tracker:                  newTracker(&base.Logger),
 		hostResolver:             hostResolver,
 		hostsWatcher:             net.NewHostsWatcher(&base.Logger, hostResolver, net.DefaultInterval),
 		customHostsEnabled:       config.CustomHostsEnabled,
@@ -75,32 +74,26 @@ func NewController(config *ControllerConfig) *Controller {
 	// Watch for events related to Ingresses
 	c.sharedInformerFactory.Networking().V1().Ingresses().Informer().AddEventHandler(cache.ResourceEventHandlerFuncs{
 		AddFunc: func(obj interface{}) {
+			ingress := obj.(*networkingv1.Ingress)
+			c.Logger.V(3).Info("enqueue ingress new ingress added", "cluster", ingress.ClusterName, "namespace", ingress.Namespace, "name", ingress.Name)
 			ingressObjectTotal.Inc()
 			c.Enqueue(obj)
 		},
 		UpdateFunc: func(old, obj interface{}) {
 			if old.(metav1.Object).GetResourceVersion() != obj.(metav1.Object).GetResourceVersion() {
+				ingress := obj.(*networkingv1.Ingress)
+				c.Logger.V(3).Info("enqueue ingress ingress updated", "cluster", ingress.ClusterName, "namespace", ingress.Namespace, "name", ingress.Name)
 				c.Enqueue(obj)
 			}
 		},
 		DeleteFunc: func(obj interface{}) {
+			ingress := obj.(*networkingv1.Ingress)
+			c.Logger.V(3).Info("enqueue ingress deleted ", "cluster", ingress.ClusterName, "namespace", ingress.Namespace, "name", ingress.Name)
 			ingressObjectTotal.Dec()
 			c.Enqueue(obj)
 		},
 	})
 
-	// Watch for events related to Services
-	c.sharedInformerFactory.Core().V1().Services().Informer().AddEventHandler(cache.ResourceEventHandlerFuncs{
-		AddFunc: func(obj interface{}) { c.ingressesFromService(obj) },
-		UpdateFunc: func(old, obj interface{}) {
-			if old.(*corev1.Service).ResourceVersion != obj.(*corev1.Service).ResourceVersion {
-				c.ingressesFromService(obj)
-			}
-		},
-		DeleteFunc: func(obj interface{}) {
-			c.ingressesFromService(obj)
-		},
-	})
 	// watch for certificates being addded and updated
 	c.certInformerFactory.Certmanager().V1().Certificates().Informer().AddEventHandler(cache.FilteringResourceEventHandler{
 		FilterFunc: func(obj interface{}) bool {
@@ -133,7 +126,9 @@ func NewController(config *ControllerConfig) *Controller {
 
 				enq := certificateUpdatedHandler(oldCert, newCert)
 				if enq == enqueue(true) {
+
 					ingressKey := newCert.Annotations[annotationIngressKey]
+					c.Logger.V(3).Info("reqeuing ingress certificate updated", "certificate", newCert.Name, "ingresskey", ingressKey)
 					c.enqueueIngressByKey(ingressKey)
 				}
 			},
@@ -143,6 +138,7 @@ func NewController(config *ControllerConfig) *Controller {
 				// covers a manual deletion of cert and will ensure a new cert is created
 				certificateDeletedHandler(certificate)
 				ingressKey := certificate.Annotations[annotationIngressKey]
+				c.Logger.V(3).Info("reqeuing ingress certificate deleted", "certificate", certificate.Name, "ingresskey", ingressKey)
 				c.enqueueIngressByKey(ingressKey)
 			},
 		},
@@ -158,13 +154,19 @@ func NewController(config *ControllerConfig) *Controller {
 				issuer := secret.Annotations[tls.TlsIssuerAnnotation]
 				tlsCertificateSecretCount.WithLabelValues(issuer).Inc()
 				ingressKey := secret.Annotations[annotationIngressKey]
+				c.Logger.V(3).Info("reqeuing ingress certificate tls secret created", "secret", secret.Name, "ingresskey", ingressKey)
 				c.enqueueIngressByKey(ingressKey)
 			},
 			UpdateFunc: func(old, obj interface{}) {
-				secret := obj.(*corev1.Secret)
-				if old.(*corev1.Secret).ResourceVersion != obj.(*corev1.Secret).ResourceVersion {
-					ingressKey := secret.Annotations[annotationIngressKey]
-					c.enqueueIngressByKey(ingressKey)
+				newSecret := obj.(*corev1.Secret)
+				oldSecret := obj.(*corev1.Secret)
+				if oldSecret.ResourceVersion != newSecret.ResourceVersion {
+					// we only care if the secret data changed
+					if !equality.Semantic.DeepEqual(oldSecret.Data, newSecret.Data) {
+						ingressKey := newSecret.Annotations[annotationIngressKey]
+						c.Logger.V(3).Info("reqeuing ingress certificate tls secret updated", "secret", newSecret.Name, "ingresskey", ingressKey)
+						c.enqueueIngressByKey(ingressKey)
+					}
 				}
 			},
 			DeleteFunc: func(obj interface{}) {
@@ -172,6 +174,7 @@ func NewController(config *ControllerConfig) *Controller {
 				issuer := secret.Annotations[tls.TlsIssuerAnnotation]
 				tlsCertificateSecretCount.WithLabelValues(issuer).Dec()
 				ingressKey := secret.Annotations[annotationIngressKey]
+				c.Logger.V(3).Info("reqeuing ingress certificate tls secret deleted", "secret", secret.Name, "ingresskey", ingressKey)
 				c.enqueueIngressByKey(ingressKey)
 			},
 		},
@@ -187,12 +190,16 @@ func NewController(config *ControllerConfig) *Controller {
 			}
 			// if we have a ingress key stored we can re queue the ingresss
 			if ingressKey, ok := dns.Annotations[annotationIngressKey]; ok {
+				c.Logger.V(3).Info("reqeuing ingress dns record deleted", "cluster", dns.ClusterName, "namespace", dns.Namespace, "name", dns.Name, "ingresskey", ingressKey)
 				c.enqueueIngressByKey(ingressKey)
 			}
 		},
 		UpdateFunc: func(oldObj, newObj interface{}) {
-			if oldObj.(*kuadrantv1.DNSRecord).ResourceVersion != newObj.(*kuadrantv1.DNSRecord).ResourceVersion {
+			newdns := newObj.(*kuadrantv1.DNSRecord)
+			olddns := oldObj.(*kuadrantv1.DNSRecord)
+			if olddns.ResourceVersion != newdns.ResourceVersion {
 				ingressKey := newObj.(*kuadrantv1.DNSRecord).Annotations[annotationIngressKey]
+				c.Logger.V(3).Info("reqeuing ingress dns record deleted", "cluster", newdns.ClusterName, "namespace", newdns.Namespace, "name", newdns.Name, "ingresskey", ingressKey)
 				c.enqueueIngressByKey(ingressKey)
 			}
 		},
@@ -225,7 +232,6 @@ type Controller struct {
 	certificateLister        certmanlister.CertificateLister
 	certProvider             tls.Provider
 	domain                   string
-	tracker                  *tracker
 	hostResolver             net.HostResolver
 	hostsWatcher             *net.HostsWatcher
 	customHostsEnabled       bool
@@ -251,7 +257,6 @@ func (c *Controller) process(ctx context.Context, key string) error {
 	object, exists, err := c.indexer.GetByKey(key)
 	if err != nil {
 		if errors.IsNotFound(err) {
-			c.tracker.deleteIngress(key)
 			return nil
 		}
 		return err
@@ -259,7 +264,6 @@ func (c *Controller) process(ctx context.Context, key string) error {
 
 	if !exists {
 		// The Ingress has been deleted, so we remove any Ingress to Service tracking.
-		c.tracker.deleteIngress(key)
 		return nil
 	}
 
@@ -269,33 +273,13 @@ func (c *Controller) process(ctx context.Context, key string) error {
 	if err != nil {
 		return err
 	}
-
 	if !equality.Semantic.DeepEqual(current, target) {
+		c.Logger.V(3).Info("attempting update of changed ingress ", "ingress key ", key)
 		_, err := c.kubeClient.Cluster(logicalcluster.From(target)).NetworkingV1().Ingresses(target.Namespace).Update(ctx, target, metav1.UpdateOptions{})
 		return err
 	}
 
 	return nil
-}
-
-// ingressesFromService enqueues all the related Ingresses for a given service when the service is changed.
-func (c *Controller) ingressesFromService(obj interface{}) {
-	service := obj.(*corev1.Service)
-
-	serviceKey, err := cache.MetaNamespaceKeyFunc(service)
-	if err != nil {
-		runtime.HandleError(err)
-		return
-	}
-
-	// Does that Service has any Ingress associated to?
-	ingresses := c.tracker.getIngressesForService(serviceKey)
-
-	// One Service can be referenced by 0..N Ingresses, so we need to enqueue all the related Ingresses.
-	for _, ingress := range ingresses.List() {
-		c.Logger.Info("Enqueuing Ingress reconciliation via tracked Service", "ingress", ingress, "service", service)
-		c.Queue.Add(ingress)
-	}
 }
 
 func (c *Controller) getIngressByKey(key string) (*networkingv1.Ingress, error) {

@@ -2,14 +2,15 @@ package workloadMigration
 
 import (
 	"errors"
+	"strconv"
+	"strings"
+	"time"
+
 	"github.com/go-logr/logr"
 	"github.com/kuadrant/kcp-glbc/pkg/util/metadata"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/client-go/tools/cache"
 	"k8s.io/client-go/util/workqueue"
-	"strconv"
-	"strings"
-	"time"
 )
 
 const (

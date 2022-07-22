@@ -132,6 +132,11 @@ func CertificateName(ingress *networkingv1.Ingress) string {
 	return strings.ReplaceAll(fmt.Sprintf("%s-%s-%s", ingress.ClusterName, ingress.Namespace, ingress.Name), ":", "")
 }
 
+// TLSSecretName returns the name for the secret in the end user namespace
+func TLSSecretName(ingress *networkingv1.Ingress) string {
+	return fmt.Sprintf("hcg-tls-%s", ingress.Name)
+}
+
 func (r *certificateReconciler) reconcile(ctx context.Context, ingress *networkingv1.Ingress) (reconcileStatus, error) {
 	annotations := ingress.GetAnnotations()
 	if annotations == nil {
@@ -141,6 +146,7 @@ func (r *certificateReconciler) reconcile(ctx context.Context, ingress *networki
 	if err != nil {
 		return reconcileStatusStop, err
 	}
+	tlsSecretName := TLSSecretName(ingress)
 	//set the ingress key on the certificate to help us with locating the ingress later
 	annotations[annotationIngressKey] = key
 	certReq := tls.CertificateRequest{
@@ -159,7 +165,7 @@ func (r *certificateReconciler) reconcile(ctx context.Context, ingress *networki
 			return reconcileStatusStop, err
 		}
 		//TODO remove once owner refs work in kcp
-		if err := r.deleteSecret(ctx, logicalcluster.From(ingress), ingress.Namespace, ingress.Name); err != nil {
+		if err := r.deleteSecret(ctx, logicalcluster.From(ingress), ingress.Namespace, tlsSecretName); err != nil {
 			return reconcileStatusStop, err
 		}
 		return reconcileStatusContinue, nil
@@ -171,6 +177,7 @@ func (r *certificateReconciler) reconcile(ctx context.Context, ingress *networki
 		secret, err := r.getCertificateSecret(ctx, certReq)
 		if err != nil {
 			if tls.IsCertNotReadyErr(err) {
+				// cetificate not ready so update the status and allow it continue reconcile. Will be requeued once certificate becomes ready
 				status, err := r.getCertificateStatus(ctx, certReq)
 				if err != nil {
 					return reconcileStatusStop, err
@@ -193,7 +200,9 @@ func (r *certificateReconciler) reconcile(ctx context.Context, ingress *networki
 				BlockOwnerDeletion: pointer.Bool(true),
 			},
 		})
+
 		scopy.Namespace = ingress.Namespace
+		scopy.Name = tlsSecretName
 		if err := r.copySecret(ctx, logicalcluster.From(ingress), ingress.Namespace, scopy); err != nil {
 			return reconcileStatusStop, err
 		}
@@ -202,7 +211,7 @@ func (r *certificateReconciler) reconcile(ctx context.Context, ingress *networki
 		return reconcileStatusStop, err
 	}
 	// set tls setting on the ingress
-	upsertTLS(ingress, certReq.Host, certReq.Name)
+	upsertTLS(ingress, certReq.Host, tlsSecretName)
 
 	return reconcileStatusContinue, nil
 }

@@ -162,8 +162,7 @@ func TestMetrics(t *testing.T) {
 			},
 		)),
 	))
-
-	secretName := strings.ReplaceAll(fmt.Sprintf("%s-%s-%s", namespace.GetClusterName(), namespace.Name, name), ":", "")
+	secretName := fmt.Sprintf("hcg-tls-%s", name)
 
 	// Wait until the Ingress is reconciled with the load balancer Ingresses
 	test.Eventually(Ingress(test, namespace, name)).WithTimeout(TestTimeoutMedium).Should(And(
@@ -209,7 +208,7 @@ func TestMetrics(t *testing.T) {
 		WithTransform(DNSRecordEndpoints, ContainElement(MatchFieldsP(IgnoreExtras,
 			Fields{
 				"DNSName":          Equal(ingress.Annotations[ingressController.ANNOTATION_HCG_HOST]),
-				"Targets":          ConsistOf(ingress.Status.LoadBalancer.Ingress[0].IP),
+				"Targets":          ConsistOf(ingressStatus.LoadBalancer.Ingress[0].IP),
 				"RecordType":       Equal("A"),
 				"RecordTTL":        Equal(kuadrantv1.TTL(60)),
 				"SetIdentifier":    Equal(ingressStatus.LoadBalancer.Ingress[0].IP),
@@ -265,7 +264,6 @@ func TestMetrics(t *testing.T) {
 
 	// Take a snapshot of the reconciliation metrics
 	reconcileTotal := GetMetric(test, "glbc_controller_reconcile_total")
-
 	// Continually gets the metrics and check no reconciliation occurred over a reasonable period of time.
 	test.Consistently(Metrics(test), 30*time.Second).Should(And(
 		HaveKey("glbc_controller_reconcile_total"),
@@ -275,19 +273,20 @@ func TestMetrics(t *testing.T) {
 			// and there is currently no way to predictably wait for it. So options are either to wait
 			// for an arbitrary period of time, or to accommodate the assertion, and tolerate an extra
 			// reconciliation by the Ingress controller. The below code implements the later option.
+			//TODO(cbrookes) I haven't seen it need to use this workaround now for sometime. May be able to remove it
 			Satisfy(func(metric *prometheus.MetricFamily) bool {
 				if len(metric.Metric) != len(reconcileTotal.Metric) {
-
 					return false
 				}
 				for i, m := range metric.Metric {
-
 					if hasLabels(m,
 						&prometheus.LabelPair{Name: stringP("controller"), Value: stringP("kcp-glbc-ingress")},
 						&prometheus.LabelPair{Name: stringP("result"), Value: stringP("success")},
 					) {
-						fmt.Println("not checking kcp-glbc-ingress , success")
-						continue
+						fmt.Println("satisfy metric values ", *reconcileTotal.Metric[i].Counter.Value, *m.Counter.Value)
+						if *m.Counter.Value != *reconcileTotal.Metric[i].Counter.Value+1 {
+							return false
+						}
 
 					} else {
 						match, _ := Equal(reconcileTotal.Metric[i]).Match(m)

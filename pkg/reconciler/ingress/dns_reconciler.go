@@ -18,19 +18,16 @@ import (
 	"github.com/kuadrant/kcp-glbc/pkg/util/workloadMigration"
 	networkingv1 "k8s.io/api/networking/v1"
 	"k8s.io/apimachinery/pkg/api/equality"
-	"k8s.io/apimachinery/pkg/api/errors"
 	k8errors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/client-go/tools/cache"
 	"k8s.io/utils/pointer"
 )
 
 type dnsReconciler struct {
-	deleteDNS func(ctx context.Context, ingress *networkingv1.Ingress) error
-	getDNS    func(ctx context.Context, ingress *networkingv1.Ingress) (*v1.DNSRecord, error)
-	createDNS func(ctx context.Context, dns *v1.DNSRecord) (*v1.DNSRecord, error)
-	//patchDNS         func(ctx context.Context, dns *v1.DNSRecord, data []byte) (*v1.DNSRecord, error)
+	deleteDNS        func(ctx context.Context, ingress *networkingv1.Ingress) error
+	getDNS           func(ctx context.Context, ingress *networkingv1.Ingress) (*v1.DNSRecord, error)
+	createDNS        func(ctx context.Context, dns *v1.DNSRecord) (*v1.DNSRecord, error)
 	updateDNS        func(ctx context.Context, dns *v1.DNSRecord) error
 	watchHost        func(ctx context.Context, key interface{}, host string) bool
 	forgetHost       func(key interface{}, host string)
@@ -239,7 +236,7 @@ func (r *dnsReconciler) targetsFromIngress(ctx context.Context, ingress *network
 				targets[lb.IP] = []string{lb.IP}
 			}
 			if lb.Hostname != "" {
-				ips, err := c.hostResolver.LookupIPAddr(ctx, lb.Hostname)
+				ips, err := r.DNSLookup(ctx, lb.Hostname)
 				if err != nil {
 					return nil, err
 				}
@@ -277,9 +274,6 @@ func (c *Controller) updateDNS(ctx context.Context, dns *v1.DNSRecord) error {
 		return err
 	}
 	return nil
-}
-func (c *Controller) patchDNS(ctx context.Context, dns *v1.DNSRecord, data []byte) (*v1.DNSRecord, error) {
-	return c.dnsRecordClient.Cluster(logicalcluster.From(dns)).KuadrantV1().DNSRecords(dns.Namespace).Patch(ctx, dns.Name, types.ApplyPatchType, data, metav1.PatchOptions{FieldManager: manager, Force: pointer.Bool(true)})
 }
 
 func (c *Controller) deleteDNS(ctx context.Context, ingress *networkingv1.Ingress) error {
