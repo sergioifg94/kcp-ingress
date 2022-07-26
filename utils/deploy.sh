@@ -39,11 +39,6 @@ KCP_SYNCER_IMAGE="ghcr.io/kcp-dev/kcp/syncer:${KCP_VERSION}"
 GLBC_NAMESPACE=kcp-glbc
 DEPLOY_COMPONENTS=glbc,cert-manager
 GLBC_KUSTOMIZATION=${KCP_GLBC_DIR}/config/deploy/local
-MULTI_WORKSPACE_AWARE=true
-
-# Misc
-# Wait for workload clusters to be ready before continuing
-: ${WAIT_WC_READY:="false"}
 
 ############################################################
 # Help                                                     #
@@ -57,7 +52,6 @@ help()
    echo "options:"
    echo "c     Components to deploy (default: ${DEPLOY_COMPONENTS})"
    echo "k     GLBC deployment kustomization directory (default: ${GLBC_KUSTOMIZATION})"
-   echo "m     Multi Workspace aware deployment (default: ${MULTI_WORKSPACE_AWARE})"
    echo "n     Namespace glbc is being deployed into (default: ${GLBC_NAMESPACE})"
    echo "h     Print this Help."
    echo "w     Workspace to create and use for deployment (default: ${GLBC_WORKSPACE})."
@@ -95,11 +89,11 @@ print_env()
    echo "  GLBC_NAMESPACE:                   ${GLBC_NAMESPACE}"
    echo "  DEPLOY_COMPONENTS:                ${DEPLOY_COMPONENTS}"
    echo "  GLBC_KUSTOMIZATION:               ${GLBC_KUSTOMIZATION}"
-   echo "  MULTI_WORKSPACE_AWARE:            ${MULTI_WORKSPACE_AWARE}"
    echo
    echo "Misc:"
    echo
    echo "  WAIT_WC_READY                     ${WAIT_WC_READY}"
+   echo "  OUTPUT_DIR                        ${OUTPUT_DIR}"
    echo
 }
 
@@ -129,10 +123,10 @@ create_ns() {
 create_workload_cluster() {
   kubectl get synctargets ${GLBC_WORKLOAD_CLUSTER_NAME} || {
     echo "Creating workload cluster '${1}'"
-    ${KUBECTL_KCP_BIN} workload sync ${1} --kcp-namespace kcp-syncer --syncer-image=${KCP_SYNCER_IMAGE} --resources=ingresses.networking.k8s.io,services --output-file ${GLBC_KUSTOMIZATION}/${1}-syncer.yaml
+    ${KUBECTL_KCP_BIN} workload sync ${1} --kcp-namespace kcp-syncer --syncer-image=${KCP_SYNCER_IMAGE} --resources=ingresses.networking.k8s.io,services --output-file ${OUTPUT_DIR}/${1}-syncer.yaml
     echo "Apply the following syncer config to the intended physical cluster."
     echo ""
-    echo "   kubectl apply -f ${GLBC_KUSTOMIZATION}/${1}-syncer.yaml"
+    echo "   kubectl apply -f ${OUTPUT_DIR}/${1}-syncer.yaml"
     echo ""
   }
   kubectl wait --timeout=60s --for=condition=VirtualWorkspaceURLsReady=true apiexport kubernetes
@@ -157,7 +151,8 @@ deploy_glbc() {
   create_ns ${GLBC_NAMESPACE}
 
   echo "Creating issuer"
-  go run ${DEPLOY_SCRIPT_DIR}/certman-issuer/ --glbc-kubeconfig ${GLBC_KUSTOMIZATION}/kcp.kubeconfig --issuer-namespace ${GLBC_NAMESPACE}
+  #ToDo This shouldn't be forcing us to set a value for the KUBECONFIG env var
+  go run ${DEPLOY_SCRIPT_DIR}/certman-issuer/ --glbc-kubeconfig ${KUBECONFIG} --issuer-namespace ${GLBC_NAMESPACE}
 
   echo "Deploying GLBC"
   ${KUSTOMIZE_BIN} build ${GLBC_KUSTOMIZATION} | kubectl apply -f -
@@ -180,16 +175,13 @@ deploy_glbc_observability() {
 # Script Start                                             #
 ############################################################
 
-while getopts "c:k:m:n:hw:W:" arg; do
+while getopts "c:k:n:hw:W:" arg; do
   case "${arg}" in
     c)
       DEPLOY_COMPONENTS=${OPTARG}
       ;;
     k)
       GLBC_KUSTOMIZATION=${OPTARG}
-      ;;
-    m)
-      MULTI_WORKSPACE_AWARE=${OPTARG}
       ;;
     n)
       GLBC_NAMESPACE=${OPTARG}
@@ -215,6 +207,12 @@ while getopts "c:k:m:n:hw:W:" arg; do
 done
 shift $((OPTIND-1))
 
+# Misc
+# Wait for workload clusters to be ready before continuing
+: ${WAIT_WC_READY:="false"}
+# Directory to output any generated files to i.e *syncer.yaml
+: ${OUTPUT_DIR:=${GLBC_KUSTOMIZATION}}
+
 set -e pipefail
 
 ## Check we are targeting a kcp instance
@@ -223,9 +221,6 @@ ${KUBECTL_KCP_BIN} workspace . > /dev/null || (echo "You must be targeting a KCP
 print_env
 echo "Continuing in 10 seconds, Ctrl+C to stop ..."
 sleep 10
-
-## Get the ca data for this KCP if it exists, used later to inject into generated kubeconfigs
-caData=$(kubectl config view --raw -o json | jq -r '.clusters[0].cluster."certificate-authority-data"' | tr -d '"')
 
 ############################################################
 # GLBC Compute Service Workspace (kcp-glbc-compute)        #
@@ -258,19 +253,11 @@ kubectl apply -f ${KCP_GLBC_DIR}/utils/kcp-contrib/crds/pods.yaml
 
 ## Register GLBC APIs
 kubectl apply -f ${KCP_GLBC_DIR}/utils/kcp-contrib/apiresourceschema.yaml
-kubectl apply -f ${KCP_GLBC_DIR}/utils/kcp-contrib/apiexport.yaml
-
-kubectl wait --timeout=60s --for=condition=VirtualWorkspaceURLsReady=true apiexport glbc
-
-create_api_binding "glbc" "glbc" "${ORG_WORKSPACE}:${GLBC_WORKSPACE}"
 
 ## Register CertManager APIs
 kubectl apply -f ${KCP_GLBC_DIR}/config/cert-manager/certificates-apiresourceschema.yaml
 kubectl apply -f ${KCP_GLBC_DIR}/config/cert-manager/cert-manager-apiexport.yaml
 create_api_binding "cert-manager" "cert-manager-stable" "${ORG_WORKSPACE}:${GLBC_WORKSPACE}"
-
-## Create cluster scoped SA for glbc to use (Currently watches a single workspace)
-${DEPLOY_SCRIPT_DIR}/create_glbc_ns.sh -a ${caData} -n "default" -c ${GLBC_WORKSPACE} -C
 
 ###############################################################
 # GLBC User Compute Service Workspace (kcp-glbc-user-compute) #
@@ -296,16 +283,18 @@ ${KUBECTL_KCP_BIN} workspace use ${ORG_WORKSPACE}
 ${KUBECTL_KCP_BIN} workspace create ${GLBC_WORKSPACE_USER} --enter || ${KUBECTL_KCP_BIN} workspace use ${GLBC_WORKSPACE_USER}
 ## Bind to compute APIs
 create_api_binding "kubernetes" "kubernetes" "${ORG_WORKSPACE}:${GLBC_WORKSPACE_USER_COMPUTE}"
-## Bind to GLBC APIs
-create_api_binding "glbc" "glbc" "${ORG_WORKSPACE}:${GLBC_WORKSPACE}"
 
-createGLBCNSOptions=""
-if [[ ! $MULTI_WORKSPACE_AWARE = true ]]; then
-  # If it's not multi workspace aware we replace the deployments kcp kubeconfig with the generated one giving access to the single workspace
-  createGLBCNSOptions="-o ${GLBC_KUSTOMIZATION}/kcp.kubeconfig"
+############################################################
+# Setup GLBC APIExport                                     #
+############################################################
+
+if ${DEPLOY_SCRIPT_DIR}/create_glbc_api_export.sh -w "${ORG_WORKSPACE}:${GLBC_WORKSPACE_USER}" -W "${ORG_WORKSPACE}:${GLBC_WORKSPACE}" -n "glbc" ; then
+  echo "GLBC APIExport created successfully for ${ORG_WORKSPACE}:${GLBC_WORKSPACE_USER} workspace!"
+else
+  echo "GLBC APIExport could not be created!"
+  # If the GLBC APIExport can't be created, we shouldn't continue to try and deploy anything!
+  exit 0
 fi
-## Create cluster scoped SA for glbc to use (Currently watches a single workspace)
-${DEPLOY_SCRIPT_DIR}/create_glbc_ns.sh -a ${caData} -n "default" -c ${GLBC_WORKSPACE_USER} -C ${createGLBCNSOptions}
 
 ############################################################
 # Deploy GLBC Components                                   #

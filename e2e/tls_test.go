@@ -44,19 +44,8 @@ func TestTLS(t *testing.T) {
 	// Create the test workspace
 	workspace := test.NewTestWorkspace()
 
-	// Import GLBC APIs
-	binding := test.NewAPIBinding("glbc", WithExportReference(GLBCWorkspace, "glbc"), InWorkspace(workspace))
-
-	// Wait until the APIBinding is actually in bound phase
-	test.Eventually(APIBinding(test, binding.ClusterName, binding.Name)).
-		Should(WithTransform(APIBindingPhase, Equal(apisv1alpha1.APIBindingPhaseBound)))
-
-	// And check the APIs are imported into the test workspace
-	test.Expect(HasImportedAPIs(test, workspace, kuadrantv1.SchemeGroupVersion.WithKind("DNSRecord"))(test)).
-		Should(BeTrue())
-
 	// Import compute workspace APIs
-	binding = test.NewAPIBinding("kubernetes", WithComputeServiceExport(ComputeWorkspace), InWorkspace(workspace))
+	binding := test.NewAPIBinding("kubernetes", WithComputeServiceExport(ComputeWorkspace), InWorkspace(workspace))
 
 	// Wait until the APIBinding is actually in bound phase
 	test.Eventually(APIBinding(test, binding.ClusterName, binding.Name)).
@@ -68,6 +57,20 @@ func TestTLS(t *testing.T) {
 		appsv1.SchemeGroupVersion.WithKind("Deployment"),
 		networkingv1.SchemeGroupVersion.WithKind("Ingress"),
 	)).Should(BeTrue())
+
+	binding = GetAPIBinding(test, binding.ClusterName, binding.Name)
+	kubeIdentityHash := binding.Status.BoundResources[0].Schema.IdentityHash
+
+	// Import GLBC APIs
+	binding = test.NewAPIBinding("glbc", WithExportReference(GLBCWorkspace, "glbc"), WithGLBCAcceptedPermissionClaims(kubeIdentityHash), InWorkspace(workspace))
+
+	// Wait until the APIBinding is actually in bound phase
+	test.Eventually(APIBinding(test, binding.ClusterName, binding.Name)).
+		Should(WithTransform(APIBindingPhase, Equal(apisv1alpha1.APIBindingPhaseBound)))
+
+	// And check the APIs are imported into the test workspace
+	test.Expect(HasImportedAPIs(test, workspace, kuadrantv1.SchemeGroupVersion.WithKind("DNSRecord"))(test)).
+		Should(BeTrue())
 
 	// Create a namespace
 	namespace := test.NewTestNamespace(InWorkspace(workspace))
