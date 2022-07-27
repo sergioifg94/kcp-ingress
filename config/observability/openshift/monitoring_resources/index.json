@@ -3,7 +3,8 @@
     "config": {
         "grafana": {
             "dashboards": [
-                "dashboard-glbc.yaml"
+                "dashboard-glbc.yaml",
+                "dashboard-glbc-slo.yaml"
             ],
             "dashboardLabelSelector": {
                 "app": "glbc"
