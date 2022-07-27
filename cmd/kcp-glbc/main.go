@@ -173,14 +173,15 @@ func main() {
 	// certificate client targeting the glbc workspace
 	certClient := certmanclient.NewForConfigOrDie(defaultClientConfig)
 
-	certificateInformerFactory := certmaninformer.NewSharedInformerFactory(certClient, resyncPeriod)
 	namespace := env.GetNamespace()
+	if namespace == "" {
+		namespace = tls.DefaultCertificateNS
+	}
+
+	certificateInformerFactory := certmaninformer.NewSharedInformerFactoryWithOptions(certClient, resyncPeriod, certmaninformer.WithNamespace(namespace))
 
 	var certProvider tls.Provider
 	if options.TLSProviderEnabled {
-		if namespace == "" {
-			namespace = tls.DefaultCertificateNS
-		}
 
 		// TLSProvider is mandatory when TLS is enabled
 		if options.TLSProvider == "" {
