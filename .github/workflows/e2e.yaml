@@ -139,8 +139,8 @@ jobs:
           KCP_PID=$!
           echo "KCP_PID=${KCP_PID}" >> $GITHUB_ENV
 
-          echo "Waiting 15 seconds..."
-          sleep 15
+          echo "Waiting 30 seconds..."
+          sleep 30
 
           if ! ps -p ${KCP_PID}; then
             echo "KCP failed to start, see ${KCP_LOG_FILE} for info."

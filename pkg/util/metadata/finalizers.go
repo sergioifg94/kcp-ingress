@@ -1,8 +1,9 @@
 package metadata
 
 import (
-	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"strings"
+
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
 func AddFinalizer(obj metav1.Object, finalizer string) {

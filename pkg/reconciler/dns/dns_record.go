@@ -3,7 +3,6 @@ package dns
 import (
 	"context"
 	"fmt"
-	"github.com/kuadrant/kcp-glbc/pkg/util/metadata"
 	"reflect"
 	"strings"
 
@@ -17,6 +16,7 @@ import (
 	"github.com/kcp-dev/logicalcluster"
 
 	v1 "github.com/kuadrant/kcp-glbc/pkg/apis/kuadrant/v1"
+	"github.com/kuadrant/kcp-glbc/pkg/util/metadata"
 	"github.com/kuadrant/kcp-glbc/pkg/util/slice"
 )
 

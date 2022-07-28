@@ -22,11 +22,11 @@ source "${DEPLOY_SCRIPT_DIR}"/.startUtils
 
 set -e pipefail
 
-#Hash of root:default:kcp-glbc, this will work for all local deployments using the kcp-glbc workspace
-GLBC_NAMESPACE=kcp89b5fd4ba9405ee7b18d0da859ce7420d36926bac4a97e01af5c244a
 PROMETHEUS_NAMESPACE=monitoring
 
 kubectl config use-context kind-kcp-cluster-glbc-control
+
+GLBC_NAMESPACE=$(kubectl get deployments --all-namespaces | grep -e kcp-glbc-controller-manager | awk '{print $1 }')
 
 # Deploy monitoring stack (includes prometheus, alertmanager & grafana)
 wait_for "./bin/kustomize build config/observability/kubernetes | kubectl apply --force-conflicts  --server-side -f -" "prometheus" "2m" "10"

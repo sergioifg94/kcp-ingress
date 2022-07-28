@@ -209,7 +209,7 @@ func (r *dnsReconciler) setEndpointsFromIngress(ctx context.Context, ingress *ne
 	return nil
 }
 
-// targetsFromIngressStatus returns a map of all the IPs associated with a single ingress(cluster)
+// targetsFromIngress returns a map of all the IPs associated with a single ingress(cluster)
 func (r *dnsReconciler) targetsFromIngress(ctx context.Context, ingress *networkingv1.Ingress) (map[string][]string, error) {
 	targets := map[string][]string{}
 	deletingTargets := map[string][]string{}

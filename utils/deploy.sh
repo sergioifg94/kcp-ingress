@@ -74,7 +74,7 @@ print_env()
    echo
    echo "KubeConfig:"
    echo
-   echo "  KUBECONFIG:                    ${KUBECONFIG}"
+   echo "  KUBECONFIG:                       ${KUBECONFIG}"
    echo
    echo "Workspaces:"
    echo
@@ -218,7 +218,7 @@ shift $((OPTIND-1))
 set -e pipefail
 
 ## Check we are targeting a kcp instance
-${KUBECTL_KCP_BIN} workspace > /dev/null || (echo "You must be targeting a KCP API Server, check your current KUBECONIFG and context before continuing!" && exit 1)
+${KUBECTL_KCP_BIN} workspace . > /dev/null || (echo "You must be targeting a KCP API Server, check your current KUBECONIFG and context before continuing!" && exit 1)
 
 print_env
 echo "Continuing in 10 seconds, Ctrl+C to stop ..."

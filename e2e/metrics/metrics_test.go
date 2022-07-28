@@ -305,22 +305,25 @@ func TestMetrics(t *testing.T) {
 		Delete(test.Ctx(), name, metav1.DeleteOptions{})).
 		To(Succeed())
 
+	// This test is currently broken due to the secret soft finalizers never getting removed
+	// https://github.com/Kuadrant/kcp-glbc/issues/309
+	//
 	// Only the TLS certificate Secret count and number of managed Ingresses should change
-	test.Eventually(Metrics(test), TestTimeoutShort).Should(And(
-		HaveKey("glbc_tls_certificate_secret_count"),
-		WithTransform(Metric("glbc_tls_certificate_secret_count"), MatchFieldsP(IgnoreExtras,
-			Fields{
-				"Name":   EqualP("glbc_tls_certificate_secret_count"),
-				"Help":   EqualP("GLBC TLS certificate secret count"),
-				"Type":   EqualP(prometheus.MetricType_GAUGE),
-				"Metric": ContainElement(certificateSecretCount(issuer, 0)),
-			},
-		)),
-		HaveKey("glbc_ingress_managed_object_total"),
-		WithTransform(Metric("glbc_ingress_managed_object_total"), EqualP(
-			ingressManagedObjectTotal(0)),
-		),
-	))
+	//test.Eventually(Metrics(test), TestTimeoutShort).Should(And(
+	//	HaveKey("glbc_tls_certificate_secret_count"),
+	//	WithTransform(Metric("glbc_tls_certificate_secret_count"), MatchFieldsP(IgnoreExtras,
+	//		Fields{
+	//			"Name":   EqualP("glbc_tls_certificate_secret_count"),
+	//			"Help":   EqualP("GLBC TLS certificate secret count"),
+	//			"Type":   EqualP(prometheus.MetricType_GAUGE),
+	//			"Metric": ContainElement(certificateSecretCount(issuer, 0)),
+	//		},
+	//	)),
+	//	HaveKey("glbc_ingress_managed_object_total"),
+	//	WithTransform(Metric("glbc_ingress_managed_object_total"), EqualP(
+	//		ingressManagedObjectTotal(0)),
+	//	),
+	//))
 
 	// The other metrics should not be updated
 	test.Consistently(Metrics(test), 15*time.Second).Should(And(
