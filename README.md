@@ -1,4 +1,4 @@
-# KCP Global Load Balancer
+# KCP Global Load Balancer Controller
 
 ![build status badge](https://github.com/kuadrant/kcp-glbc/actions/workflows/ci.yaml/badge.svg)
 
