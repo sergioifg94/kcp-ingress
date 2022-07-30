@@ -5,6 +5,7 @@ package performance
 import (
 	"fmt"
 	"os"
+	"sync"
 	"testing"
 
 	. "github.com/onsi/gomega"
@@ -77,10 +78,16 @@ func TestDNSRecord(t *testing.T) {
 	test.T().Log(fmt.Sprintf("Creating %d DNSRecords", dnsRecordCount))
 
 	// Create DNSRecords
+	wg := sync.WaitGroup{}
 	for i := 1; i <= dnsRecordCount; i++ {
-		dnsRecord := createTestDNSRecord(test, namespace, glbcDomain)
-		test.Expect(dnsRecord).NotTo(BeNil())
+		wg.Add(1)
+		go func (){
+			defer wg.Done()
+			dnsRecord := createTestDNSRecord(test, namespace, glbcDomain)
+			test.Expect(dnsRecord).NotTo(BeNil())
+		}()
 	}
+	wg.Wait()
 
 	// Retrieve DNSRecords
 	dnsRecords := GetDNSRecords(test, namespace, "")

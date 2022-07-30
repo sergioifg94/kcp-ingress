@@ -5,6 +5,7 @@ package performance
 import (
 	"fmt"
 	"os"
+	"sync"
 	"testing"
 
 	. "github.com/onsi/gomega"
@@ -17,7 +18,7 @@ import (
 
 	. "github.com/kuadrant/kcp-glbc/e2e/performance/support"
 	kuadrantv1 "github.com/kuadrant/kcp-glbc/pkg/apis/kuadrant/v1"
-	kuadrantcluster "github.com/kuadrant/kcp-glbc/pkg/cluster"
+	ingressController "github.com/kuadrant/kcp-glbc/pkg/reconciler/ingress"
 	"github.com/kuadrant/kcp-glbc/pkg/util/env"
 )
 
@@ -71,10 +72,16 @@ func TestIngress(t *testing.T) {
 	test.Expect(err).NotTo(HaveOccurred())
 
 	// Create Ingresses
+	wg := sync.WaitGroup{}
 	for i := 1; i <= ingressCount; i++ {
-		ingress := createTestIngress(test, namespace)
-		test.Expect(ingress).NotTo(BeNil())
+		wg.Add(1)
+		go func (){
+			defer wg.Done()
+			ingress := createTestIngress(test, namespace)
+			test.Expect(ingress).NotTo(BeNil())
+		}()
 	}
+	wg.Wait()
 
 	// Retrieve Ingresses
 	ingresses := GetIngresses(test, namespace, "")
@@ -84,8 +91,8 @@ func TestIngress(t *testing.T) {
 	for _, ingress := range ingresses {
 		test.Eventually(Ingress(test, namespace, ingress.Name)).WithTimeout(TestTimeoutMedium).Should(And(
 			WithTransform(Annotations, And(
-				HaveKey(kuadrantcluster.ANNOTATION_HCG_HOST),
-				HaveKey(kuadrantcluster.ANNOTATION_HCG_CUSTOM_HOST_REPLACED)),
+				HaveKey(ingressController.ANNOTATION_HCG_HOST),
+				HaveKey(ingressController.ANNOTATION_HCG_CUSTOM_HOST_REPLACED)),
 			),
 			WithTransform(LoadBalancerIngresses, HaveLen(1)),
 		))
