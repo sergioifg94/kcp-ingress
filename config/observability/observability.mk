@@ -70,7 +70,8 @@ $(DHALL_OPENSHIFT_TARGET_DIR):
 # TODO: regen prometheusrule crs when rules files have changed. 
 .PHONY: touch-monitoring-files
 touch-monitoring-files:
-	@find $(DHALL_COMMON_SOURCE_DIR) -type f -name "*.dhall" -exec touch {} +
+	@find $(DHALL_SOURCE_DIR) -type f -name "*.dhall" -exec touch {} +
+	@find $(DHALL_SOURCE_DIR) -type f -name "*.json" -exec touch {} +
 
 # Generate monitoring resources for prometheus etc... 
 .PHONY: gen-monitoring-resources
