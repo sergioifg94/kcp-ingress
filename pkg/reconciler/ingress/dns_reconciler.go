@@ -54,10 +54,11 @@ func (r *dnsReconciler) reconcile(ctx context.Context, ingress *networkingv1.Ing
 		}
 		annotationParts := strings.Split(k, "/")
 		if len(annotationParts) < 2 {
-			return reconcileStatusStop, errors.New("invalid workloadStatus annotation format")
+			r.log.Error(errors.New("invalid workloadStatus annotation format"), "could not process target")
+			continue
 		}
-		//only add IP record if cluster is  targeted
-		if !metadata.HasLabel(ingress, workloadMigration.WorkloadTargetLabel+"/"+annotationParts[1]) {
+		//skip IP record if cluster is being deleted by KCP
+		if metadata.HasAnnotation(ingress, workloadMigration.WorkloadDeletingAnnotation+annotationParts[1]) {
 			continue
 		}
 		err := json.Unmarshal([]byte(v), ingressStatus)
@@ -208,47 +209,67 @@ func (r *dnsReconciler) setEndpointsFromIngress(ctx context.Context, ingress *ne
 	return nil
 }
 
-// targetsFromIngressStatus returns a map of all the IPs associated with a single ingress(cluster)
+// targetsFromIngress returns a map of all the IPs associated with a single ingress(cluster)
 func (r *dnsReconciler) targetsFromIngress(ctx context.Context, ingress *networkingv1.Ingress) (map[string][]string, error) {
 	targets := map[string][]string{}
+	deletingTargets := map[string][]string{}
 
 	ingressStatus := &networkingv1.IngressStatus{}
-	for k, v := range ingress.Annotations {
-		//skip non-status annotations
-		if !strings.Contains(k, workloadMigration.WorkloadStatusAnnotation) {
-			continue
-		}
-		//only add targets for targeted cluster
+	//find all annotations of a workload status (indicates a synctarget for this resource)
+	_, annotations := metadata.HasAnnotationsContaining(ingress, workloadMigration.WorkloadStatusAnnotation)
+	for k, v := range annotations {
+		//get the cluster name
 		annotationParts := strings.Split(k, "/")
 		if len(annotationParts) < 2 {
-			return targets, fmt.Errorf("invalid workloadStatus annotation format")
-		}
-
-		if !metadata.HasLabel(ingress, workloadMigration.WorkloadTargetLabel+"/"+annotationParts[1]) {
+			r.log.Error(errors.New("invalid workloadStatus annotation format"), "skipping sync target")
 			continue
 		}
+		clusterName := annotationParts[1]
+
 		err := json.Unmarshal([]byte(v), ingressStatus)
 		if err != nil {
 			return nil, err
 		}
-		for _, lb := range ingressStatus.LoadBalancer.Ingress {
-			if lb.IP != "" {
-				targets[lb.IP] = []string{lb.IP}
-			}
-			if lb.Hostname != "" {
-				ips, err := r.DNSLookup(ctx, lb.Hostname)
-				if err != nil {
-					return nil, err
-				}
-				targets[lb.Hostname] = []string{}
-				for _, ip := range ips {
-					targets[lb.Hostname] = append(targets[lb.Hostname], ip.IP.String())
-				}
-			}
+		statusTargets, err := r.targetsFromIngressStatus(ctx, ingressStatus)
+		if err != nil {
+			return nil, err
 		}
 
+		if metadata.HasAnnotation(ingress, workloadMigration.WorkloadDeletingAnnotation+clusterName) {
+			for host, ips := range statusTargets {
+				deletingTargets[host] = append(deletingTargets[host], ips...)
+			}
+			continue
+		}
+		for host, ips := range statusTargets {
+			targets[host] = append(targets[host], ips...)
+		}
+	}
+	//no non-deleting hosts have an IP yet, so continue using IPs of "losing" clusters
+	if len(targets) == 0 && len(deletingTargets) > 0 {
+		return deletingTargets, nil
 	}
 
+	return targets, nil
+}
+
+func (r *dnsReconciler) targetsFromIngressStatus(ctx context.Context, ingressStatus *networkingv1.IngressStatus) (map[string][]string, error) {
+	targets := map[string][]string{}
+	for _, lb := range ingressStatus.LoadBalancer.Ingress {
+		if lb.IP != "" {
+			targets[lb.IP] = []string{lb.IP}
+		}
+		if lb.Hostname != "" {
+			ips, err := r.DNSLookup(ctx, lb.Hostname)
+			if err != nil {
+				return nil, err
+			}
+			targets[lb.Hostname] = []string{}
+			for _, ip := range ips {
+				targets[lb.Hostname] = append(targets[lb.Hostname], ip.IP.String())
+			}
+		}
+	}
 	return targets, nil
 }
 

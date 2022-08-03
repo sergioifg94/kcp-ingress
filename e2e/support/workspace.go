@@ -110,9 +110,10 @@ func createTestWorkspace(t Test) *tenancyv1alpha1.ClusterWorkspace {
 		ObjectMeta: metav1.ObjectMeta{
 			Name: name,
 		},
-		Spec: tenancyv1alpha1.ClusterWorkspaceSpec{},
+		Spec: tenancyv1alpha1.ClusterWorkspaceSpec{
+			Type: tenancyv1alpha1.ClusterWorkspaceTypeReference{},
+		},
 	}
-
 	workspace, err := t.Client().Kcp().Cluster(TestOrganization).TenancyV1alpha1().ClusterWorkspaces().Create(t.Ctx(), workspace, metav1.CreateOptions{})
 	if err != nil {
 		t.Expect(err).NotTo(gomega.HaveOccurred())
