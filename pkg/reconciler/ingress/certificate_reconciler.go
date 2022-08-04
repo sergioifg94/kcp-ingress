@@ -138,9 +138,13 @@ func TLSSecretName(ingress *networkingv1.Ingress) string {
 }
 
 func (r *certificateReconciler) reconcile(ctx context.Context, ingress *networkingv1.Ingress) (reconcileStatus, error) {
-	annotations := ingress.GetAnnotations()
-	if annotations == nil {
-		annotations = map[string]string{}
+	ingressAnnotations := ingress.GetAnnotations()
+	if ingressAnnotations == nil {
+		ingressAnnotations = map[string]string{}
+	}
+	annotations := map[string]string{}
+	labels := map[string]string{
+		LABEL_HCG_MANAGED: "true",
 	}
 	key, err := cache.MetaNamespaceKeyFunc(ingress)
 	if err != nil {
@@ -151,14 +155,10 @@ func (r *certificateReconciler) reconcile(ctx context.Context, ingress *networki
 	annotations[annotationIngressKey] = key
 	certReq := tls.CertificateRequest{
 		Name:        CertificateName(ingress),
-		Labels:      ingress.GetLabels(),
+		Labels:      labels,
 		Annotations: annotations,
-		Host:        annotations[ANNOTATION_HCG_HOST],
+		Host:        ingressAnnotations[ANNOTATION_HCG_HOST],
 	}
-	if certReq.Labels == nil {
-		certReq.Labels = map[string]string{}
-	}
-	certReq.Labels[LABEL_HCG_MANAGED] = "true"
 
 	if ingress.DeletionTimestamp != nil && !ingress.DeletionTimestamp.IsZero() {
 		if err := r.deleteCertificate(ctx, certReq); err != nil && !strings.Contains(err.Error(), "not found") {
