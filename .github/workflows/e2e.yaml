@@ -185,14 +185,20 @@ jobs:
           echo "Checking all workload clusters are ready"
           kubectl wait --timeout=300s --for=condition=Ready=true synctargets kcp-cluster-1 kcp-cluster-2
 
+          echo "Export GLBC CI Cluster Config Enviornment"
+          export $(cat ./config/deploy/local/controller-config.env.ci | xargs)
+
           GLBC_LOG_FILE="${TEMP_DIR}"/glbc.log
           echo "GLBC_LOG_FILE=${GLBC_LOG_FILE}" >> $GITHUB_ENV
-          export AWS_DNS_PUBLIC_ZONE_ID=FAKE_ZONE_ID
-          echo "AWS_DNS_PUBLIC_ZONE_ID=FAKE_ZONE_ID" >> $GITHUB_ENV
+
           echo "Starting GLBC, sending logs to ${GLBC_LOG_FILE}"
           ./bin/kubectl-kcp workspace use root:default:kcp-glbc
+
+          echo "Creating ${NAMESPACE}"
+          kubectl create namespace ${NAMESPACE} --dry-run=client -o yaml | kubectl apply -f -
+
           go run ./utils/certman-issuer/ --glbc-kubeconfig .kcp/admin.kubeconfig
-          ./bin/kcp-glbc --kubeconfig .kcp/admin.kubeconfig --context system:admin --dns-provider fake --glbc-tls-provided true > ${GLBC_LOG_FILE} 2>&1 &
+          ./bin/kcp-glbc --kubeconfig .kcp/admin.kubeconfig > ${GLBC_LOG_FILE} 2>&1 &
           GLBC_PID=$!
           echo "GLBC_PID=${GLBC_PID}" >> $GITHUB_ENV
 
@@ -214,10 +220,33 @@ jobs:
         run: |
           export KUBECONFIG=${{ env.KUBECONFIG }}
           export CLUSTERS_KUBECONFIG_DIR=${{ env.CLUSTERS_KUBECONFIG_DIR }}
-          export AWS_DNS_PUBLIC_ZONE_ID=${{ env.AWS_DNS_PUBLIC_ZONE_ID }}
+
+          echo "Export GLBC CI Cluster Config Enviornment"
+          export $(cat ./config/deploy/local/controller-config.env.ci | xargs)
 
           # Then run e2e tests
           make e2e
+      - name: Run performance tests
+        env:
+          TEST_DNSRECORD_COUNT: 1
+          TEST_INGRESS_COUNT: 1
+        run: |
+          # Note: This doesn't really apply much load, but we run it here to ensure the tests are run on PRs
+          export KUBECONFIG=${{ env.KUBECONFIG }}
+
+          echo "Export GLBC CI Cluster Config Enviornment"
+          export $(cat ./config/deploy/local/controller-config.env.ci | xargs)
+
+          echo "TEST_INGRESS_COUNT = ${{ env.TEST_INGRESS_COUNT }}"
+          echo "TEST_DNSRECORD_COUNT = ${{ env.TEST_DNSRECORD_COUNT }}"
+
+          echo "Switching to kcp-glbc-user workspace"
+          ./bin/kubectl-kcp workspace use root:default:kcp-glbc-user
+
+          kubectl config get-contexts
+
+          # Then run performance tests
+          make performance
       - name: Verify generated metrics documentation
         run: |
           make verify-gen-metrics-docs
