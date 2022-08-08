@@ -31,7 +31,7 @@ import (
 
 const (
 	controllerName                      = "kcp-glbc-ingress"
-	annotationIngressKey                = "kuadarant.dev/ingress-key"
+	annotationIngressKey                = "kuadrant.dev/ingress-key"
 	annotationCertificateState          = "kuadrant.dev/certificate-status"
 	ANNOTATION_HCG_HOST                 = "kuadrant.dev/host.generated"
 	ANNOTATION_HEALTH_CHECK_PREFIX      = "kuadrant.experimental/health-"
