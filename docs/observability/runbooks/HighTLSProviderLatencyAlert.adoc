@@ -39,7 +39,7 @@ You will find:
 - How to check the issuer state.
 . https://cert-manager.io/docs/faq/acme/[Troubleshooting Issuing ACME Certificates] such as Let's Encrypt.
 . Let's Encrypt does not provide support via email. Support questions are answered in their https://community.letsencrypt.org/[community forums].
-
+. Check the status of https://letsencrypt.status.io/[Let's Encrypt]
 
 
 == Validate
