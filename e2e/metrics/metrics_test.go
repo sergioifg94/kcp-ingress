@@ -39,7 +39,7 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 
 	apisv1alpha1 "github.com/kcp-dev/kcp/pkg/apis/apis/v1alpha1"
-	"github.com/kcp-dev/logicalcluster"
+	"github.com/kcp-dev/logicalcluster/v2"
 
 	. "github.com/kuadrant/kcp-glbc/e2e/support"
 	kuadrantv1 "github.com/kuadrant/kcp-glbc/pkg/apis/kuadrant/v1"
@@ -103,7 +103,7 @@ func TestMetrics(t *testing.T) {
 	binding := test.NewAPIBinding("kubernetes", WithComputeServiceExport(ComputeWorkspace), InWorkspace(workspace))
 
 	// Wait until the APIBinding is actually in bound phase
-	test.Eventually(APIBinding(test, binding.ClusterName, binding.Name)).
+	test.Eventually(APIBinding(test, logicalcluster.From(binding).String(), binding.Name)).
 		Should(WithTransform(APIBindingPhase, Equal(apisv1alpha1.APIBindingPhaseBound)))
 
 	// Wait until the APIs are imported into the test workspace
@@ -113,14 +113,14 @@ func TestMetrics(t *testing.T) {
 		networkingv1.SchemeGroupVersion.WithKind("Ingress"),
 	)).Should(BeTrue())
 
-	binding = GetAPIBinding(test, binding.ClusterName, binding.Name)
+	binding = GetAPIBinding(test, logicalcluster.From(binding).String(), binding.Name)
 	kubeIdentityHash := binding.Status.BoundResources[0].Schema.IdentityHash
 
 	// Import GLBC APIs
 	binding = test.NewAPIBinding("glbc", WithExportReference(GLBCWorkspace, "glbc"), WithGLBCAcceptedPermissionClaims(kubeIdentityHash), InWorkspace(workspace))
 
 	// Wait until the APIBinding is actually in bound phase
-	test.Eventually(APIBinding(test, binding.ClusterName, binding.Name)).
+	test.Eventually(APIBinding(test, logicalcluster.From(binding).String(), binding.Name)).
 		Should(WithTransform(APIBindingPhase, Equal(apisv1alpha1.APIBindingPhaseBound)))
 
 	// And check the APIs are imported into the test workspace

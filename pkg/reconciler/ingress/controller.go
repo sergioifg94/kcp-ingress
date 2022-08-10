@@ -17,7 +17,7 @@ import (
 	"k8s.io/client-go/util/workqueue"
 
 	tenancyv1alpha1 "github.com/kcp-dev/kcp/pkg/apis/tenancy/v1alpha1"
-	"github.com/kcp-dev/logicalcluster"
+	"github.com/kcp-dev/logicalcluster/v2"
 
 	certman "github.com/jetstack/cert-manager/pkg/apis/certmanager/v1"
 	certmaninformer "github.com/jetstack/cert-manager/pkg/client/informers/externalversions"
@@ -75,20 +75,20 @@ func NewController(config *ControllerConfig) *Controller {
 	c.sharedInformerFactory.Networking().V1().Ingresses().Informer().AddEventHandler(cache.ResourceEventHandlerFuncs{
 		AddFunc: func(obj interface{}) {
 			ingress := obj.(*networkingv1.Ingress)
-			c.Logger.V(3).Info("enqueue ingress new ingress added", "cluster", ingress.ClusterName, "namespace", ingress.Namespace, "name", ingress.Name)
+			c.Logger.V(3).Info("enqueue ingress new ingress added", "cluster", logicalcluster.From(ingress), "namespace", ingress.Namespace, "name", ingress.Name)
 			ingressObjectTotal.Inc()
 			c.Enqueue(obj)
 		},
 		UpdateFunc: func(old, obj interface{}) {
 			if old.(metav1.Object).GetResourceVersion() != obj.(metav1.Object).GetResourceVersion() {
 				ingress := obj.(*networkingv1.Ingress)
-				c.Logger.V(3).Info("enqueue ingress ingress updated", "cluster", ingress.ClusterName, "namespace", ingress.Namespace, "name", ingress.Name)
+				c.Logger.V(3).Info("enqueue ingress ingress updated", "cluster", logicalcluster.From(ingress), "namespace", ingress.Namespace, "name", ingress.Name)
 				c.Enqueue(obj)
 			}
 		},
 		DeleteFunc: func(obj interface{}) {
 			ingress := obj.(*networkingv1.Ingress)
-			c.Logger.V(3).Info("enqueue ingress deleted ", "cluster", ingress.ClusterName, "namespace", ingress.Namespace, "name", ingress.Name)
+			c.Logger.V(3).Info("enqueue ingress deleted ", "cluster", logicalcluster.From(ingress), "namespace", ingress.Namespace, "name", ingress.Name)
 			ingressObjectTotal.Dec()
 			c.Enqueue(obj)
 		},
@@ -190,7 +190,7 @@ func NewController(config *ControllerConfig) *Controller {
 			}
 			// if we have a ingress key stored we can re queue the ingresss
 			if ingressKey, ok := dns.Annotations[annotationIngressKey]; ok {
-				c.Logger.V(3).Info("reqeuing ingress dns record deleted", "cluster", dns.ClusterName, "namespace", dns.Namespace, "name", dns.Name, "ingresskey", ingressKey)
+				c.Logger.V(3).Info("reqeuing ingress dns record deleted", "cluster", logicalcluster.From(dns), "namespace", dns.Namespace, "name", dns.Name, "ingresskey", ingressKey)
 				c.enqueueIngressByKey(ingressKey)
 			}
 		},
@@ -199,7 +199,7 @@ func NewController(config *ControllerConfig) *Controller {
 			olddns := oldObj.(*kuadrantv1.DNSRecord)
 			if olddns.ResourceVersion != newdns.ResourceVersion {
 				ingressKey := newObj.(*kuadrantv1.DNSRecord).Annotations[annotationIngressKey]
-				c.Logger.V(3).Info("reqeuing ingress dns record deleted", "cluster", newdns.ClusterName, "namespace", newdns.Namespace, "name", newdns.Name, "ingresskey", ingressKey)
+				c.Logger.V(3).Info("reqeuing ingress dns record deleted", "cluster", logicalcluster.From(newdns), "namespace", newdns.Namespace, "name", newdns.Name, "ingresskey", ingressKey)
 				c.enqueueIngressByKey(ingressKey)
 			}
 		},

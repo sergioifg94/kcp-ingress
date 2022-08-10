@@ -9,9 +9,7 @@ import (
 	"github.com/go-logr/logr"
 	certman "github.com/jetstack/cert-manager/pkg/apis/certmanager/v1"
 	cmmeta "github.com/jetstack/cert-manager/pkg/apis/meta/v1"
-	"github.com/kcp-dev/logicalcluster"
-	"github.com/kuadrant/kcp-glbc/pkg/tls"
-	"github.com/kuadrant/kcp-glbc/pkg/util/slice"
+
 	corev1 "k8s.io/api/core/v1"
 	networkingv1 "k8s.io/api/networking/v1"
 	"k8s.io/apimachinery/pkg/api/errors"
@@ -19,6 +17,11 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/client-go/tools/cache"
 	"k8s.io/utils/pointer"
+
+	"github.com/kcp-dev/logicalcluster/v2"
+
+	"github.com/kuadrant/kcp-glbc/pkg/tls"
+	"github.com/kuadrant/kcp-glbc/pkg/util/slice"
 )
 
 type certificateReconciler struct {
@@ -129,7 +132,7 @@ func CertificateName(ingress *networkingv1.Ingress) string {
 	// Removes chars which are invalid characters for cert manager certificate names. RFC 1123 subdomain must consist of
 	// lower case alphanumeric characters, '-' or '.', and must start and end with an alphanumeric character
 
-	return strings.ReplaceAll(fmt.Sprintf("%s-%s-%s", ingress.ClusterName, ingress.Namespace, ingress.Name), ":", "")
+	return strings.ReplaceAll(fmt.Sprintf("%s-%s-%s", logicalcluster.From(ingress), ingress.Namespace, ingress.Name), ":", "")
 }
 
 // TLSSecretName returns the name for the secret in the end user namespace

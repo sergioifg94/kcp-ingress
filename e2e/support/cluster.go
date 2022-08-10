@@ -42,7 +42,7 @@ import (
 
 	workloadv1alpha1 "github.com/kcp-dev/kcp/pkg/apis/workload/v1alpha1"
 	workloadplugin "github.com/kcp-dev/kcp/pkg/cliplugins/workload/plugin"
-	"github.com/kcp-dev/logicalcluster"
+	"github.com/kcp-dev/logicalcluster/v2"
 )
 
 var (

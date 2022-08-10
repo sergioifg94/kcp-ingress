@@ -27,9 +27,10 @@ import (
 	"k8s.io/klog/v2"
 
 	apisv1alpha1 "github.com/kcp-dev/kcp/pkg/apis/apis/v1alpha1"
+	"github.com/kcp-dev/kcp/pkg/apis/tenancy/v1alpha1/helper"
 	conditionsutil "github.com/kcp-dev/kcp/pkg/apis/third_party/conditions/util/conditions"
 	kcp "github.com/kcp-dev/kcp/pkg/client/clientset/versioned"
-	"github.com/kcp-dev/logicalcluster"
+	"github.com/kcp-dev/logicalcluster/v2"
 
 	kuadrantv1 "github.com/kuadrant/kcp-glbc/pkg/client/kuadrant/clientset/versioned"
 	"github.com/kuadrant/kcp-glbc/pkg/client/kuadrant/informers/externalversions"
@@ -272,12 +273,12 @@ func exitOnError(err error, msg string) {
 
 func getAPIExportVirtualWorkspaceURLAndIdentityHash(export *apisv1alpha1.APIExport) (string, string) {
 	if conditionsutil.IsFalse(export, apisv1alpha1.APIExportVirtualWorkspaceURLsReady) {
-		exitOnError(fmt.Errorf("APIExport %s|%s is not ready", export.GetClusterName(), export.GetName()), "Failed to get APIExport virtual workspace URL")
+		exitOnError(fmt.Errorf("APIExport %s is not ready", helper.QualifiedObjectName(export)), "Failed to get APIExport virtual workspace URL")
 	}
 
 	if len(export.Status.VirtualWorkspaces) != 1 {
 		// It's not clear how to handle multiple API export virtual workspace URLs. Let's fail fast.
-		exitOnError(fmt.Errorf("APIExport %s|%s has multiple virtual workspace URLs", export.GetClusterName(), export.GetName()), "Failed to get APIExport virtual workspace URL")
+		exitOnError(fmt.Errorf("APIExport %s has multiple virtual workspace URLs", helper.QualifiedObjectName(export)), "Failed to get APIExport virtual workspace URL")
 	}
 
 	return export.Status.VirtualWorkspaces[0].URL, export.Status.IdentityHash
