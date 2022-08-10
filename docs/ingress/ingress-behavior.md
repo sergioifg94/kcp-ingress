@@ -62,7 +62,7 @@ For more info and to better understand using custom domains see the custom domai
 Multiple GLBC managed Ingress objects within a given namespaces is supported. Each individual Ingress will receive its own unique managed host. 
 When using a custom domain, multiple Ingresses with the same custom domain is also supported with the following limitations. 
 - In order for your custom domain to be used to send traffic to your application(s) you will need to setup a CNAME record. The target for that CNAME should be one of the managed hosts within the namespace where the custom domain is being used. Any managed host can be selected as by default KCP schedules everything within a single namespace to the same workload clusters.
-- Using the same custom domain across multiple namespaces is not recommended at this point as (depending on what workloadclusters and locations you have setup) the workloads could be scheduled to different workload clusters. This means the DNS may not be correct to send traffic for both applications deployed across different namespaces.
+- Using the same custom domain across multiple namespaces is not recommended at this point as (depending on what synctargets and locations you have setup) the workloads could be scheduled to different workload clusters. This means the DNS may not be correct to send traffic for both applications deployed across different namespaces.
 - If you delete the ingress that has the managed host you selected as the CNAME, you will need to update the CNAME record to a different managed host within the namespace for your application to remain reachable on the custom domain. 
 
 Below is an example to illustrate (note there are two different Ingress objects within a single namespace)
@@ -79,7 +79,7 @@ spec:
   rules:
     - host: app.myapp.com #example custom domain
     ...    
-    - host: 1234.hcpapps.net #example managed host this will resolve to the loadbalancers in front of the workloadclusters where the workloads and ingresses are scheduled
+    - host: 1234.hcpapps.net #example managed host this will resolve to the loadbalancers in front of the synctargets where the workloads and ingresses are scheduled
     ...
 
 ---

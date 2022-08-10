@@ -34,13 +34,13 @@
 # "v1.22.7"
 # $ kubectl --context kind-kcp-cluster-2 version -o json | jq .serverVersion.gitVersion
 # "v1.22.7"
-# $ kubectl get workloadclusters -o wide
+# $ kubectl get synctargets -o wide
 # NAME              LOCATION          READY   SYNCED API RESOURCES
 # glbc              glbc              True
 # kcp-cluster-crc   kcp-cluster-crc   True
 # kubectl get locations
 # NAME         RESOURCE           AVAILABLE   INSTANCES   LABELS
-# location-1   workloadclusters   2           2
+# location-1   synctargets   2           2
 
 set -e pipefail
 

@@ -65,7 +65,7 @@ With a running local setup i.e. you have successfully executed `make local-setup
 ```
 
 ```bash
-$ kubectl get workloadclusters -o wide
+$ kubectl get synctargets -o wide
 NAME              LOCATION          READY   SYNCED API RESOURCES
 kcp-cluster-1     kcp-cluster-1     True    ["deployments.apps","ingresses.networking.k8s.io","secrets","services"]
 kcp-cluster-2     kcp-cluster-2     True    ["deployments.apps","ingresses.networking.k8s.io","secrets","services"]
@@ -90,19 +90,38 @@ KUBECONFIG=./tmp/kcp-cluster-1.kubeconfig kubectl get deployments,services,ingre
 
 The e2e tests can be executed locally by running the following commands:
 
-```bash
-# Start KCP and the KinD clusters
-$ make local-setup
-export KUBECONFIG=config/deploy/local/kcp.kubeconfig
-./bin/kubectl-kcp workspace use root:default:kcp-glbc
-./bin/kcp-glbc --kubeconfig .kcp/admin.kubeconfig --context system:admin
-export CLUSTERS_KUBECONFIG_DIR=$(pwd)/tmp
-export AWS_DNS_PUBLIC_ZONE_ID=YOUR_ZONE_ID
+#### Terminal 1
 
-# Start KCP GLBC
-$ ./bin/kcp-glbc --kubeconfig .kcp/admin.kubeconfig --context system:admin --dns-provider fake
-# Run the e2e test suite
-$ make e2e
+Start KCP and create KinD clusters
+```bash
+make local-setup
+```
+
+#### Terminal 2
+
+Run the controller with the same environment as CI ([e2e](.github/workflows/e2e.yaml)):
+```bash
+(export $(cat ./config/deploy/local/controller-config.env.ci | xargs) && \
+KUBECONFIG=./tmp/kcp.kubeconfig ./bin/kcp-glbc)
+```
+
+#### Terminal 3
+
+Run the e2e tests:
+
+```bash
+(export $(cat ./config/deploy/local/controller-config.env.ci | xargs) && \
+export KUBECONFIG="$(pwd)"/.kcp/admin.kubeconfig && \
+export CLUSTERS_KUBECONFIG_DIR="$(pwd)/tmp" && \
+make e2e)
+```
+
+Run the performance tests:
+
+```bash
+(export $(cat ./config/deploy/local/controller-config.env.ci | xargs) && \
+export KUBECONFIG="$(pwd)"/.kcp/admin.kubeconfig &&
+make performance TEST_DNSRECORD_COUNT=1 TEST_INGRESS_COUNT=1)
 ```
 
 Alternatively, You can run the KCP GLBC and/or the tests from your IDE / debugger.

@@ -14,10 +14,10 @@ $ make local-setup
 
 ### Terminal 2
 
-Target the local deployment kcp kubeconfig:
+Target the admin kcp kubeconfig:
 
 ```shell
-export KUBECONFIG=config/deploy/local/kcp.kubeconfig
+export KUBECONFIG=.kcp/admin.kubeconfig
 ```
 
 #### Check local setup state
@@ -75,7 +75,7 @@ cert-manager   cert-manager   1/1     1            1           15m
 ```shell
 $ ./bin/kubectl-kcp workspace use root:default:kcp-glbc-compute
 Current workspace is "root:default:kcp-glbc-compute".
-$ kubectl get workloadclusters -o wide
+$ kubectl get synctargets -o wide
 NAME   LOCATION   READY   SYNCED API RESOURCES
 glbc   glbc       True    
 $ kubectl get apiexports
@@ -111,7 +111,7 @@ No resources found
 ```shell
 $ ./bin/kubectl-kcp workspace use root:default:kcp-glbc-user-compute
 Current workspace is "root:default:kcp-glbc-user-compute".
-$ kubectl get workloadclusters -o wide
+$ kubectl get synctargets -o wide
 NAME            LOCATION        READY   SYNCED API RESOURCES
 kcp-cluster-1   kcp-cluster-1   True    
 kcp-cluster-2   kcp-cluster-2   True    

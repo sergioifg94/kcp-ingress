@@ -59,7 +59,7 @@ Verify the workload cluster becomes ready:
 # targeting your kcp cluster run:
 
 ./bin/kubectl-kcp workspace use root:<your org>:kcp-glbc-compute
-kubectl get workloadclusters -o wide
+kubectl get synctargets -o wide
 NAME   LOCATION   READY   SYNCED API RESOURCES
 glbc   glbc       True
 ```
@@ -91,7 +91,7 @@ Verify it's ready:
 # targeting your kcp cluster run:
 
 ./bin/kubectl-kcp workspace use root:<your org>:kcp-glbc-user-compute
-kubectl get workloadclusters -o wide
+kubectl get synctargets -o wide
 NAME        LOCATION        READY   SYNCED API RESOURCES
 glbc-user   glbc-user       True
 ```

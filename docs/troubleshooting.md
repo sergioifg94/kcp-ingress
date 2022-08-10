@@ -26,11 +26,11 @@ sudo systemctl start docker
 **Kind cluster failed to become ready - Check logs for errors:**
 Attempt the following to confirm if *kcp-cluster-1* and *kcp-cluster-2* are in a READY state:
 ```bash
-KUBECONFIG=config/deploy/local/kcp.kubeconfig ./bin/kubectl-kcp workspace use root:default:kcp-glbc-user-compute
+KUBECONFIG=.kcp/admin.kubeconfig ./bin/kubectl-kcp workspace use root:default:kcp-glbc-user-compute
 Current workspace is "root:default:kcp-glbc-user-compute".
 ```
 ```bash
-kubectl get workloadclusters -o wide
+kubectl get synctargets -o wide
 NAME            LOCATION        READY   SYNCED API RESOURCES
 kcp-cluster-1   kcp-cluster-1   True    
 kcp-cluster-2   kcp-cluster-2   False 
