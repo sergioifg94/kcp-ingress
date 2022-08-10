@@ -31,8 +31,7 @@ can be used to modify the configuration of GLBC.
 $ tree -I '*.yaml|*.template' config/deploy/local/
 config/deploy/local/
 ├── aws-credentials.env
-├── controller-config.env
-└── kcp.kubeconfig
+└── controller-config.env
 ```
 
 These files will not be committed and can be modified as required by you.
@@ -149,7 +148,8 @@ kcp-glbc       kcp-glbc-controller-manager   1/1     1            1           11
 It's not currently possible to check the logs via KCP, but you can view them by accessing the deployment on the kind cluster directly: 
 
 ```shell
-$ kubectl --kubeconfig ~/.kube/config --context kind-kcp-cluster-glbc-control logs -f deployments/kcp-glbc-controller-manager -n kcp89b5fd4ba9405ee7b18d0da859ce7420d36926bac4a97e01af5c244a               
+$ namespace=$(kubectl --context kind-kcp-cluster-glbc-control get deployments --all-namespaces | grep -e kcp-glbc-controller-manager | awk '{print $1 }')
+$ kubectl --kubeconfig ~/.kube/config --context kind-kcp-cluster-glbc-control logs -f deployments/kcp-glbc-controller-manager -n $namespace               
 2022-06-20T09:59:47.622Z INFO runtime/proc.go:255 Creating TLS certificate provider {"issuer": "glbc-ca"}
 ....
 ```

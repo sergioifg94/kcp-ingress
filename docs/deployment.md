@@ -100,15 +100,6 @@ N.B. This can be the same workload cluster used for the `glbc` in the step above
 
 ## Configuration
 
-### KCP Kubeconfig (Required)
-
-A secret `secret/kcp-glbc-kcp-kubeconfig` containing the KCP cluster kubeconfig. An empty secret is created by default 
-during installation, but can be replaced with:  
-
-```
-kubectl -n kcp-glbc create secret generic kcp-glbc-kcp-kubeconfig --from-file=kubeconfig=$(KCP_KUBECONFIG)
-```
-
 ### AWS Credentials (Optional) 
 
 A secret  `secret/kcp-glbc-aws-credentials` containing AWS access key and secret. This is only required if `GLBC_DNS_PROVIDER` is set to `aws`.
@@ -162,7 +153,6 @@ kubectl -n kcp-glbc edit configmap kcp-glbc-controller-config
 | `HCG_LE_EMAIL` | Email address to use during LE cert requests | kuadrant-dev@redhat.com |
 | `NAMESPACE` | Target namesapce of rcert-manager resources (issuers, certificates) | kcp-glbc |
 | `GLBC_WORKSPACE` | The GLBC workspace| root:default:kcp-glbc |
-| `GLBC_COMPUTE_WORKSPACE` | The user compute workspace | root:default:kcp-glbc-user-compute |
 
 ### Applying configuration changes
 
@@ -174,48 +164,4 @@ need to be restarted after each change in order for them to come into affect.
 
 ## Configuring for remote KCP
 
-If you are not using a local KCP, you will need to create a kubeconfig that allows GLBC to connect to the remote KCP instance. 
-
-To do this, use the following steps. (note you will need the KCP kube plugin which is part of the kcp repo)
-
-1) Login to KCP and select your workspace
-
-```
-kubectl kcp workspace my-workspace
-```
-
-2) Create a service account
-
-```
-kubectl create sa glbc
-```
-
-3) create a cluster role and bind it to your service account
-
-```
-kubectl create -f config/kcp/glbc-cluster-role.yaml
-
-kubectl create -f config/kcp/glbc-cluster-role-binding.yaml
-
-```
-
-4) extract the service account token
-
-```
-kubectl get secrets
-
-$(kubectl --namespace default get secret/glbc-token-<id> -o jsonpath='{.data.token}' | base64 --decode)
-```
-
-5) copy the token into a kubeconfig. An example template has been added to ```config/kcp/kcp-cube-config.yaml.template ```
-
-
-You can now run GLBC targeting the KCP instance by passing this kubeconfig file as a start up parameter
-
-```
---kubeconfig=<path to kcp kube config>
-```
-
-Note: When targeting a remote KCP you may not have access to all workspaces. If that's the case you will need to start the controller with the logical cluster specified `--logical-cluster root:<my org>:<my workspace>`  
-
-
+ToDo 

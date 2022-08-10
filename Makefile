@@ -130,7 +130,6 @@ undeploy: ## Undeploy controller from the K8s cluster specified in ~/.kube/confi
 LD_DIR=config/deploy/local
 LD_AWS_CREDS_ENV=$(LD_DIR)/aws-credentials.env
 LD_CONTROLLER_CONFIG_ENV=$(LD_DIR)/controller-config.env
-LD_KCP_KUBECONFIG=$(LD_DIR)/kcp.kubeconfig
 
 $(LD_AWS_CREDS_ENV):
 	envsubst \
@@ -142,11 +141,8 @@ $(LD_CONTROLLER_CONFIG_ENV):
 		< $(LD_CONTROLLER_CONFIG_ENV).template \
 		> $(LD_CONTROLLER_CONFIG_ENV)
 
-$(LD_KCP_KUBECONFIG):
-	cp .kcp/admin.kubeconfig $(LD_KCP_KUBECONFIG)
-
 .PHONY: generate-ld-config
-generate-ld-config: $(LD_AWS_CREDS_ENV) $(LD_CONTROLLER_CONFIG_ENV) $(LD_KCP_KUBECONFIG) ## Generate local deployment files.
+generate-ld-config: $(LD_AWS_CREDS_ENV) $(LD_CONTROLLER_CONFIG_ENV) ## Generate local deployment files.
 
 .PHONY: clean-ld-env
 clean-ld-env:

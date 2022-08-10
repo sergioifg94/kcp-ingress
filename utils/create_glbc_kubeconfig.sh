@@ -16,22 +16,16 @@
 # limitations under the License.
 #
 
-# Creates a namespace in the current kube context and outputs a kubeconfig which has permissions to access all
-# resources relevant to GLBC in that namespace.
-#
-# ./bin/kubectl-kcp workspace create my-glbc --enter
-# ./utils/create_glbc_ns.sh -n bob -c my-glbc
-# kubectl --kubeconfig tmp/bob-my-glbc.kubeconfig api-resources
-#
-
 DEPLOY_SCRIPT_DIR="$(dirname "${BASH_SOURCE[0]}")"
 KCP_GLBC_DIR="${DEPLOY_SCRIPT_DIR}/.."
 source "${DEPLOY_SCRIPT_DIR}"/.setupEnv
 source "${DEPLOY_SCRIPT_DIR}"/.startUtils
 
-CLUSTER_ROLE=false
 OUTPUT_DIR=${KCP_GLBC_DIR}/tmp
 CA_DATA=""
+
+NAMESPACE=kcp-glbc
+SERVICE_ACCOUNT_NAME=kcp-glbc-controller-manager
 
 trap cleanup EXIT 1 2 3 6 15
 
@@ -45,35 +39,24 @@ cleanup() {
 help()
 {
    # Display Help
-   echo "Creates a namespace in the current context and outputs a kubeconfig which has permissions"
-   echo "to access all resources relevant to GLBC in that namespace."
+   echo "Create the kcp-glbc namespace, kcp-glbc-controller-manager service account and generates a kubeconfig for access."
    echo
-   echo "Syntax: create_glbc_ns.sh [-n|c|C|o]"
+   echo "Syntax: create_glbc_kubeconfig.sh [-n|c|C|o]"
    echo "options:"
    echo "a     Certificate Authority Data to add to the cluster of the generated kubeconfig (default: ${CA_DATA})."
-   echo "c     Cluster Name (required)"
-   echo "C     Apply cluster role permissions (default: ${CLUSTER_ROLE})."
    echo "h     Print this Help."
-   echo "n     Namespace (required)"
+   echo "n     Namespace (default: ${NAMESPACE})"
    echo "o     Output directory where generated kubeconfig will be written (default: ${OUTPUT_DIR}/<namesapce>-<cluster name>.kubeconfig)."
    echo
 }
 
-while getopts "a:n:c:Co:" arg; do
+while getopts "a:n:o:" arg; do
   case "${arg}" in
     a)
       CA_DATA=${OPTARG}
       ;;
     n)
-      # The namespace to create
-      namespace=${OPTARG}
-      ;;
-    c)
-      # Unique name for the cluster, can be anything
-      clusterName=${OPTARG}
-      ;;
-    C)
-      CLUSTER_ROLE=true
+      NAMESPACE=${OPTARG}
       ;;
     o)
       OUTPUT_FILE=${OPTARG}
@@ -86,34 +69,21 @@ while getopts "a:n:c:Co:" arg; do
 done
 shift $((OPTIND-1))
 
-if [ -z "$namespace" ] || [ -z "$clusterName" ]; then
-  help
-  exit 1
-fi
+set -e pipefail
 
 if [ -z "$OUTPUT_FILE" ]; then
-  OUTPUT_FILE=${OUTPUT_DIR}/"${namespace}-${clusterName}.kubeconfig"
+  OUTPUT_FILE=${OUTPUT_DIR}/"kcp.kubeconfig"
 fi
 
-serviceAccount=glbc
-
-if [ "$CLUSTER_ROLE" = true ] ; then
-  namespace="default"
-  kubectl create sa $serviceAccount
-  kubectl apply -f ${KCP_GLBC_DIR}/config/kcp/glbc-cluster-role.yaml
-  kubectl apply -f ${KCP_GLBC_DIR}/config/kcp/glbc-cluster-role-binding.yaml
-else
-  ## Create ns/role/rolebinding and serviceAccount for user
-  cd config/kcp/ || exit
-  ../../bin/kustomize edit set namespace $namespace
-  cd ../..
-  ./bin/kustomize build ${KCP_GLBC_DIR}/config/kcp | kubectl apply -f -
-fi
+cd config/kcp/ || exit
+../../bin/kustomize edit set namespace $NAMESPACE
+cd ../..
+./bin/kustomize build ${KCP_GLBC_DIR}/config/kcp | kubectl apply -f -
 
 # Generate kubeconfig
-secretName=$(kubectl get sa "$serviceAccount" --namespace="$namespace" -o json | jq -r .secrets[0].name)
+secretName=$(kubectl get sa "$SERVICE_ACCOUNT_NAME" --namespace="$NAMESPACE" -o json | jq -r .secrets[0].name)
 echo "secretName: ${secretName}"
-secretToken=$(kubectl get secret --namespace "${namespace}" "${secretName}" -o json | jq -r '.data["token"]' | base64 --decode)
+secretToken=$(kubectl get secret --namespace "$NAMESPACE" "${secretName}" -o json | jq -r '.data["token"]' | base64 --decode)
 echo "secretToken: ${secretToken}"
 currentContext=$(kubectl config current-context)
 echo "currentContext: ${currentContext}"
@@ -121,35 +91,35 @@ currentCluster=$(kubectl config get-contexts "$currentContext" | awk '{print $3}
 echo "currentCluster: ${currentCluster}"
 clusterServer=$(kubectl config view -o jsonpath="{.clusters[?(@.name == \"${currentCluster}\")].cluster.server}")
 echo "clusterServer: ${clusterServer}"
-
-if [ "$CLUSTER_ROLE" = true ] ; then
-  clusterServer=$(echo $clusterServer | cut -d'/' -f1,2,3)
-fi
+clusterServer=$(echo $clusterServer | cut -d'/' -f1,2,3)
+echo "clusterServer: ${clusterServer}"
 
 echo "apiVersion: v1
 kind: Config
 clusters:
-  - name: ${clusterName}
+  - name: glbc
     cluster:
       server: ${clusterServer}
 contexts:
-  - name: ${serviceAccount}@${clusterName}
+  - name: glbc@glbc
     context:
-      cluster: ${clusterName}
-      namespace: ${namespace}
-      user: ${serviceAccount}
+      cluster: glbc
+      namespace: $NAMESPACE
+      user: glbc
 users:
-  - name: ${serviceAccount}
+  - name: glbc
     user:
       token: ${secretToken}
-current-context: ${serviceAccount}@${clusterName}" > ${OUTPUT_FILE}
+current-context: glbc@glbc" > ${OUTPUT_FILE}
 
-echo ${CA_DATA}
+## Get the ca data for this KCP if it exists, used later to inject into generated kubeconfigs
+caData=$(kubectl config view --raw -o json | jq -r '.clusters[0].cluster."certificate-authority-data"' | tr -d '"')
+echo ${caData}
 
-#ToDO Check the contents of CA_DATA are valid and not "null"
-if [  ! -z "${CA_DATA}" ] ; then
-  echo "${CA_DATA}" | base64 --decode > "${KCP_GLBC_DIR}/tmp/ca.crt"
-  kubectl config set-cluster "${clusterName}" \
+#ToDO Check the contents of caData are valid and not "null"
+if [  ! -z "${caData}" ] ; then
+  echo "${caData}" | base64 --decode > "${KCP_GLBC_DIR}/tmp/ca.crt"
+  kubectl config set-cluster glbc \
   --kubeconfig="${OUTPUT_FILE}" \
   --server="${clusterServer}" \
   --certificate-authority="${KCP_GLBC_DIR}/tmp/ca.crt" \

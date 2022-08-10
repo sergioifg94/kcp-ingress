@@ -35,7 +35,7 @@ type DNSValidator int
 
 const (
 	DNSValidatorRoute53  DNSValidator = iota
-	DefaultCertificateNS string       = "cert-manager"
+	DefaultCertificateNS string       = "kcp-glbc"
 	certFinalizer                     = "kcp.dev/certificates-cleanup"
 )
 

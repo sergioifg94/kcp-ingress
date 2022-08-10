@@ -99,19 +99,8 @@ func TestMetrics(t *testing.T) {
 	// Create the test workspace
 	workspace := test.NewTestWorkspace()
 
-	// Import GLBC APIs
-	binding := test.NewAPIBinding("glbc", WithExportReference(GLBCWorkspace, "glbc"), InWorkspace(workspace))
-
-	// Wait until the APIBinding is actually in bound phase
-	test.Eventually(APIBinding(test, binding.ClusterName, binding.Name)).
-		Should(WithTransform(APIBindingPhase, Equal(apisv1alpha1.APIBindingPhaseBound)))
-
-	// And check the APIs are imported into the test workspace
-	test.Expect(HasImportedAPIs(test, workspace, kuadrantv1.SchemeGroupVersion.WithKind("DNSRecord"))(test)).
-		Should(BeTrue())
-
 	// Import compute workspace APIs
-	binding = test.NewAPIBinding("kubernetes", WithComputeServiceExport(ComputeWorkspace), InWorkspace(workspace))
+	binding := test.NewAPIBinding("kubernetes", WithComputeServiceExport(ComputeWorkspace), InWorkspace(workspace))
 
 	// Wait until the APIBinding is actually in bound phase
 	test.Eventually(APIBinding(test, binding.ClusterName, binding.Name)).
@@ -123,6 +112,20 @@ func TestMetrics(t *testing.T) {
 		appsv1.SchemeGroupVersion.WithKind("Deployment"),
 		networkingv1.SchemeGroupVersion.WithKind("Ingress"),
 	)).Should(BeTrue())
+
+	binding = GetAPIBinding(test, binding.ClusterName, binding.Name)
+	kubeIdentityHash := binding.Status.BoundResources[0].Schema.IdentityHash
+
+	// Import GLBC APIs
+	binding = test.NewAPIBinding("glbc", WithExportReference(GLBCWorkspace, "glbc"), WithGLBCAcceptedPermissionClaims(kubeIdentityHash), InWorkspace(workspace))
+
+	// Wait until the APIBinding is actually in bound phase
+	test.Eventually(APIBinding(test, binding.ClusterName, binding.Name)).
+		Should(WithTransform(APIBindingPhase, Equal(apisv1alpha1.APIBindingPhaseBound)))
+
+	// And check the APIs are imported into the test workspace
+	test.Expect(HasImportedAPIs(test, workspace, kuadrantv1.SchemeGroupVersion.WithKind("DNSRecord"))(test)).
+		Should(BeTrue())
 
 	// Create a namespace
 	namespace := test.NewTestNamespace(InWorkspace(workspace))
@@ -262,41 +265,17 @@ func TestMetrics(t *testing.T) {
 		// )),
 	))
 
+	// Wait for a period of time to allow all reconciliations to be completed
+	// ToDo (mnairn) Is there any way we can do an assertion on something to know we are at this point?
+	// Needs investigation into what is actually triggering a reconciliation after the DNSRecord is finished.
+	time.Sleep(30 * time.Second)
+
 	// Take a snapshot of the reconciliation metrics
 	reconcileTotal := GetMetric(test, "glbc_controller_reconcile_total")
 	// Continually gets the metrics and check no reconciliation occurred over a reasonable period of time.
 	test.Consistently(Metrics(test), 30*time.Second).Should(And(
 		HaveKey("glbc_controller_reconcile_total"),
-		WithTransform(Metric("glbc_controller_reconcile_total"), Or(
-			Equal(reconcileTotal),
-			// A final reconciliation of the Ingress object may happen once the system has converged,
-			// and there is currently no way to predictably wait for it. So options are either to wait
-			// for an arbitrary period of time, or to accommodate the assertion, and tolerate an extra
-			// reconciliation by the Ingress controller. The below code implements the later option.
-			//TODO(cbrookes) I haven't seen it need to use this workaround now for sometime. May be able to remove it
-			Satisfy(func(metric *prometheus.MetricFamily) bool {
-				if len(metric.Metric) != len(reconcileTotal.Metric) {
-					return false
-				}
-				for i, m := range metric.Metric {
-					if hasLabels(m,
-						&prometheus.LabelPair{Name: stringP("controller"), Value: stringP("kcp-glbc-ingress")},
-						&prometheus.LabelPair{Name: stringP("result"), Value: stringP("success")},
-					) {
-						fmt.Println("satisfy metric values ", *reconcileTotal.Metric[i].Counter.Value, *m.Counter.Value)
-						if *m.Counter.Value != *reconcileTotal.Metric[i].Counter.Value+1 {
-							return false
-						}
-
-					} else {
-						match, _ := Equal(reconcileTotal.Metric[i]).Match(m)
-						if !match {
-							return false
-						}
-					}
-				}
-				return true
-			})),
+		WithTransform(Metric("glbc_controller_reconcile_total"), Equal(reconcileTotal),
 		),
 	))
 

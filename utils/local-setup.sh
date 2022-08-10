@@ -68,8 +68,8 @@ KIND_CLUSTER_PREFIX="kcp-cluster-"
 KCP_GLBC_CLUSTER_NAME="${KIND_CLUSTER_PREFIX}glbc-control"
 ORG_WORKSPACE=root:default
 
-KUBECONFIG_GLBC=config/deploy/local/kcp.kubeconfig
-KUBECONFIG_GLBC_USER=.kcp/admin.kubeconfig
+KUBECONFIG_KCP_ADMIN=.kcp/admin.kubeconfig
+KUBECONFIG_KCP_GLBC=${TEMP_DIR}/kcp.kubeconfig
 
 : ${KCP_VERSION:="release-0.6"}
 KCP_SYNCER_IMAGE="ghcr.io/kcp-dev/kcp/syncer:${KCP_VERSION}"
@@ -132,14 +132,14 @@ createSyncTarget() {
 createUserSyncTarget() {
   createSyncTarget $1 $2 $3 $4
   echo "Deploying kcp syncer to ${1}"
-  KUBECONFIG=${KUBECONFIG_GLBC} kubectl create namespace kcp-syncer --dry-run=client -o yaml | kubectl --kubeconfig=${KUBECONFIG_GLBC} apply -f -
-  KUBECONFIG=${KUBECONFIG_GLBC} ${KUBECTL_KCP_BIN} workload sync ${clusterName} --kcp-namespace kcp-syncer --syncer-image=${KCP_SYNCER_IMAGE} --resources=ingresses.networking.k8s.io,services --output-file ${TEMP_DIR}/${clusterName}-syncer.yaml
+  KUBECONFIG=${KUBECONFIG_KCP_ADMIN} kubectl create namespace kcp-syncer --dry-run=client -o yaml | kubectl --kubeconfig=${KUBECONFIG_KCP_ADMIN} apply -f -
+  KUBECONFIG=${KUBECONFIG_KCP_ADMIN} ${KUBECTL_KCP_BIN} workload sync ${clusterName} --kcp-namespace kcp-syncer --syncer-image=${KCP_SYNCER_IMAGE} --resources=ingresses.networking.k8s.io,services --output-file ${TEMP_DIR}/${clusterName}-syncer.yaml
 
   # Enable advanced scheduling
   echo "Enabling advanced scheduling"
-  KUBECONFIG=${KUBECONFIG_GLBC} kubectl annotate --overwrite synctarget ${clusterName} featuregates.experimental.workload.kcp.dev/advancedscheduling='true'
-  KUBECONFIG=${KUBECONFIG_GLBC} kubectl label --overwrite synctarget ${clusterName} kuadrant.dev/synctarget=${clusterName}
-  KUBECONFIG=${KUBECONFIG_GLBC} kubectl get synctargets ${clusterName} -o json | jq .metadata.annotations
+  KUBECONFIG=${KUBECONFIG_KCP_ADMIN} kubectl annotate --overwrite synctarget ${clusterName} featuregates.experimental.workload.kcp.dev/advancedscheduling='true'
+  KUBECONFIG=${KUBECONFIG_KCP_ADMIN} kubectl label --overwrite synctarget ${clusterName} kuadrant.dev/synctarget=${clusterName}
+  KUBECONFIG=${KUBECONFIG_KCP_ADMIN} kubectl get synctargets ${clusterName} -o json | jq .metadata.annotations
 
   kubectl apply -f ${TEMP_DIR}/${clusterName}-syncer.yaml
 }
@@ -153,7 +153,7 @@ fi
 
 #1. Start KCP
 echo "Starting KCP, sending logs to ${KCP_LOG_FILE}"
-${KCP_BIN} start --run-controllers > ${KCP_LOG_FILE} 2>&1 &
+${KCP_BIN} --v=9 start --run-controllers > ${KCP_LOG_FILE} 2>&1 &
 KCP_PID=$!
 
 if ! ps -p ${KCP_PID}; then
@@ -169,33 +169,21 @@ sleep 5
 
 (cd ${KCP_GLBC_DIR} && make generate-ld-config)
 
-KUBECONFIG=${KUBECONFIG_GLBC} ${KUBECTL_KCP_BIN} workspace use "root"
-KUBECONFIG=${KUBECONFIG_GLBC} ${KUBECTL_KCP_BIN} workspace create "default" --type universal --enter
+KUBECONFIG=${KUBECONFIG_KCP_ADMIN} ${KUBECTL_KCP_BIN} workspace use "root"
+KUBECONFIG=${KUBECONFIG_KCP_ADMIN} ${KUBECTL_KCP_BIN} workspace create "default" --type universal --enter
 
 #2. Setup workspaces (kcp-glbc, kcp-glbc-compute, kcp-glbc-user, kcp-glbc-user-compute)
-KUBECONFIG=${KUBECONFIG_GLBC} GLBC_USER_WORKLOAD_CLUSTER_NAME=${KIND_CLUSTER_PREFIX}1 ${SCRIPT_DIR}/deploy.sh -c "none"
+KUBECONFIG=${KUBECONFIG_KCP_ADMIN} OUTPUT_DIR=${TEMP_DIR} GLBC_USER_WORKLOAD_CLUSTER_NAME=${KIND_CLUSTER_PREFIX}1 ${SCRIPT_DIR}/deploy.sh -c "none"
 
 #3. Create GLBC sync target and wait for it to be ready
 createSyncTarget $KCP_GLBC_CLUSTER_NAME 8081 8444 "glbc"
-kubectl apply -f config/deploy/local/glbc-syncer.yaml
+kubectl apply -f ${TEMP_DIR}/glbc-syncer.yaml
 
-KUBECONFIG=${KUBECONFIG_GLBC} ${KUBECTL_KCP_BIN} workspace use "${ORG_WORKSPACE}:kcp-glbc-compute"
-KUBECONFIG=${KUBECONFIG_GLBC} kubectl wait --timeout=300s --for=condition=Ready=true synctargets "glbc"
+KUBECONFIG=${KUBECONFIG_KCP_ADMIN} ${KUBECTL_KCP_BIN} workspace use "${ORG_WORKSPACE}:kcp-glbc-compute"
+KUBECONFIG=${KUBECONFIG_KCP_ADMIN} kubectl wait --timeout=300s --for=condition=Ready=true synctargets "glbc"
 
-#4. Deploy GLBC components
-KUBECONFIG=${KUBECONFIG_GLBC} GLBC_USER_WORKLOAD_CLUSTER_NAME=${KIND_CLUSTER_PREFIX}1 ${SCRIPT_DIR}/deploy.sh -c ${GLBC_DEPLOY_COMPONENTS}
-# When using Run Option 1(Local), the `kcp-glbc` ns won't exist in the glcb workspace.
-# Create it here so that we can always use `kcp-glbc` for NAMESPACE (cert manager resources are created here)
-KUBECONFIG=${KUBECONFIG_GLBC} ${KUBECTL_KCP_BIN} workspace use "${ORG_WORKSPACE}:kcp-glbc"
-kubectl --kubeconfig=${KUBECONFIG_GLBC} create namespace kcp-glbc --dry-run=client -o yaml | kubectl --kubeconfig=${KUBECONFIG_GLBC} apply -f -
-
-#ToDo This issuer should only need to be created in one ns
-# Currently, depending on how you are running glbc (local vs container), the expected location of the issuer differs
-go run ${SCRIPT_DIR}/certman-issuer/ --glbc-kubeconfig ${KUBECONFIG_GLBC}
-go run ${SCRIPT_DIR}/certman-issuer/ --glbc-kubeconfig ${KUBECONFIG_GLBC} --issuer-namespace=kcp-glbc
-
-#5. Create User sync target clusters and wait for them to be ready
-KUBECONFIG=${KUBECONFIG_GLBC} ${KUBECTL_KCP_BIN} workspace use "${ORG_WORKSPACE}:kcp-glbc-user-compute"
+#4. Create User sync target clusters and wait for them to be ready
+KUBECONFIG=${KUBECONFIG_KCP_ADMIN} ${KUBECTL_KCP_BIN} workspace use "${ORG_WORKSPACE}:kcp-glbc-user-compute"
 echo "Creating $NUM_CLUSTERS kcp SyncTarget cluster(s)"
 port80=8082
 port443=8445
@@ -205,14 +193,30 @@ for cluster in $CLUSTERS; do
   port443=$((port443 + 1))
 done
 
-KUBECONFIG=${KUBECONFIG_GLBC} kubectl wait --timeout=300s --for=condition=Ready=true synctargets $CLUSTERS
+KUBECONFIG=${KUBECONFIG_KCP_ADMIN} kubectl wait --timeout=300s --for=condition=Ready=true synctargets $CLUSTERS
 
-#6. Switch to user workspace
-KUBECONFIG=${KUBECONFIG_GLBC_USER} ${KUBECTL_KCP_BIN} workspace use "${ORG_WORKSPACE}:kcp-glbc-user"
+#5 Create the GLBC APIExport after all the clusters have synced
+KUBECONFIG=${KUBECONFIG_KCP_ADMIN} OUTPUT_DIR=${TEMP_DIR} GLBC_USER_WORKLOAD_CLUSTER_NAME=${KIND_CLUSTER_PREFIX}1 ${SCRIPT_DIR}/deploy.sh -c "none" | grep "GLBC APIExport created successfully"
 
+#6. Deploy GLBC components
+KUBECONFIG=${KUBECONFIG_KCP_ADMIN} OUTPUT_DIR=${TEMP_DIR} GLBC_USER_WORKLOAD_CLUSTER_NAME=${KIND_CLUSTER_PREFIX}1 ${SCRIPT_DIR}/deploy.sh -c ${GLBC_DEPLOY_COMPONENTS}
+
+#7. Miscellaneous local development specific steps
+KUBECONFIG=${KUBECONFIG_KCP_ADMIN} ${KUBECTL_KCP_BIN} workspace use "${ORG_WORKSPACE}:kcp-glbc"
+
+# Create the kcp-glbc namepsace, kcp-glbc-controller-manager service account and generate a kubeconfig for access
+KUBECONFIG=${KUBECONFIG_KCP_ADMIN} ${SCRIPT_DIR}/create_glbc_kubeconfig.sh -o ${KUBECONFIG_KCP_GLBC}
+
+# Create the default glbc-ca issuer
+go run ${SCRIPT_DIR}/certman-issuer/ --glbc-kubeconfig ${KUBECONFIG_KCP_ADMIN} --issuer-namespace=kcp-glbc
+
+#8. Switch to user workspace
+KUBECONFIG=${KUBECONFIG_KCP_ADMIN} ${KUBECTL_KCP_BIN} workspace use "${ORG_WORKSPACE}:kcp-glbc-user"
+
+#ToDo Is there any point to this? Does this not need to be done to every ns
 #disable automatic scheduling
-kubectl --kubeconfig=${KUBECONFIG_GLBC_USER} label namespace default experimental.workload.kcp.dev/scheduling-disabled="true"
-kubectl --kubeconfig=${KUBECONFIG_GLBC_USER} annotate namespace default scheduling.kcp.dev/placement-
+kubectl --kubeconfig=${KUBECONFIG_KCP_ADMIN} label namespace default experimental.workload.kcp.dev/scheduling-disabled="true"
+kubectl --kubeconfig=${KUBECONFIG_KCP_ADMIN} annotate namespace default scheduling.kcp.dev/placement-
 
 echo ""
 echo "KCP PID          : ${KCP_PID}"
@@ -222,21 +226,19 @@ echo ""
 echo "Run Option 1 (Local):"
 echo ""
 echo "       cd ${PWD}"
-echo "       export KUBECONFIG=${KUBECONFIG_GLBC}"
-echo "       ./bin/kubectl-kcp workspace use ${ORG_WORKSPACE}:kcp-glbc"
-echo "       ./bin/kcp-glbc --kubeconfig ${KUBECONFIG_GLBC} --context system:admin"
+echo "       KUBECONFIG=${KUBECONFIG_KCP_GLBC} ./bin/kcp-glbc"
 echo ""
 echo "Run Option 2 (Deploy latest in KCP with monitoring enabled):"
 echo ""
 echo "       cd ${PWD}"
-echo "       export KUBECONFIG=${KUBECONFIG_GLBC}"
-echo "       KUBECONFIG=${KUBECONFIG_GLBC} ./utils/deploy.sh"
+echo "       export KUBECONFIG=${KUBECONFIG_KCP_ADMIN}"
+echo "       KUBECONFIG=${KUBECONFIG_KCP_ADMIN} ./utils/deploy.sh"
 echo "       KUBECONFIG=${KUBECONFIG} ./utils/deploy-observability.sh"
 echo ""
 echo "When glbc is running, try deploying the sample service:"
 echo ""
 echo "       cd ${PWD}"
-echo "       export KUBECONFIG=${KUBECONFIG_GLBC_USER}"
+echo "       export KUBECONFIG=${KUBECONFIG_KCP_ADMIN}"
 echo "       ./bin/kubectl-kcp workspace use ${ORG_WORKSPACE}:kcp-glbc-user"
 echo "       kubectl apply -f samples/echo-service/echo.yaml"
 echo ""

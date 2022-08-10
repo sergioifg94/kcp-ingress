@@ -20,7 +20,6 @@ import (
 	"fmt"
 
 	"github.com/onsi/gomega"
-
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 
 	apisv1alpha1 "github.com/kcp-dev/kcp/pkg/apis/apis/v1alpha1"
@@ -62,6 +61,55 @@ func (o *withExportReference) applyTo(to interface{}) error {
 
 var _ Option = &withExportReference{}
 
+func WithGLBCAcceptedPermissionClaims(identityHash string) Option {
+	return &withGLBCAcceptedPermissionClaims{
+		acceptedPermissionClaims: []apisv1alpha1.PermissionClaim{
+			{
+				GroupResource: apisv1alpha1.GroupResource{
+					Group:    "",
+					Resource: "secrets",
+				},
+			},
+			{
+				GroupResource: apisv1alpha1.GroupResource{
+					Group:    "",
+					Resource: "services",
+				},
+				IdentityHash: identityHash,
+			},
+			{
+				GroupResource: apisv1alpha1.GroupResource{
+					Group:    "apps",
+					Resource: "deployments",
+				},
+				IdentityHash: identityHash,
+			},
+			{
+				GroupResource: apisv1alpha1.GroupResource{
+					Group:    "networking.k8s.io",
+					Resource: "ingresses",
+				},
+				IdentityHash: identityHash,
+			},
+		},
+	}
+}
+
+type withGLBCAcceptedPermissionClaims struct {
+	acceptedPermissionClaims []apisv1alpha1.PermissionClaim
+}
+
+func (o *withGLBCAcceptedPermissionClaims) applyTo(to interface{}) error {
+	binding, ok := to.(*apisv1alpha1.APIBinding)
+	if !ok {
+		return fmt.Errorf("cannot apply WithExportReference option to %q", to)
+	}
+	binding.Spec.AcceptedPermissionClaims = o.acceptedPermissionClaims
+	return nil
+}
+
+var _ Option = &withGLBCAcceptedPermissionClaims{}
+
 func createAPIBinding(t Test, name string, options ...Option) *apisv1alpha1.APIBinding {
 	binding := &apisv1alpha1.APIBinding{
 		TypeMeta: metav1.TypeMeta{
@@ -97,4 +145,9 @@ func APIBinding(t Test, workspace, name string) func(g gomega.Gomega) *apisv1alp
 
 func APIBindingPhase(binding *apisv1alpha1.APIBinding) apisv1alpha1.APIBindingPhaseType {
 	return binding.Status.Phase
+}
+
+func GetAPIBinding(t Test, workspace, name string) *apisv1alpha1.APIBinding {
+	t.T().Helper()
+	return APIBinding(t, workspace, name)(t)
 }

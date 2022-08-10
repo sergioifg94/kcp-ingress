@@ -4,7 +4,6 @@ import (
 	"context"
 	"flag"
 	"fmt"
-	"net/url"
 	"os"
 	"sync"
 	"time"
@@ -19,6 +18,7 @@ import (
 	certmanclient "github.com/jetstack/cert-manager/pkg/client/clientset/versioned"
 	certmaninformer "github.com/jetstack/cert-manager/pkg/client/informers/externalversions"
 
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	genericapiserver "k8s.io/apiserver/pkg/server"
 	"k8s.io/client-go/informers"
 	"k8s.io/client-go/kubernetes"
@@ -26,6 +26,9 @@ import (
 	"k8s.io/client-go/tools/clientcmd"
 	"k8s.io/klog/v2"
 
+	apisv1alpha1 "github.com/kcp-dev/kcp/pkg/apis/apis/v1alpha1"
+	conditionsutil "github.com/kcp-dev/kcp/pkg/apis/third_party/conditions/util/conditions"
+	kcp "github.com/kcp-dev/kcp/pkg/client/clientset/versioned"
 	"github.com/kcp-dev/logicalcluster"
 
 	kuadrantv1 "github.com/kuadrant/kcp-glbc/pkg/client/kuadrant/clientset/versioned"
@@ -47,12 +50,6 @@ const (
 )
 
 var options struct {
-	// The path to the kcp kubeconfig
-	Kubeconfig string
-	// The kcp context
-	Kubecontext string
-	// The user compute workspace
-	ComputeWorkspace string
 	// The GLBC workspace
 	GLBCWorkspace string
 	// The kcp logical cluster
@@ -77,9 +74,6 @@ func init() {
 	flagSet := flag.CommandLine
 
 	// KCP client options
-	flagSet.StringVar(&options.Kubeconfig, "kubeconfig", "", "Path to kubeconfig")
-	flagSet.StringVar(&options.Kubecontext, "context", env.GetEnvString("GLBC_KCP_CONTEXT", ""), "Context to use in the Kubeconfig file, instead of the current context")
-	flagSet.StringVar(&options.ComputeWorkspace, "compute-workspace", env.GetEnvString("GLBC_COMPUTE_WORKSPACE", "root:default:kcp-glbc-user-compute"), "The user compute workspace")
 	flagSet.StringVar(&options.GLBCWorkspace, "glbc-workspace", env.GetEnvString("GLBC_WORKSPACE", "root:default:kcp-glbc"), "The GLBC workspace")
 	flagSet.StringVar(&options.LogicalClusterTarget, "logical-cluster", env.GetEnvString("GLBC_LOGICAL_CLUSTER_TARGET", "*"), "set the target logical cluster")
 	// TLS certificate issuance options
@@ -124,54 +118,35 @@ func main() {
 
 	g.Go(metricsServer.Start)
 
-	defaultClientConfig, err := clientcmd.NewNonInteractiveDeferredLoadingClientConfig(
+	kcpClientConfig, err := clientcmd.NewNonInteractiveDeferredLoadingClientConfig(
 		clientcmd.NewDefaultClientConfigLoadingRules(),
 		&clientcmd.ConfigOverrides{}).ClientConfig()
 	exitOnError(err, "Failed to create K8S config")
-	// defaultKubeClient the client to the GLBC workspace, that uses the kcp TMC feature that rewrites the service account so the in-cluster client connects back to kcp
-	defaultKubeClient, err := kubernetes.NewForConfig(defaultClientConfig)
-	exitOnError(err, "Failed to create K8S core client")
+	kubeClient, err := kubernetes.NewForConfig(kcpClientConfig)
+	exitOnError(err, "Failed to create K8S client")
 
-	// kcp bootstrap client
-	kcpClientConfig, err := clientcmd.NewNonInteractiveDeferredLoadingClientConfig(
-		&clientcmd.ClientConfigLoadingRules{ExplicitPath: options.Kubeconfig},
-		&clientcmd.ConfigOverrides{CurrentContext: options.Kubecontext}).ClientConfig()
-	exitOnError(err, "Failed to create KCP config")
+	kcpClient, err := kcp.NewClusterForConfig(kcpClientConfig)
+	exitOnError(err, "Failed to create KCP client")
 
-	// kcp compute client, providing access to the APIs negotiated with workload clusters,
-	// i.e., Ingress, Service, Deployment, bootstrapped from the kubernetes APIExport of the
-	// GLBC compute workspace.
-	computeClientConfig := rest.CopyConfig(kcpClientConfig)
-	computeClientConfig.Host = getAPIExportVirtualWorkspaceURL(kcpClientConfig, "kubernetes", options.ComputeWorkspace)
-	log.Logger.Info(fmt.Sprintf("computeClientConfig.Host: %s", computeClientConfig.Host))
-	// kcpKubeClient the client configured with the compute APIExport virtual workspace URL, that consumes APIs that are provided by the compute (Service, Deployment, Ingress)
-	kcpKubeClient, err := kubernetes.NewClusterForConfig(computeClientConfig)
-	exitOnError(err, "Failed to create KCP core client")
-	kcpKubeInformerFactory := informers.NewSharedInformerFactory(kcpKubeClient.Cluster(logicalcluster.New(options.LogicalClusterTarget)), resyncPeriod)
+	glbcAPIExport, err := kcpClient.Cluster(logicalcluster.New(options.GLBCWorkspace)).ApisV1alpha1().APIExports().Get(ctx, "glbc", metav1.GetOptions{})
+	exitOnError(err, "Failed to get GLBC APIExport")
 
-	// Override the Kubernetes client as create and delete operations are not working yet
-	// via the APIExport virtual workspace API server.
-	// See https://github.com/kcp-dev/kcp/issues/1253 for more details.
-	kcpKubeClient, err = kubernetes.NewClusterForConfig(kcpClientConfig)
-	exitOnError(err, "Failed to create KCP kuadrant client")
+	glbcVirtualWorkspaceURL, glbcIdentityHash := getAPIExportVirtualWorkspaceURLAndIdentityHash(glbcAPIExport)
+	log.Logger.Info(fmt.Sprintf("GLBC APIExport URL: %s, identityHash :%s", glbcVirtualWorkspaceURL, glbcIdentityHash))
 
-	// GLBC APIs client, i.e., for DNSRecord resources, bootstrapped from the GLBC workspace.
-	glbcClientConfig := rest.CopyConfig(kcpClientConfig)
-	glbcClientConfig.Host = getAPIExportVirtualWorkspaceURL(kcpClientConfig, "glbc", options.GLBCWorkspace)
-	log.Logger.Info(fmt.Sprintf("glbcClientConfig.Host: %s", glbcClientConfig.Host))
-	// kcpKuadrantClient the client configured with the GLBC APIExport virtual workspace URL, that consumes the DNSRecord API
-	kcpKuadrantClient, err := kuadrantv1.NewClusterForConfig(glbcClientConfig)
+	glbcVWClientConfig := rest.CopyConfig(kcpClientConfig)
+	glbcVWClientConfig.Host = glbcVirtualWorkspaceURL
+
+	kcpKuadrantClient, err := kuadrantv1.NewClusterForConfig(glbcVWClientConfig)
 	exitOnError(err, "Failed to create KCP kuadrant client")
 	kcpKuadrantInformerFactory := externalversions.NewSharedInformerFactory(kcpKuadrantClient.Cluster(logicalcluster.New(options.LogicalClusterTarget)), resyncPeriod)
 
-	// Override the Kuadrant client as create and delete operations are not working yet
-	// via the APIExport virtual workspace API server.
-	// See https://github.com/kcp-dev/kcp/issues/1253 for more details.
-	kcpKuadrantClient, err = kuadrantv1.NewClusterForConfig(kcpClientConfig)
-	exitOnError(err, "Failed to create KCP kuadrant client")
+	kcpKubeClient, err := kubernetes.NewClusterForConfig(glbcVWClientConfig)
+	exitOnError(err, "Failed to create KCP core client")
+	kcpKubeInformerFactory := informers.NewSharedInformerFactory(kcpKubeClient.Cluster(logicalcluster.New(options.LogicalClusterTarget)), resyncPeriod)
 
 	// certificate client targeting the glbc workspace
-	certClient := certmanclient.NewForConfigOrDie(defaultClientConfig)
+	certClient := certmanclient.NewForConfigOrDie(kcpClientConfig)
 
 	namespace := env.GetNamespace()
 	if namespace == "" {
@@ -197,7 +172,7 @@ func main() {
 			CertClient:    certClient,
 			CertProvider:  tlsCertProvider,
 			Region:        options.Region,
-			K8sClient:     defaultKubeClient,
+			K8sClient:     kubeClient,
 			ValidDomains:  []string{options.Domain},
 			CertificateNS: namespace,
 		})
@@ -207,7 +182,7 @@ func main() {
 
 	}
 
-	glbcKubeInformerFactory := informers.NewSharedInformerFactoryWithOptions(defaultKubeClient, time.Minute, informers.WithNamespace(namespace))
+	glbcKubeInformerFactory := informers.NewSharedInformerFactoryWithOptions(kubeClient, time.Minute, informers.WithNamespace(namespace))
 
 	exitOnError(err, "Failed to create TLS certificate controller")
 
@@ -295,10 +270,15 @@ func exitOnError(err error, msg string) {
 	}
 }
 
-func getAPIExportVirtualWorkspaceURL(config *rest.Config, exportName, exportPath string) string {
-	cfg := rest.CopyConfig(config)
-	u, err := url.Parse(cfg.Host)
-	exitOnError(err, "Failed to parse client config host")
-	u.Path = fmt.Sprintf("/services/apiexport/%s/%s", exportPath, exportName)
-	return u.String()
+func getAPIExportVirtualWorkspaceURLAndIdentityHash(export *apisv1alpha1.APIExport) (string, string) {
+	if conditionsutil.IsFalse(export, apisv1alpha1.APIExportVirtualWorkspaceURLsReady) {
+		exitOnError(fmt.Errorf("APIExport %s|%s is not ready", export.GetClusterName(), export.GetName()), "Failed to get APIExport virtual workspace URL")
+	}
+
+	if len(export.Status.VirtualWorkspaces) != 1 {
+		// It's not clear how to handle multiple API export virtual workspace URLs. Let's fail fast.
+		exitOnError(fmt.Errorf("APIExport %s|%s has multiple virtual workspace URLs", export.GetClusterName(), export.GetName()), "Failed to get APIExport virtual workspace URL")
+	}
+
+	return export.Status.VirtualWorkspaces[0].URL, export.Status.IdentityHash
 }
