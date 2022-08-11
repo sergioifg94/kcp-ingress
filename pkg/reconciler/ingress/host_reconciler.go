@@ -7,8 +7,8 @@ import (
 	"github.com/kcp-dev/logicalcluster/v2"
 	v1 "github.com/kuadrant/kcp-glbc/pkg/apis/kuadrant/v1"
 	kuadrantclientv1 "github.com/kuadrant/kcp-glbc/pkg/client/kuadrant/clientset/versioned"
-	"github.com/kuadrant/kcp-glbc/pkg/util/metadata"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"github.com/kuadrant/kcp-glbc/pkg/util/metadata"
 	"strings"
 
 	"github.com/go-logr/logr"
@@ -34,6 +34,7 @@ type Pending struct {
 
 func (r *hostReconciler) reconcile(ctx context.Context, ingress *networkingv1.Ingress) (reconcileStatus, error) {
 	if ingress.Annotations == nil || ingress.Annotations[ANNOTATION_HCG_HOST] == "" {
+
 		// Let's assign it a global hostname if any
 		generatedHost := fmt.Sprintf("%s.%s", xid.New(), r.managedDomain)
 		if ingress.Annotations == nil {
