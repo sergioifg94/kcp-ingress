@@ -2,8 +2,11 @@ package ingress
 
 import (
 	"context"
+	"encoding/json"
+	"strings"
 
-	kuadrantv1 "github.com/kuadrant/kcp-glbc/pkg/apis/kuadrant/v1"
+	"k8s.io/apimachinery/pkg/labels"
+
 	corev1 "k8s.io/api/core/v1"
 	networkingv1 "k8s.io/api/networking/v1"
 	"k8s.io/apimachinery/pkg/api/equality"
@@ -16,14 +19,17 @@ import (
 	"k8s.io/client-go/tools/cache"
 	"k8s.io/client-go/util/workqueue"
 
+	kuadrantv1 "github.com/kuadrant/kcp-glbc/pkg/apis/kuadrant/v1"
+
 	tenancyv1alpha1 "github.com/kcp-dev/kcp/pkg/apis/tenancy/v1alpha1"
 	"github.com/kcp-dev/logicalcluster/v2"
 
 	certman "github.com/jetstack/cert-manager/pkg/apis/certmanager/v1"
 	certmaninformer "github.com/jetstack/cert-manager/pkg/client/informers/externalversions"
 	certmanlister "github.com/jetstack/cert-manager/pkg/client/listers/certmanager/v1"
+
 	kuadrantclientv1 "github.com/kuadrant/kcp-glbc/pkg/client/kuadrant/clientset/versioned"
-	dnsrecordinformer "github.com/kuadrant/kcp-glbc/pkg/client/kuadrant/informers/externalversions"
+	kuadrantInformer "github.com/kuadrant/kcp-glbc/pkg/client/kuadrant/informers/externalversions"
 	"github.com/kuadrant/kcp-glbc/pkg/net"
 	basereconciler "github.com/kuadrant/kcp-glbc/pkg/reconciler"
 	"github.com/kuadrant/kcp-glbc/pkg/tls"
@@ -52,18 +58,18 @@ func NewController(config *ControllerConfig) *Controller {
 
 	base := basereconciler.NewController(controllerName, queue)
 	c := &Controller{
-		Controller:               base,
-		kubeClient:               config.KubeClient,
-		certProvider:             config.CertProvider,
-		sharedInformerFactory:    config.KCPSharedInformerFactory,
-		glbcInformerFactory:      config.GlbcInformerFactory,
-		dnsRecordClient:          config.DnsRecordClient,
-		domain:                   config.Domain,
-		hostResolver:             hostResolver,
-		hostsWatcher:             net.NewHostsWatcher(&base.Logger, hostResolver, net.DefaultInterval),
-		customHostsEnabled:       config.CustomHostsEnabled,
-		certInformerFactory:      config.CertificateInformer,
-		dnsRecordInformerFactory: config.DNSRecordInformer,
+		Controller:              base,
+		kubeClient:              config.KubeClient,
+		certProvider:            config.CertProvider,
+		sharedInformerFactory:   config.KCPSharedInformerFactory,
+		glbcInformerFactory:     config.GlbcInformerFactory,
+		kuadrantClient:          config.DnsRecordClient,
+		domain:                  config.Domain,
+		hostResolver:            hostResolver,
+		hostsWatcher:            net.NewHostsWatcher(&base.Logger, hostResolver, net.DefaultInterval),
+		customHostsEnabled:      config.CustomHostsEnabled,
+		certInformerFactory:     config.CertificateInformer,
+		KuadrantInformerFactory: config.KuadrantInformer,
 	}
 	c.Process = c.process
 	c.hostsWatcher.OnChange = c.Enqueue
@@ -92,6 +98,12 @@ func NewController(config *ControllerConfig) *Controller {
 			ingressObjectTotal.Dec()
 			c.Enqueue(obj)
 		},
+	})
+
+	c.KuadrantInformerFactory.Kuadrant().V1().DomainVerifications().Informer().AddEventHandler(cache.ResourceEventHandlerFuncs{
+		AddFunc:    c.enqueueIngresses(c.ingressesFromDomainVerification),
+		UpdateFunc: c.enqueueIngressesFromUpdate(c.ingressesFromDomainVerification),
+		DeleteFunc: c.enqueueIngresses(c.ingressesFromDomainVerification),
 	})
 
 	// watch for certificates being addded and updated
@@ -181,7 +193,7 @@ func NewController(config *ControllerConfig) *Controller {
 	})
 
 	//watch for DNSRecords
-	c.dnsRecordInformerFactory.Kuadrant().V1().DNSRecords().Informer().AddEventHandler(cache.ResourceEventHandlerFuncs{
+	c.KuadrantInformerFactory.Kuadrant().V1().DNSRecords().Informer().AddEventHandler(cache.ResourceEventHandlerFuncs{
 		DeleteFunc: func(obj interface{}) {
 			//when a dns record is deleted we requeue the ingress (currently owner refs don't work in KCP)
 			dns := obj.(*kuadrantv1.DNSRecord)
@@ -215,7 +227,7 @@ type ControllerConfig struct {
 	KCPSharedInformerFactory informers.SharedInformerFactory
 	CertificateInformer      certmaninformer.SharedInformerFactory
 	GlbcInformerFactory      informers.SharedInformerFactory
-	DNSRecordInformer        dnsrecordinformer.SharedInformerFactory
+	KuadrantInformer         kuadrantInformer.SharedInformerFactory
 	Domain                   string
 	CertProvider             tls.Provider
 	HostResolver             net.HostResolver
@@ -224,20 +236,20 @@ type ControllerConfig struct {
 
 type Controller struct {
 	*basereconciler.Controller
-	kubeClient               kubernetes.ClusterInterface
-	sharedInformerFactory    informers.SharedInformerFactory
-	dnsRecordClient          kuadrantclientv1.ClusterInterface
-	indexer                  cache.Indexer
-	ingressLister            networkingv1lister.IngressLister
-	certificateLister        certmanlister.CertificateLister
-	certProvider             tls.Provider
-	domain                   string
-	hostResolver             net.HostResolver
-	hostsWatcher             *net.HostsWatcher
-	customHostsEnabled       bool
-	certInformerFactory      certmaninformer.SharedInformerFactory
-	glbcInformerFactory      informers.SharedInformerFactory
-	dnsRecordInformerFactory dnsrecordinformer.SharedInformerFactory
+	kubeClient              kubernetes.ClusterInterface
+	sharedInformerFactory   informers.SharedInformerFactory
+	kuadrantClient          kuadrantclientv1.ClusterInterface
+	indexer                 cache.Indexer
+	ingressLister           networkingv1lister.IngressLister
+	certificateLister       certmanlister.CertificateLister
+	certProvider            tls.Provider
+	domain                  string
+	hostResolver            net.HostResolver
+	hostsWatcher            *net.HostsWatcher
+	customHostsEnabled      bool
+	certInformerFactory     certmaninformer.SharedInformerFactory
+	glbcInformerFactory     informers.SharedInformerFactory
+	KuadrantInformerFactory kuadrantInformer.SharedInformerFactory
 }
 
 func (c *Controller) enqueueIngressByKey(key string) {
@@ -291,4 +303,41 @@ func (c *Controller) getIngressByKey(key string) (*networkingv1.Ingress, error) 
 		return nil, errors.NewNotFound(networkingv1.Resource("ingress"), key)
 	}
 	return i.(*networkingv1.Ingress), nil
+}
+
+func (c *Controller) ingressesFromDomainVerification(obj interface{}) ([]*networkingv1.Ingress, error) {
+	dv := obj.(*kuadrantv1.DomainVerification)
+	domain := strings.ToLower(strings.TrimSpace(dv.Spec.Domain))
+
+	// find all ingresses in this workspace with pending hosts that contain this domains
+	ingressList, err := c.ingressLister.Ingresses("").List(labels.SelectorFromSet(labels.Set{
+		PendingCustomHostsLabel: "true",
+	}))
+	if err != nil {
+		return nil, err
+	}
+
+	ingressesToEnqueue := []*networkingv1.Ingress{}
+
+	for _, ingress := range ingressList {
+		pendingRulesAnnotation, ok := ingress.Annotations[PendingCustomHostsAnnotation]
+		if !ok {
+			continue
+		}
+
+		var pendingRules Pending
+		if err := json.Unmarshal([]byte(pendingRulesAnnotation), &pendingRules); err != nil {
+			return nil, err
+		}
+
+		for _, potentialPending := range pendingRules.Rules {
+			if !hostMatches(potentialPending.Host, domain) {
+				continue
+			}
+
+			ingressesToEnqueue = append(ingressesToEnqueue, ingress)
+		}
+	}
+
+	return ingressesToEnqueue, nil
 }

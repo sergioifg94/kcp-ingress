@@ -2,7 +2,11 @@ package ingress
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
+	v1 "github.com/kuadrant/kcp-glbc/pkg/apis/kuadrant/v1"
+	"k8s.io/apimachinery/pkg/api/equality"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"testing"
 
 	networkingv1 "k8s.io/api/networking/v1"
@@ -110,6 +114,429 @@ func TestReconcileHost(t *testing.T) {
 				t.Fatalf("fail: %s", err)
 			}
 
+		})
+	}
+}
+
+func TestProcessCustomHostValidation(t *testing.T) {
+	testCases := []struct {
+		name                 string
+		ingress              *networkingv1.Ingress
+		domainVerifications  *v1.DomainVerificationList
+		expectedPendingRules Pending
+		expectedRules        []networkingv1.IngressRule
+		expectedTLS          []networkingv1.IngressTLS
+	}{
+		{
+			name: "Empty host",
+			ingress: &networkingv1.Ingress{
+				ObjectMeta: metav1.ObjectMeta{
+					Name: "ingress",
+					Annotations: map[string]string{
+						ANNOTATION_HCG_HOST: "generated.host.net",
+					},
+				},
+				Spec: networkingv1.IngressSpec{
+					Rules: []networkingv1.IngressRule{
+						{
+							Host: "",
+							IngressRuleValue: networkingv1.IngressRuleValue{
+								HTTP: &networkingv1.HTTPIngressRuleValue{
+									Paths: []networkingv1.HTTPIngressPath{
+										{
+											Path: "/",
+										},
+									},
+								},
+							},
+						},
+					},
+				},
+			},
+			domainVerifications:  &v1.DomainVerificationList{},
+			expectedPendingRules: Pending{},
+			expectedRules: []networkingv1.IngressRule{
+				{
+					Host: "",
+					IngressRuleValue: networkingv1.IngressRuleValue{
+						HTTP: &networkingv1.HTTPIngressRuleValue{
+							Paths: []networkingv1.HTTPIngressPath{
+								{
+									Path: "/",
+								},
+							},
+						},
+					},
+				},
+				{
+					Host: "generated.host.net",
+					IngressRuleValue: networkingv1.IngressRuleValue{
+						HTTP: &networkingv1.HTTPIngressRuleValue{
+							Paths: []networkingv1.HTTPIngressPath{
+								{
+									Path: "/",
+								},
+							},
+						},
+					},
+				},
+			},
+		},
+		{
+			name: "Custom host verified",
+			ingress: &networkingv1.Ingress{
+				ObjectMeta: metav1.ObjectMeta{
+					Name: "ingress",
+					Annotations: map[string]string{
+						ANNOTATION_HCG_HOST: "generated.host.net",
+					},
+				},
+				Spec: networkingv1.IngressSpec{
+					Rules: []networkingv1.IngressRule{
+						{
+							Host: "test.pb-custom.hcpapps.net",
+							IngressRuleValue: networkingv1.IngressRuleValue{
+								HTTP: &networkingv1.HTTPIngressRuleValue{
+									Paths: []networkingv1.HTTPIngressPath{
+										{
+											Path: "/path",
+										},
+									},
+								},
+							},
+						},
+					},
+				},
+			},
+			domainVerifications: &v1.DomainVerificationList{
+				Items: []v1.DomainVerification{
+					{
+						ObjectMeta: metav1.ObjectMeta{
+							Name: "pb-custom.hcpapps.net",
+						},
+						Spec: v1.DomainVerificationSpec{
+							Domain: "pb-custom.hcpapps.net",
+						},
+						Status: v1.DomainVerificationStatus{
+							Verified: true,
+						},
+					},
+				},
+			},
+			expectedPendingRules: Pending{},
+			expectedRules: []networkingv1.IngressRule{
+				{
+					Host: "test.pb-custom.hcpapps.net",
+					IngressRuleValue: networkingv1.IngressRuleValue{
+						HTTP: &networkingv1.HTTPIngressRuleValue{
+							Paths: []networkingv1.HTTPIngressPath{
+								{
+									Path: "/path",
+								},
+							},
+						},
+					},
+				},
+				{
+					Host: "generated.host.net",
+					IngressRuleValue: networkingv1.IngressRuleValue{
+						HTTP: &networkingv1.HTTPIngressRuleValue{
+							Paths: []networkingv1.HTTPIngressPath{
+								{
+									Path: "/path",
+								},
+							},
+						},
+					},
+				},
+			},
+		},
+		{
+			name: "subdomain of verifiied custom host",
+			ingress: &networkingv1.Ingress{
+				ObjectMeta: metav1.ObjectMeta{
+					Name: "ingress",
+					Annotations: map[string]string{
+						ANNOTATION_HCG_HOST: "generated.host.net",
+					},
+				},
+				Spec: networkingv1.IngressSpec{
+					Rules: []networkingv1.IngressRule{
+						{
+							Host: "sub.test.pb-custom.hcpapps.net",
+							IngressRuleValue: networkingv1.IngressRuleValue{
+								HTTP: &networkingv1.HTTPIngressRuleValue{
+									Paths: []networkingv1.HTTPIngressPath{
+										{
+											Path: "/path",
+										},
+									},
+								},
+							},
+						},
+					},
+				},
+			},
+			domainVerifications: &v1.DomainVerificationList{
+				Items: []v1.DomainVerification{
+					{
+						ObjectMeta: metav1.ObjectMeta{
+							Name: "pb-custom.hcpapps.net",
+						},
+						Spec: v1.DomainVerificationSpec{
+							Domain: "pb-custom.hcpapps.net",
+						},
+						Status: v1.DomainVerificationStatus{
+							Verified: true,
+						},
+					},
+				},
+			},
+			expectedPendingRules: Pending{},
+			expectedRules: []networkingv1.IngressRule{
+				{
+					Host: "sub.test.pb-custom.hcpapps.net",
+					IngressRuleValue: networkingv1.IngressRuleValue{
+						HTTP: &networkingv1.HTTPIngressRuleValue{
+							Paths: []networkingv1.HTTPIngressPath{
+								{
+									Path: "/path",
+								},
+							},
+						},
+					},
+				},
+				{
+					Host: "generated.host.net",
+					IngressRuleValue: networkingv1.IngressRuleValue{
+						HTTP: &networkingv1.HTTPIngressRuleValue{
+							Paths: []networkingv1.HTTPIngressPath{
+								{
+									Path: "/path",
+								},
+							},
+						},
+					},
+				},
+			},
+		},
+		{
+			name: "Custom host unverified",
+			ingress: &networkingv1.Ingress{
+				ObjectMeta: metav1.ObjectMeta{
+					Name: "ingress",
+					Annotations: map[string]string{
+						ANNOTATION_HCG_HOST: "generated.host.net",
+					},
+				},
+				Spec: networkingv1.IngressSpec{
+					Rules: []networkingv1.IngressRule{
+						{
+							Host: "test.pb-custom.hcpapps.net",
+							IngressRuleValue: networkingv1.IngressRuleValue{
+								HTTP: &networkingv1.HTTPIngressRuleValue{
+									Paths: []networkingv1.HTTPIngressPath{
+										{
+											Path: "/path",
+										},
+									},
+								},
+							},
+						},
+					},
+				},
+			},
+			domainVerifications: &v1.DomainVerificationList{
+				Items: []v1.DomainVerification{
+					{
+						ObjectMeta: metav1.ObjectMeta{
+							Name: "pb-custom.hcpapps.net",
+						},
+						Spec: v1.DomainVerificationSpec{
+							Domain: "pb-custom.hcpapps.net",
+						},
+						Status: v1.DomainVerificationStatus{
+							Verified: false,
+						},
+					},
+				},
+			},
+			expectedPendingRules: Pending{
+				Rules: []networkingv1.IngressRule{
+					{
+						Host: "test.pb-custom.hcpapps.net",
+						IngressRuleValue: networkingv1.IngressRuleValue{
+							HTTP: &networkingv1.HTTPIngressRuleValue{
+								Paths: []networkingv1.HTTPIngressPath{
+									{
+										Path: "/path",
+									},
+								},
+							},
+						},
+					},
+				},
+			},
+			expectedRules: []networkingv1.IngressRule{
+				{
+					Host: "generated.host.net",
+					IngressRuleValue: networkingv1.IngressRuleValue{
+						HTTP: &networkingv1.HTTPIngressRuleValue{
+							Paths: []networkingv1.HTTPIngressPath{
+								{
+									Path: "/path",
+								},
+							},
+						},
+					},
+				},
+			},
+		},
+		{
+			name: "TLS section is preserved",
+			ingress: &networkingv1.Ingress{
+				ObjectMeta: metav1.ObjectMeta{
+					Name: "ingress",
+					Annotations: map[string]string{
+						ANNOTATION_HCG_HOST: "generated.host.net",
+					},
+				},
+				Spec: networkingv1.IngressSpec{
+					TLS: []networkingv1.IngressTLS{
+						{
+							Hosts: []string{
+								"test.pb-custom.hcpapps.net",
+							},
+							SecretName: "tls-secret",
+						},
+					},
+					Rules: []networkingv1.IngressRule{
+						{
+							Host: "test.pb-custom.hcpapps.net",
+							IngressRuleValue: networkingv1.IngressRuleValue{
+								HTTP: &networkingv1.HTTPIngressRuleValue{
+									Paths: []networkingv1.HTTPIngressPath{
+										{
+											Path: "/path",
+										},
+									},
+								},
+							},
+						},
+					},
+				},
+			},
+			domainVerifications: &v1.DomainVerificationList{
+				Items: []v1.DomainVerification{
+					{
+						ObjectMeta: metav1.ObjectMeta{
+							Name: "pb-custom.hcpapps.net",
+						},
+						Spec: v1.DomainVerificationSpec{
+							Domain: "pb-custom.hcpapps.net",
+						},
+						Status: v1.DomainVerificationStatus{
+							Verified: false,
+						},
+					},
+				},
+			},
+			expectedPendingRules: Pending{
+				Rules: []networkingv1.IngressRule{
+					{
+						Host: "test.pb-custom.hcpapps.net",
+						IngressRuleValue: networkingv1.IngressRuleValue{
+							HTTP: &networkingv1.HTTPIngressRuleValue{
+								Paths: []networkingv1.HTTPIngressPath{
+									{
+										Path: "/path",
+									},
+								},
+							},
+						},
+					},
+				},
+			},
+			expectedRules: []networkingv1.IngressRule{
+				{
+					Host: "generated.host.net",
+					IngressRuleValue: networkingv1.IngressRuleValue{
+						HTTP: &networkingv1.HTTPIngressRuleValue{
+							Paths: []networkingv1.HTTPIngressPath{
+								{
+									Path: "/path",
+								},
+							},
+						},
+					},
+				},
+			},
+			expectedTLS: []networkingv1.IngressTLS{
+				{
+					Hosts: []string{
+						"test.pb-custom.hcpapps.net",
+					},
+					SecretName: "tls-secret",
+				},
+			},
+		},
+	}
+
+	for _, testCase := range testCases {
+		t.Run(testCase.name, func(t *testing.T) {
+			ingress := testCase.ingress.DeepCopy()
+
+			if _, err := doProcessCustomHosts(
+				ingress,
+				testCase.domainVerifications,
+			); err != nil {
+				t.Fatal(err)
+			}
+
+			// Assert the expected generated rules matches the
+			// annotation
+			if testCase.expectedPendingRules.Rules != nil {
+				annotation, ok := ingress.Annotations[PendingCustomHostsAnnotation]
+				if !ok {
+					t.Fatalf("expected GeneratedRulesAnnotation to be set")
+				}
+
+				pendingRules := Pending{}
+				if err := json.Unmarshal(
+					[]byte(annotation),
+					&pendingRules,
+				); err != nil {
+					t.Fatalf("invalid format on PendingRules: %v", err)
+				}
+			}
+
+			// Assert the reconciled rules match the expected rules
+			for _, expectedRule := range testCase.expectedRules {
+				foundExpectedRule := false
+				for _, rule := range ingress.Spec.Rules {
+					if equality.Semantic.DeepEqual(expectedRule, rule) {
+						foundExpectedRule = true
+						break
+					}
+				}
+				if !foundExpectedRule {
+					t.Fatalf("Expected rule not found: %+v", expectedRule)
+				}
+			}
+
+			for _, expectedTLS := range testCase.expectedTLS {
+				foundExpectedTLS := false
+				for _, tls := range ingress.Spec.TLS {
+					if equality.Semantic.DeepEqual(expectedTLS, tls) {
+						foundExpectedTLS = true
+						break
+					}
+				}
+
+				if !foundExpectedTLS {
+					t.Fatalf("Expected TLS not found: %+v", expectedTLS)
+				}
+			}
 		})
 	}
 }

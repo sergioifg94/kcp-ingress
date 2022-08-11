@@ -4,6 +4,7 @@ import (
 	"context"
 	"flag"
 	"fmt"
+	gonet "net"
 	"os"
 	"sync"
 	"time"
@@ -34,11 +35,13 @@ import (
 
 	kuadrantv1 "github.com/kuadrant/kcp-glbc/pkg/client/kuadrant/clientset/versioned"
 	"github.com/kuadrant/kcp-glbc/pkg/client/kuadrant/informers/externalversions"
+	pkgDns "github.com/kuadrant/kcp-glbc/pkg/dns"
 	"github.com/kuadrant/kcp-glbc/pkg/log"
 	"github.com/kuadrant/kcp-glbc/pkg/metrics"
 	"github.com/kuadrant/kcp-glbc/pkg/net"
 	"github.com/kuadrant/kcp-glbc/pkg/reconciler/deployment"
 	"github.com/kuadrant/kcp-glbc/pkg/reconciler/dns"
+	"github.com/kuadrant/kcp-glbc/pkg/reconciler/domainverification"
 	"github.com/kuadrant/kcp-glbc/pkg/reconciler/ingress"
 	"github.com/kuadrant/kcp-glbc/pkg/reconciler/secret"
 	"github.com/kuadrant/kcp-glbc/pkg/reconciler/service"
@@ -168,7 +171,7 @@ func main() {
 			exitOnError(fmt.Errorf("TLS Provider not specified"), "Failed to create cert provider")
 		}
 
-		var tlsCertProvider tls.CertProvider = tls.CertProvider(options.TLSProvider)
+		var tlsCertProvider = tls.CertProvider(options.TLSProvider)
 
 		log.Logger.Info("Instantiating TLS certificate provider", "issuer", tlsCertProvider)
 
@@ -197,7 +200,7 @@ func main() {
 	ingressController := ingress.NewController(&ingress.ControllerConfig{
 		KubeClient:               kcpKubeClient,
 		DnsRecordClient:          kcpKuadrantClient,
-		DNSRecordInformer:        kcpKuadrantInformerFactory,
+		KuadrantInformer:         kcpKuadrantInformerFactory,
 		KCPSharedInformerFactory: kcpKubeInformerFactory,
 		CertificateInformer:      certificateInformerFactory,
 		GlbcInformerFactory:      glbcKubeInformerFactory,
@@ -218,6 +221,14 @@ func main() {
 		DNSProvider:           options.DNSProvider,
 	})
 	exitOnError(err, "Failed to create DNSRecord controller")
+
+	domainVerificationController, err := domainverification.NewController(&domainverification.ControllerConfig{
+		DomainVerificationClient: kcpKuadrantClient,
+		SharedInformerFactory:    kcpKuadrantInformerFactory,
+		DNSVerifier:              pkgDns.NewVerifier(gonet.DefaultResolver),
+	})
+
+	exitOnError(err, "Failed to create DomainVerification controller")
 
 	serviceController, err := service.NewController(&service.ControllerConfig{
 		ServicesClient:        kcpKubeClient,
@@ -252,6 +263,7 @@ func main() {
 
 	start(gCtx, ingressController)
 	start(gCtx, dnsRecordController)
+	start(gCtx, domainVerificationController)
 
 	start(gCtx, serviceController)
 	start(gCtx, deploymentController)
