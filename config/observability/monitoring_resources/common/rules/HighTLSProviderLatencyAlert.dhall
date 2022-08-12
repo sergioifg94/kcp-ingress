@@ -17,7 +17,7 @@ in  PrometheusOperator.Rule::{
     , alert = Some "HighTLSProviderLatencyAlert"
     , expr =
         K8s.IntOrString.String
-          "sum(rate(glbc_tls_certificate_issuance_duration_seconds_sum[5m])) / sum(rate(glbc_tls_certificate_issuance_duration_seconds_count[5m])) > 0.5"
+          "sum(rate(glbc_tls_certificate_issuance_duration_seconds_sum[5m])) / sum(rate(glbc_tls_certificate_issuance_duration_seconds_count[5m])) > 120"
     , for = Some (Duration.show { amount = 60, unit = TimeUnit.Type.Minutes })
     , labels = Some
         (toMap { severity = AlertSeverity.show AlertSeverity.Type.Warning })
@@ -25,7 +25,7 @@ in  PrometheusOperator.Rule::{
         ( toMap
             { summary = "High TLS Latency Rate Alert"
             , description =
-                "High latency rate when requesting TLS - The latency rate is {{ \$value }} seconds, which is greater than our threshold which is 0.5seconds."
+                "High latency rate when requesting TLS - The latency rate is {{ \$value }} seconds, which is greater than our threshold which is 120 seconds."
             , runbook_url =
                 "https://github.com/Kuadrant/kcp-glbc/blob/main/docs/observability/runbooks/HighTLSProviderLatencyAlert.adoc"
             }

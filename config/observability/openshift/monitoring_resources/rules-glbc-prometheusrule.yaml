@@ -64,10 +64,10 @@ spec:
             severity: warning
         - alert: HighTLSProviderLatencyAlert
           annotations:
-            description: "High latency rate when requesting TLS - The latency rate is {{ $value }} seconds, which is greater than our threshold which is 0.5seconds."
+            description: "High latency rate when requesting TLS - The latency rate is {{ $value }} seconds, which is greater than our threshold which is 120 seconds."
             runbook_url: https://github.com/Kuadrant/kcp-glbc/blob/main/docs/observability/runbooks/HighTLSProviderLatencyAlert.adoc
             summary: High TLS Latency Rate Alert
-          expr: "sum(rate(glbc_tls_certificate_issuance_duration_seconds_sum[5m])) / sum(rate(glbc_tls_certificate_issuance_duration_seconds_count[5m])) > 0.5"
+          expr: "sum(rate(glbc_tls_certificate_issuance_duration_seconds_sum[5m])) / sum(rate(glbc_tls_certificate_issuance_duration_seconds_count[5m])) > 120"
           for: "60m"
           labels:
             severity: warning

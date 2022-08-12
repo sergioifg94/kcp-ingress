@@ -17,7 +17,7 @@ toc::[]
 == Description
 
 The source of the alert is the `glbc_tls_certificate_*` metric. It fires when there is high latency rate on the requests made.
-The alert will be triggered if requests are taking longer than 0.5 seconds. This usually means, the TLS certificate provider is not responding, metrics is misconfigured, or the metrics endpoint is not responding.
+The alert will be triggered if requests are taking longer than 120 seconds. This usually means, the TLS certificate provider is not responding, metrics is misconfigured, or the metrics endpoint is not responding.
 
 == Prerequisites
 
