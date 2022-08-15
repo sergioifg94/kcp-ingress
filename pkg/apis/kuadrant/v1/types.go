@@ -78,7 +78,10 @@ type Endpoint struct {
 
 // DNSRecordSpec contains the details of a DNS record.
 type DNSRecordSpec struct {
-	Endpoints []*Endpoint `json:"endpoints,omitempty"`
+	// +kubebuilder:validation:Required
+	// +kubebuilder:validation:MinItems=1
+	// +required
+	Endpoints []*Endpoint `json:"endpoints"`
 }
 
 // DNSRecordStatus is the most recently observed status of each record.
