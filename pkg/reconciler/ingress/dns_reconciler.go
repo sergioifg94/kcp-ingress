@@ -9,19 +9,22 @@ import (
 	"strings"
 
 	"github.com/go-logr/logr"
-	"github.com/kcp-dev/logicalcluster"
-	v1 "github.com/kuadrant/kcp-glbc/pkg/apis/kuadrant/v1"
-	"github.com/kuadrant/kcp-glbc/pkg/dns/aws"
-	"github.com/kuadrant/kcp-glbc/pkg/net"
-	"github.com/kuadrant/kcp-glbc/pkg/util/metadata"
-	"github.com/kuadrant/kcp-glbc/pkg/util/slice"
-	"github.com/kuadrant/kcp-glbc/pkg/util/workloadMigration"
+
 	networkingv1 "k8s.io/api/networking/v1"
 	"k8s.io/apimachinery/pkg/api/equality"
 	k8errors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/client-go/tools/cache"
 	"k8s.io/utils/pointer"
+
+	"github.com/kcp-dev/logicalcluster/v2"
+
+	v1 "github.com/kuadrant/kcp-glbc/pkg/apis/kuadrant/v1"
+	"github.com/kuadrant/kcp-glbc/pkg/dns/aws"
+	"github.com/kuadrant/kcp-glbc/pkg/net"
+	"github.com/kuadrant/kcp-glbc/pkg/util/metadata"
+	"github.com/kuadrant/kcp-glbc/pkg/util/slice"
+	"github.com/kuadrant/kcp-glbc/pkg/util/workloadMigration"
 )
 
 type dnsReconciler struct {
@@ -96,9 +99,11 @@ func (r *dnsReconciler) reconcile(ctx context.Context, ingress *networkingv1.Ing
 			Kind:       "DNSRecord",
 		}
 		record.ObjectMeta = metav1.ObjectMeta{
-			Name:        ingress.Name,
-			Namespace:   ingress.Namespace,
-			ClusterName: ingress.ClusterName,
+			Annotations: map[string]string{
+				logicalcluster.AnnotationKey: logicalcluster.From(ingress).String(),
+			},
+			Name:      ingress.Name,
+			Namespace: ingress.Namespace,
 		}
 
 		// Sets the Ingress as the owner reference
