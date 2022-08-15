@@ -18,34 +18,13 @@ This requires you to have access to a KCP instance to deploy GLBC to, if you wan
 Deploy the GLBC using a default configuration (config/deploy/local).
 
 ```
-./utils/deploy.sh
+./utils/deploy.sh -w <target workspace i.e. root:myglbc>
 ```
 N.B. You must be targeting a KCP instance in order to install GLBC.
 
-### Workspaces
+## GLBC Sync Target
 
-After a successful deployment you will have the following workspaces in your target KCP:
-
-```
-./bin/kubectl-kcp workspace use root:<your org>
-Current workspace is "root:<your org>". $ ./bin/kubectl-kcp workspace list
-NAME                    TYPE        PHASE   URL
-kcp-glbc                Universal   Ready   https://192.168.0.103:6443/clusters/root:<your org>:kcp-glbc
-kcp-glbc-compute        Universal   Ready   https://192.168.0.103:6443/clusters/root:<your org>:kcp-glbc-compute
-kcp-glbc-user           Universal   Ready   https://192.168.0.103:6443/clusters/root:<your org>:kcp-glbc-user
-kcp-glbc-user-compute   Universal   Ready   https://192.168.0.103:6443/clusters/root:<your org>:kcp-glbc-user-compute 
-```
-
-| Workspace | Description |
-| ---------- | ----------- |
-| `kcp-glbc` |  Workspace containing GLBC, and it's dependencies (cert-manager), deployments. Exposes the `glbc` APIExport that user workspaces bind to, and binds to the `kubernetes` APIExport from `kcp-glbc-compute` for compute and locations. |
-| `kcp-glbc-compute` |  Compute service workspace providing compute specifically for GLBC components. Exposes the `kubernetes` APIExport that the `kcp-glbc` workspace binds to, and has 1 Location by default. |
-| `kcp-glbc-user` |  Workspace created for user application deployments e.g. sample echo service. Binds to the glbc APIExport from `kcp-glbc`, and the, `kubernetes` APIExport from `kcp-glbc-user-compute` for compute and locations. |
-| `kcp-glbc-user-compute` |  Compute service workspace providing compute specifically for user deployments. Exposes the `kubernetes` APIExport that the `kcp-glbc-user` workspace binds to, and has 1 Location by default. |
-
-### Workload Cluster
-
-The deployment script will create a `glbc` workload cluster in the `kcp-glbc-compute` workspace, however, for GLBC and it's dependencies to deploy the [`KCP syncer`](https://github.com/kcp-dev/kcp/blob/main/docs/syncer.md) resources must be applied to a physical cluster.
+The deployment script will create a `glbc` sync target in the target workspace, however, for GLBC and it's dependencies to deploy the [`KCP syncer`](https://github.com/kcp-dev/kcp/blob/main/docs/syncer.md) resources must be applied to a physical cluster.
 The exact command will be output as part of the deploy script, but will look something like:
 
 ```
@@ -58,45 +37,21 @@ Verify the workload cluster becomes ready:
 ```
 # targeting your kcp cluster run:
 
-./bin/kubectl-kcp workspace use root:<your org>:kcp-glbc-compute
-kubectl get synctargets -o wide
-NAME   LOCATION   READY   SYNCED API RESOURCES
-glbc   glbc       True
+./bin/kubectl-kcp ws root:<target workspace>
+ $ kubectl get synctargets -o wide
+NAME            LOCATION        READY   SYNCED API RESOURCES   KEY                                      AGE
+glbc            glbc            True                           832Kocbfr9pZCD62hs7bt3No2aylrt9lYwTJYa   46m
 ```
 N.B. It can take a couple of minutes for it go into a "ready" state.
 
 Verify GLBC deployments:
 ```
-./bin/kubectl-kcp workspace use root:<your org>:kcp-glbc
+./bin/kubectl-kcp ws root:<target workspace>
 kubectl get deployments --all-namespaces
 NAMESPACE      NAME                          READY   UP-TO-DATE   AVAILABLE   AGE
 cert-manager   cert-manager                  1/1     1            1           38m
 kcp-glbc       kcp-glbc-controller-manager   1/1     1            1           37m
 ```
-
-### User Workload Cluster
-
-A separate user workspace `kcp-glbc-user` is created by default which has it's own compute service workspace pre configured.
-Like the `glbc` workload cluster, it also requires a physical cluster to have the [`KCP syncer`](https://github.com/kcp-dev/kcp/blob/main/docs/syncer.md) resources applied.
-The exact command will be output as part of the deploy script, but will look something like:
-
-```
-# targeting your physical cluster run:
-
-kubectl apply -f ./config/deploy/local/glbc-user-syncer.yaml
-```
-
-Verify it's ready:
-```
-# targeting your kcp cluster run:
-
-./bin/kubectl-kcp workspace use root:<your org>:kcp-glbc-user-compute
-kubectl get synctargets -o wide
-NAME        LOCATION        READY   SYNCED API RESOURCES
-glbc-user   glbc-user       True
-```
-
-N.B. This can be the same workload cluster used for the `glbc` in the step above.
 
 ## Configuration
 
@@ -150,7 +105,7 @@ kubectl -n kcp-glbc edit configmap kcp-glbc-controller-config
 | `GLBC_LOGICAL_CLUSTER_TARGET` | logical cluster to target | `*` |
 | `GLBC_TLS_PROVIDED` | Generate TLS certs for glbc managed hosts | false |
 | `GLBC_TLS_PROVIDER` | The TLS certificate issuer | glbc-ca |
-| `GLBC_WORKSPACE` | The GLBC workspace| root:default:kcp-glbc |
+| `GLBC_WORKSPACE` | The GLBC workspace| root:kuadrant |
 | `HCG_LE_EMAIL` | Email address to use during LE cert requests | kuadrant-dev@redhat.com |
 | `NAMESPACE` | Target namespace of cert-manager resources (issuers, certificates) | kcp-glbc |
 

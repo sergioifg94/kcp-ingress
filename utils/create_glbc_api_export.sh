@@ -31,7 +31,7 @@ help()
    echo "Syntax: create_glbc_api_export.sh [-n|w|W]"
    echo "options:"
    echo "n     The name of the glbc export to create (default: ${GLBC_EXPORT_NAME})."
-   echo "w     The workspace containing the \"kubernetes\" APIBinding being targetted (default: ${GLBC_WORKSPACE_USER})."
+   echo "w     The workspace containing the \"kubernetes\" APIBinding being targeted (default: ${GLBC_WORKSPACE_KUBERNETES})."
    echo "W     The workspace where GLBC is deployed (default: ${GLBC_WORKSPACE})."
    echo
 }
@@ -50,9 +50,12 @@ print_env()
    echo "Workspaces:"
    echo
    echo "  GLBC_EXPORT_NAME:                 ${GLBC_EXPORT_NAME}"
-   echo "  GLBC_WORKSPACE_USER:              ${GLBC_WORKSPACE_USER}"
+   echo "  GLBC_WORKSPACE_KUBERNETES:        ${GLBC_WORKSPACE_KUBERNETES}"
    echo "  GLBC_WORKSPACE:                   ${GLBC_WORKSPACE}"
    echo
+   echo "Misc:"
+   echo
+   echo "  OUTPUT_DIR                        ${OUTPUT_DIR}"
 }
 
 create_glbc_api_export() {
@@ -80,6 +83,7 @@ spec:
       resource: "ingresses"
       identityHash: ${identityHash}
 EOF
+  kubectl apply view-last-applied apiexport ${name} -o yaml > ${OUTPUT_DIR}/${name}-apiexport.yaml
   kubectl wait --timeout=60s --for=condition=VirtualWorkspaceURLsReady=true apiexport $name
 }
 
@@ -111,6 +115,7 @@ spec:
       resource: "ingresses"
       identityHash: ${identityHash}
 EOF
+  kubectl apply view-last-applied apibinding ${name} -o yaml > ${OUTPUT_DIR}/${name}-apibinding.yaml
   kubectl wait --timeout=120s --for=condition=Ready=true apibinding $name
 }
 
@@ -128,7 +133,7 @@ while getopts "hn:w:W:" arg; do
       GLBC_EXPORT_NAME=${OPTARG}
       ;;
     w)
-      GLBC_WORKSPACE_USER=${OPTARG}
+      GLBC_WORKSPACE_KUBERNETES=${OPTARG}
       ;;
     W)
       GLBC_WORKSPACE=${OPTARG}
@@ -142,9 +147,11 @@ done
 shift $((OPTIND-1))
 
 #Workspace
-: ${GLBC_WORKSPACE:=root:default:kcp-glbc}
-: ${GLBC_WORKSPACE_USER:=root:default:kcp-glbc-user}
-: ${GLBC_EXPORT_NAME:="glbc-${GLBC_WORKSPACE_USER//:/-}"}
+: ${GLBC_WORKSPACE:=root:kuadrant}
+: ${GLBC_WORKSPACE_KUBERNETES:=${GLBC_WORKSPACE}}
+: ${GLBC_EXPORT_NAME:="glbc-${GLBC_WORKSPACE_KUBERNETES//:/-}"}
+
+: ${OUTPUT_DIR:=${TMP_DIR}}
 
 set -e pipefail
 
@@ -153,11 +160,11 @@ ${KUBECTL_KCP_BIN} workspace . > /dev/null || (echo "You must be targeting a KCP
 
 print_env
 
-############################################################
-# Check user workspace has appropriate kubernetes config   #
-############################################################
+#############################################################
+## Check kube workspace has appropriate kubernetes config   #
+#############################################################
 
-${KUBECTL_KCP_BIN} workspace use ${GLBC_WORKSPACE_USER}
+${KUBECTL_KCP_BIN} workspace use ${GLBC_WORKSPACE_KUBERNETES}
 
 # Get the kubernetes APIBinding
 kubectl get apibinding kubernetes
@@ -170,19 +177,19 @@ kubectl get apibinding kubernetes -o json | jq -e .status.boundResources
 # ToDo Check each resource we need actually exists
 coreAPIExportIdentityHash=$(kubectl get apibinding kubernetes -o json | jq -r .status.boundResources[0].schema.identityHash)
 
+kubectl apply view-last-applied apibinding kubernetes -o yaml > ${OUTPUT_DIR}/kubernetes-${GLBC_WORKSPACE_KUBERNETES//:/-}-apibinding.yaml
+
 ############################################################
 # Create APIExport glbc                                    #
 ############################################################
 
 ${KUBECTL_KCP_BIN} workspace use ${GLBC_WORKSPACE}
 
-## Create glbc APIExport claiming resources from the users kubernetes APIExport
+## Create glbc APIExport claiming resources from the kubernetes APIExport
 create_glbc_api_export "${GLBC_EXPORT_NAME}" "${coreAPIExportIdentityHash}"
 
 ############################################################
 # Create APIBinding for glbc and core APIs                 #
 ############################################################
-
-${KUBECTL_KCP_BIN} workspace use ${GLBC_WORKSPACE_USER}
 
 create_glbc_api_binding "glbc" "${GLBC_EXPORT_NAME}" "${GLBC_WORKSPACE}" "${coreAPIExportIdentityHash}"

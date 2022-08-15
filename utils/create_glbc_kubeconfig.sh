@@ -46,7 +46,7 @@ help()
    echo "a     Certificate Authority Data to add to the cluster of the generated kubeconfig (default: ${CA_DATA})."
    echo "h     Print this Help."
    echo "n     Namespace (default: ${NAMESPACE})"
-   echo "o     Output directory where generated kubeconfig will be written (default: ${OUTPUT_DIR}/<namesapce>-<cluster name>.kubeconfig)."
+   echo "o     Output directory where generated kubeconfig will be written (default: ${OUTPUT_DIR}/<namespace>-<cluster name>.kubeconfig)."
    echo
 }
 

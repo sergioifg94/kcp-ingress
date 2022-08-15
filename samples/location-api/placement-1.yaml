@@ -11,4 +11,4 @@ spec:
     resource: synctargets
     version: v1alpha1
   namespaceSelector: {}
-  locationWorkspace: root:default:kcp-glbc-user-compute
+  locationWorkspace: root:kuadrant

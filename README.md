@@ -45,10 +45,10 @@ Now you can create a new ingress resource from the root of the project:
 
 ```bash 
 export KUBECONFIG=.kcp/admin.kubeconfig
-./bin/kubectl-kcp workspace use root:default:kcp-glbc-user
+./bin/kubectl-kcp workspace use root:kuadrant
 kubectl apply -f samples/echo-service/echo.yaml
 ```
-N.B. It's important that you use the `.kcp/admin.kubeconfig` kube config and switch to the `root:default:kcp-glbc-user` workspace.
+N.B. It's important that you use the `.kcp/admin.kubeconfig` kube config and switch to the `root:kuadrant` workspace.
 
 To verify the resources were created successfully, check the output of the following:
 
