@@ -181,6 +181,9 @@ func main() {
 
 		ingress.InitMetrics(certProvider)
 
+		err = certProvider.Initialize(ctx)
+		exitOnError(err, "Failed to initialize cert provider")
+
 	}
 
 	glbcKubeInformerFactory := informers.NewSharedInformerFactoryWithOptions(kubeClient, time.Minute, informers.WithNamespace(namespace))
