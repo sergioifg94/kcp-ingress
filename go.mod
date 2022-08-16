@@ -14,7 +14,7 @@ require (
 	github.com/kcp-dev/kcp/pkg/apis v0.9.0
 	github.com/kcp-dev/logicalcluster/v2 v2.0.0-alpha.3
 	github.com/miekg/dns v1.1.34
-	github.com/onsi/gomega v1.17.0
+	github.com/onsi/gomega v1.18.1
 	github.com/openshift/api v3.9.0+incompatible
 	github.com/prometheus/client_golang v1.12.1
 	github.com/prometheus/client_model v0.2.0
@@ -30,7 +30,10 @@ require (
 	k8s.io/code-generator v0.24.3
 	k8s.io/klog/v2 v2.60.1
 	k8s.io/utils v0.0.0-20220210201930-3a6ce19ff2f9
+	sigs.k8s.io/controller-runtime v0.12.3
 )
+
+require gomodules.xyz/jsonpatch/v2 v2.2.0 // indirect
 
 require (
 	cloud.google.com/go v0.90.0 // indirect

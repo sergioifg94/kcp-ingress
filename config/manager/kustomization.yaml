@@ -10,3 +10,7 @@ images:
 - name: controller
   newName: quay.io/kuadrant/kcp-glbc
   newTag: latest
+
+# Patches the controller deployment to add the webhooks port
+# patchesStrategicMerge:
+#   - patches/set_port.yaml

@@ -40,6 +40,7 @@ import (
 	"github.com/kcp-dev/logicalcluster/v2"
 
 	"github.com/kuadrant/kcp-glbc/pkg/_internal/log"
+	"github.com/kuadrant/kcp-glbc/pkg/admission"
 	kuadrantv1 "github.com/kuadrant/kcp-glbc/pkg/client/kuadrant/clientset/versioned"
 	kuadrantinformer "github.com/kuadrant/kcp-glbc/pkg/client/kuadrant/informers/externalversions"
 	"github.com/kuadrant/kcp-glbc/pkg/dns"
@@ -83,6 +84,9 @@ var options struct {
 	ExportName string
 
 	AdvancedScheduling bool
+
+	// The port number of the webhooks server
+	WebhooksPort int
 }
 
 type APIExportClusterInformers struct {
@@ -112,6 +116,8 @@ func init() {
 	flag.StringVar(&options.Region, "region", env.GetEnvString("AWS_REGION", "eu-central-1"), "the region we should target with AWS clients")
 	//  Observability options
 	flagSet.IntVar(&options.MonitoringPort, "monitoring-port", 8080, "The port of the metrics endpoint (can be set to \"0\" to disable the metrics serving)")
+	// Webhook options
+	flagSet.IntVar(&options.WebhooksPort, "webhooks-port", env.GetEnvInt("GLBC_WEBHOOKS_PORT", 0), "The port of the webhooks server")
 
 	opts := log.Options{
 		EncoderConfigOptions: []log.EncoderConfigOption{
@@ -367,6 +373,14 @@ func main() {
 
 	for _, controller := range controllers {
 		start(gCtx, controller)
+	}
+
+	if options.WebhooksPort != 0 {
+		g.Go(func() error {
+			return admission.StartServer(gCtx, &admission.WebhookConfig{
+				ServerPort: options.WebhooksPort,
+			})
+		})
 	}
 
 	g.Go(func() error {

@@ -67,6 +67,7 @@ func NewController(config *ControllerConfig) *Controller {
 		certInformerFactory:       config.CertificateInformer,
 		KuadrantInformerFactory:   config.KuadrantInformer,
 		advancedSchedulingEnabled: config.AdvancedSchedulingEnabled,
+		glbcWorkspace:             config.GLBCWorkspace,
 	}
 	c.Process = c.process
 	c.hostsWatcher.OnChange = c.Enqueue
@@ -260,6 +261,7 @@ type Controller struct {
 	certInformerFactory       certmaninformer.SharedInformerFactory
 	glbcInformerFactory       informers.SharedInformerFactory
 	KuadrantInformerFactory   kuadrantInformer.SharedInformerFactory
+	glbcWorkspace             logicalcluster.Name
 }
 
 func (c *Controller) enqueueIngressByKey(key string) {

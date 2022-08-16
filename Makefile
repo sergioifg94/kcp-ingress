@@ -140,6 +140,17 @@ docker-build: ## Build docker image.
 	docker build -t ${IMG} .
 
 ##@ Deployment
+.PHONY: kind-load-image
+kind-load-image:
+	kind load docker-image ${IMG} --name kcp-cluster-glbc-control  --nodes kcp-cluster-glbc-control-control-plane
+
+.PHONY: kind-deploy-image
+kind-deploy-image:
+	cd config/manager && $(KUSTOMIZE) edit set image controller=${IMG}
+	KUBECONFIG=.kcp/admin.kubeconfig ./utils/deploy.sh
+
+.PHONY: kind-build-load-and-deploy-image
+kind-build-load-and-deploy-image: docker-build kind-load-image kind-deploy-image
 
 .PHONY: install
 install: generate-crd kustomize ## Install CRDs into the K8s cluster specified in ~/.kube/config.

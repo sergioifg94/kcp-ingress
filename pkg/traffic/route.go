@@ -52,6 +52,19 @@ func (a *Route) AddTLS(host string, secret *corev1.Secret) {
 	}
 }
 
+func (a *Route) GetTLS(getSecret func(string) (*corev1.Secret, error)) ([]*TLS, error) {
+	return []*TLS{
+		{
+			Hosts: []string{a.Route.Spec.Host},
+			Bundle: map[string][]byte{
+				corev1.TLSPrivateKeyKey:        []byte(a.Route.Spec.TLS.Key),
+				corev1.TLSCertKey:              []byte(a.Route.Spec.TLS.Certificate),
+				corev1.ServiceAccountRootCAKey: []byte(a.Route.Spec.TLS.CACertificate),
+			},
+		},
+	}, nil
+}
+
 func (a *Route) RemoveTLS(hosts []string) {
 	//check the passed in hosts contains the host this is ingress is for
 	for _, host := range hosts {

@@ -27,6 +27,8 @@ type Ingress struct {
 	*networkingv1.Ingress
 }
 
+var _ Interface = &Ingress{}
+
 func (a *Ingress) GetKind() string {
 	return "Ingress"
 }
@@ -56,6 +58,25 @@ func (a *Ingress) AddTLS(host string, secret *corev1.Secret) {
 		Hosts:      []string{host},
 		SecretName: secret.GetName(),
 	})
+}
+
+func (a *Ingress) GetTLS(getSecret func(string) (*corev1.Secret, error)) ([]*TLS, error) {
+	result := make([]*TLS, 0, len(a.Spec.TLS))
+
+	for i, tls := range a.Spec.TLS {
+		secretName := tls.SecretName
+		secret, err := getSecret(secretName)
+		if err != nil {
+			return nil, err
+		}
+
+		result[i] = &TLS{
+			Hosts:  tls.Hosts,
+			Bundle: secret.Data,
+		}
+	}
+
+	return result, nil
 }
 
 func (a *Ingress) RemoveTLS(hosts []string) {

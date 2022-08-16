@@ -59,6 +59,10 @@ func (c *Controller) reconcile(ctx context.Context, ingress traffic.Interface) e
 			ListHostWatchers: c.hostsWatcher.ListHostRecordWatchers,
 			Log:              c.Logger,
 		},
+		&traffic.WebhookReconciler{
+			KubeClient:    c.kubeClient,
+			GLBCWorkspace: c.glbcWorkspace,
+		},
 	}
 	var errs []error
 	for _, r := range reconcilers {

@@ -44,9 +44,15 @@ type Interface interface {
 	GetLogicalCluster() logicalcluster.Name
 	GetNamespaceName() types.NamespacedName
 	AddTLS(host string, secret *corev1.Secret)
+	GetTLS(getSecret func(string) (*corev1.Secret, error)) ([]*TLS, error)
 	RemoveTLS(host []string)
 	ReplaceCustomHosts(managedHost string) []string
 	ProcessCustomHosts(context.Context, *v1.DomainVerificationList, CreateOrUpdateTraffic, DeleteTraffic) error
+}
+
+type TLS struct {
+	Hosts  []string
+	Bundle map[string][]byte
 }
 
 type Pending struct {
