@@ -94,6 +94,7 @@ print_env()
    echo
    echo "  WAIT_WC_READY                     ${WAIT_WC_READY}"
    echo "  OUTPUT_DIR                        ${OUTPUT_DIR}"
+   echo "  KUBECTL_KCP_BIN                   ${KUBECTL_KCP_BIN}"
    echo
 }
 
