@@ -37,7 +37,9 @@ func (c *Controller) reconcile(ctx context.Context, ingress *networkingv1.Ingres
 		metadata.AddFinalizer(ingress, cascadeCleanupFinalizer)
 	}
 	//TODO evaluate where this actually belongs
-	workloadMigration.Process(ingress, c.Queue, c.Logger)
+	if c.advancedSchedulingEnabled {
+		workloadMigration.Process(ingress, c.Queue, c.Logger)
+	}
 
 	reconcilers := []reconciler{
 		//hostReconciler is first as the others depends on it for the host to be set on the ingress
@@ -98,7 +100,7 @@ func (c *Controller) reconcile(ctx context.Context, ingress *networkingv1.Ingres
 	return utilserrors.NewAggregate(errs)
 }
 
-func ingressKey(ingress *networkingv1.Ingress) interface{} {
+func ingressKey(ingress *networkingv1.Ingress) cache.ExplicitKey {
 	key, _ := cache.MetaNamespaceKeyFunc(ingress)
 	return cache.ExplicitKey(key)
 }

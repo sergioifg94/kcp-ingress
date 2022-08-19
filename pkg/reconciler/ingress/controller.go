@@ -5,12 +5,12 @@ import (
 	"encoding/json"
 	"strings"
 
-	"k8s.io/apimachinery/pkg/labels"
 	corev1 "k8s.io/api/core/v1"
 	networkingv1 "k8s.io/api/networking/v1"
 	"k8s.io/apimachinery/pkg/api/equality"
 	"k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/labels"
 	"k8s.io/apimachinery/pkg/util/runtime"
 	"k8s.io/client-go/informers"
 	"k8s.io/client-go/kubernetes"
@@ -41,7 +41,6 @@ const (
 	ANNOTATION_HCG_HOST                 = "kuadrant.dev/host.generated"
 	ANNOTATION_HEALTH_CHECK_PREFIX      = "kuadrant.experimental/health-"
 	ANNOTATION_HCG_CUSTOM_HOST_REPLACED = "kuadrant.dev/custom-hosts.replaced"
-	LABEL_HCG_MANAGED                   = "kuadrant.dev/hcg.managed"
 )
 
 // NewController returns a new Controller which reconciles Ingress.
@@ -58,18 +57,21 @@ func NewController(config *ControllerConfig) *Controller {
 
 	base := basereconciler.NewController(controllerName, queue)
 	c := &Controller{
-		Controller:              base,
-		kubeClient:              config.KubeClient,
-		certProvider:            config.CertProvider,
-		sharedInformerFactory:   config.KCPSharedInformerFactory,
-		glbcInformerFactory:     config.GlbcInformerFactory,
-		kuadrantClient:          config.DnsRecordClient,
-		domain:                  config.Domain,
-		hostResolver:            hostResolver,
-		hostsWatcher:            net.NewHostsWatcher(&base.Logger, hostResolver, net.DefaultInterval),
-		customHostsEnabled:      config.CustomHostsEnabled,
-		certInformerFactory:     config.CertificateInformer,
-		KuadrantInformerFactory: config.KuadrantInformer,
+		Controller:            base,
+		kubeClient:            config.KubeClient,
+		certProvider:          config.CertProvider,
+		sharedInformerFactory: config.KCPSharedInformerFactory,
+		glbcInformerFactory:   config.GlbcInformerFactory,
+		//	dnsRecordClient:           config.DnsRecordClient,
+		kuadrantClient:            config.DnsRecordClient,
+		domain:                    config.Domain,
+		hostResolver:              hostResolver,
+		hostsWatcher:              net.NewHostsWatcher(&base.Logger, hostResolver, net.DefaultInterval),
+		customHostsEnabled:        config.CustomHostsEnabled,
+		certInformerFactory:       config.CertificateInformer,
+		KuadrantInformerFactory:   config.KuadrantInformer,
+		advancedSchedulingEnabled: config.AdvancedSchedulingEnabled,
+		//	dnsRecordInformerFactory:  config.DNSRecordInformer,
 	}
 	c.Process = c.process
 	c.hostsWatcher.OnChange = c.Enqueue
@@ -121,7 +123,7 @@ func NewController(config *ControllerConfig) *Controller {
 			if certificate.Labels == nil {
 				return false
 			}
-			if _, ok := certificate.Labels[LABEL_HCG_MANAGED]; !ok {
+			if _, ok := certificate.Labels[basereconciler.LABEL_HCG_MANAGED]; !ok {
 				return false
 			}
 			if _, ok := certificate.Annotations[annotationIngressKey]; ok {
@@ -230,35 +232,38 @@ func NewController(config *ControllerConfig) *Controller {
 
 type ControllerConfig struct {
 	*basereconciler.ControllerConfig
-	KubeClient      kubernetes.ClusterInterface
-	DnsRecordClient kuadrantclientv1.ClusterInterface
-	// informer for
+	KubeClient               kubernetes.ClusterInterface
+	DnsRecordClient          kuadrantclientv1.ClusterInterface
 	KCPSharedInformerFactory informers.SharedInformerFactory
 	CertificateInformer      certmaninformer.SharedInformerFactory
 	GlbcInformerFactory      informers.SharedInformerFactory
 	KuadrantInformer         kuadrantInformer.SharedInformerFactory
-	Domain                   string
-	CertProvider             tls.Provider
-	HostResolver             net.HostResolver
-	CustomHostsEnabled       bool
+	//DNSRecordInformer         dnsrecordinformer.SharedInformerFactory
+	Domain                    string
+	CertProvider              tls.Provider
+	HostResolver              net.HostResolver
+	CustomHostsEnabled        bool
+	AdvancedSchedulingEnabled bool
 }
 
 type Controller struct {
 	*basereconciler.Controller
-	kubeClient              kubernetes.ClusterInterface
-	sharedInformerFactory   informers.SharedInformerFactory
-	kuadrantClient          kuadrantclientv1.ClusterInterface
-	indexer                 cache.Indexer
-	ingressLister           networkingv1lister.IngressLister
-	certificateLister       certmanlister.CertificateLister
-	certProvider            tls.Provider
-	domain                  string
-	hostResolver            net.HostResolver
-	hostsWatcher            *net.HostsWatcher
-	customHostsEnabled      bool
-	certInformerFactory     certmaninformer.SharedInformerFactory
-	glbcInformerFactory     informers.SharedInformerFactory
-	KuadrantInformerFactory kuadrantInformer.SharedInformerFactory
+	kubeClient                kubernetes.ClusterInterface
+	sharedInformerFactory     informers.SharedInformerFactory
+	kuadrantClient            kuadrantclientv1.ClusterInterface
+	indexer                   cache.Indexer
+	ingressLister             networkingv1lister.IngressLister
+	certificateLister         certmanlister.CertificateLister
+	certProvider              tls.Provider
+	domain                    string
+	hostResolver              net.HostResolver
+	hostsWatcher              *net.HostsWatcher
+	customHostsEnabled        bool
+	advancedSchedulingEnabled bool
+	certInformerFactory       certmaninformer.SharedInformerFactory
+	glbcInformerFactory       informers.SharedInformerFactory
+	KuadrantInformerFactory   kuadrantInformer.SharedInformerFactory
+	//dnsRecordInformerFactory  dnsrecordinformer.SharedInformerFactory
 }
 
 func (c *Controller) enqueueIngressByKey(key string) {

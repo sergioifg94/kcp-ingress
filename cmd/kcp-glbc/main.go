@@ -77,6 +77,8 @@ var options struct {
 	MonitoringPort int
 	// The glbc exports to use
 	ExportName string
+
+	AdvancedScheduling bool
 }
 
 type APIExportClusterInformers struct {
@@ -98,6 +100,8 @@ func init() {
 	flagSet.StringVar(&options.Domain, "domain", env.GetEnvString("GLBC_DOMAIN", "dev.hcpapps.net"), "The domain to use to expose ingresses")
 	flagSet.BoolVar(&options.EnableCustomHosts, "enable-custom-hosts", env.GetEnvBool("GLBC_ENABLE_CUSTOM_HOSTS", false), "Flag to enable hosts to be custom")
 	flag.StringVar(&options.DNSProvider, "dns-provider", env.GetEnvString("GLBC_DNS_PROVIDER", "fake"), "The DNS provider being used [aws, fake]")
+	flagSet.BoolVar(&options.AdvancedScheduling, "advanced-scheduling", env.GetEnvBool("GLBC_ADVANCED_SCHEDULING", false), "enabled the GLBC advanced scheduling integration")
+
 	// // AWS Route53 options
 	flag.StringVar(&options.Region, "region", env.GetEnvString("AWS_REGION", "eu-central-1"), "the region we should target with AWS clients")
 	//  Observability options
@@ -234,7 +238,8 @@ func main() {
 			// 	APIExportName:      "hosts",
 			// 	Namespace: "default",
 			// },
-			CustomHostsEnabled: options.EnableCustomHosts,
+			CustomHostsEnabled:        options.EnableCustomHosts,
+			AdvancedSchedulingEnabled: options.AdvancedScheduling,
 		})
 		controllers = append(controllers, ingressController)
 
@@ -268,7 +273,6 @@ func main() {
 			SharedInformerFactory: kcpKubeInformerFactory,
 		})
 		exitOnError(err, "Failed to create Service controller")
-		controllers = append(controllers, serviceController)
 
 		deploymentController, err := deployment.NewController(&deployment.ControllerConfig{
 			ControllerConfig: &reconciler.ControllerConfig{
@@ -278,10 +282,9 @@ func main() {
 			SharedInformerFactory: kcpKubeInformerFactory,
 		})
 		exitOnError(err, "Failed to create Deployment controller")
-		controllers = append(controllers, deploymentController)
 
 		// Secret controller should not have more than one instance
-		if isControllerLeader {
+		if isControllerLeader && options.AdvancedScheduling {
 			secretController, err := secret.NewController(&secret.ControllerConfig{
 				ControllerConfig: &reconciler.ControllerConfig{
 					NameSuffix: name,
@@ -292,6 +295,11 @@ func main() {
 			exitOnError(err, "Failed to create Secret controller")
 
 			controllers = append(controllers, secretController)
+		}
+		if options.AdvancedScheduling {
+			log.Logger.Info("advanced scheduling enabled, starting deployment, service and secret controllers")
+			controllers = append(controllers, deploymentController)
+			controllers = append(controllers, serviceController)
 		}
 
 		apiExportClusterInformers = append(apiExportClusterInformers, *clusterInformers)
@@ -313,7 +321,13 @@ func main() {
 	}
 
 	for _, controller := range controllers {
+
 		start(gCtx, controller)
+		if options.AdvancedScheduling {
+			//start(gCtx, serviceController)
+			//start(gCtx, deploymentController)
+			//start(gCtx, secretController)
+		}
 	}
 
 	g.Go(func() error {

@@ -10,6 +10,7 @@ import (
 	certman "github.com/jetstack/cert-manager/pkg/apis/certmanager/v1"
 	cmmeta "github.com/jetstack/cert-manager/pkg/apis/meta/v1"
 
+	basereconciler "github.com/kuadrant/kcp-glbc/pkg/reconciler"
 	corev1 "k8s.io/api/core/v1"
 	networkingv1 "k8s.io/api/networking/v1"
 	"k8s.io/apimachinery/pkg/api/errors"
@@ -43,7 +44,7 @@ func certificateSecretFilter(obj interface{}) bool {
 	if !ok {
 		return false
 	}
-	if _, ok := s.Labels[LABEL_HCG_MANAGED]; !ok {
+	if _, ok := s.Labels[basereconciler.LABEL_HCG_MANAGED]; !ok {
 		return false
 	}
 	if s.Annotations != nil {
@@ -147,7 +148,7 @@ func (r *certificateReconciler) reconcile(ctx context.Context, ingress *networki
 	}
 	annotations := map[string]string{}
 	labels := map[string]string{
-		LABEL_HCG_MANAGED: "true",
+		basereconciler.LABEL_HCG_MANAGED: "true",
 	}
 	key, err := cache.MetaNamespaceKeyFunc(ingress)
 	if err != nil {
