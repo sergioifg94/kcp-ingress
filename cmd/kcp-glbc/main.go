@@ -70,6 +70,8 @@ var options struct {
 	Region string
 	// The port number of the metrics endpoint
 	MonitoringPort int
+	// The glbc export to use
+	ExportName string
 }
 
 func init() {
@@ -77,6 +79,7 @@ func init() {
 
 	// KCP client options
 	flagSet.StringVar(&options.GLBCWorkspace, "glbc-workspace", env.GetEnvString("GLBC_WORKSPACE", "root:default:kcp-glbc"), "The GLBC workspace")
+	flagSet.StringVar(&options.ExportName, "glbc-export", env.GetEnvString("GLBC_EXPORT", "glbc"), "the name of the glbc api export to use")
 	flagSet.StringVar(&options.LogicalClusterTarget, "logical-cluster", env.GetEnvString("GLBC_LOGICAL_CLUSTER_TARGET", "*"), "set the target logical cluster")
 	// TLS certificate issuance options
 	flagSet.BoolVar(&options.TLSProviderEnabled, "glbc-tls-provided", env.GetEnvBool("GLBC_TLS_PROVIDED", true), "Whether to generate TLS certificates for hosts")
@@ -130,8 +133,8 @@ func main() {
 	kcpClient, err := kcp.NewClusterForConfig(kcpClientConfig)
 	exitOnError(err, "Failed to create KCP client")
 
-	glbcAPIExport, err := kcpClient.Cluster(logicalcluster.New(options.GLBCWorkspace)).ApisV1alpha1().APIExports().Get(ctx, "glbc", metav1.GetOptions{})
-	exitOnError(err, "Failed to get GLBC APIExport")
+	glbcAPIExport, err := kcpClient.Cluster(logicalcluster.New(options.GLBCWorkspace)).ApisV1alpha1().APIExports().Get(ctx, options.ExportName, metav1.GetOptions{})
+	exitOnError(err, "Failed to get GLBC APIExport "+options.ExportName)
 
 	glbcVirtualWorkspaceURL, glbcIdentityHash := getAPIExportVirtualWorkspaceURLAndIdentityHash(glbcAPIExport)
 	log.Logger.Info(fmt.Sprintf("GLBC APIExport URL: %s, identityHash :%s", glbcVirtualWorkspaceURL, glbcIdentityHash))
