@@ -181,9 +181,10 @@ func main() {
 
 		ingress.InitMetrics(certProvider)
 
-		err = certProvider.Initialize(ctx)
-		exitOnError(err, "Failed to initialize cert provider")
-
+		check, err := certProvider.IssuerExists(ctx)
+		if check == false {
+			exitOnError(err, "Failed as cert provider does not exist")
+		}
 	}
 
 	glbcKubeInformerFactory := informers.NewSharedInformerFactoryWithOptions(kubeClient, time.Minute, informers.WithNamespace(namespace))

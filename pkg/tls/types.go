@@ -32,7 +32,7 @@ type Provider interface {
 	GetCertificateSecret(ctx context.Context, cr CertificateRequest) (*v1.Secret, error)
 	GetCertificate(ctx context.Context, cr CertificateRequest) (*certman.Certificate, error)
 	GetCertificateStatus(ctx context.Context, certReq CertificateRequest) (CertStatus, error)
-	Initialize(ctx context.Context) error
+	IssuerExists(ctx context.Context) (bool, error)
 }
 
 type CertificateRequest struct {
