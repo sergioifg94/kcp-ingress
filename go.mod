@@ -16,7 +16,7 @@ require (
 	github.com/kcp-dev/kcp/pkg/apis v0.7.1
 	github.com/kcp-dev/logicalcluster/v2 v2.0.0-alpha.1
 	github.com/miekg/dns v1.1.34
-	github.com/onsi/gomega v1.17.0
+	github.com/onsi/gomega v1.18.1
 	github.com/prometheus/client_golang v1.12.1
 	github.com/prometheus/client_model v0.2.0
 	github.com/prometheus/common v0.32.1
@@ -31,7 +31,7 @@ require (
 	k8s.io/code-generator v0.24.3
 	k8s.io/klog/v2 v2.60.1
 	k8s.io/utils v0.0.0-20220210201930-3a6ce19ff2f9
-	sigs.k8s.io/controller-runtime v0.11.0
+	sigs.k8s.io/controller-runtime v0.12.3
 )
 
 require (
