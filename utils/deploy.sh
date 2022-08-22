@@ -152,8 +152,8 @@ deploy_glbc() {
   create_ns ${GLBC_NAMESPACE}
 
   echo "Creating issuer"
-  #ToDo This shouldn't be forcing us to set a value for the KUBECONFIG env var
-  go run ${DEPLOY_SCRIPT_DIR}/certman-issuer/ --glbc-kubeconfig ${KUBECONFIG} --issuer-namespace ${GLBC_NAMESPACE}
+  go run ${DEPLOY_SCRIPT_DIR}/certman-issuer/ --output-file ${GLBC_KUSTOMIZATION}/issuer.yaml
+  kubectl apply -n ${GLBC_NAMESPACE} -f ${GLBC_KUSTOMIZATION}/issuer.yaml
 
   echo "Deploying GLBC"
   ${KUSTOMIZE_BIN} build ${GLBC_KUSTOMIZATION} | kubectl apply -f -
