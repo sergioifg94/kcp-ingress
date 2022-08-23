@@ -105,9 +105,6 @@ func (cm *certManager) Domains() []string {
 func (cm *certManager) IssuerExists(ctx context.Context) (bool, error) {
 	_, err := cm.certClient.CertmanagerV1().Issuers(cm.certificateNS).Get(ctx, cm.IssuerID(), metav1.GetOptions{})
 	if err != nil {
-		if apierrors.IsNotFound(err) {
-			return false, fmt.Errorf("Issuer %s not found", cm.IssuerID())
-		}
 		return false, err
 	}
 	return true, nil
