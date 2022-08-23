@@ -182,7 +182,7 @@ func main() {
 		ingress.InitMetrics(certProvider)
 
 		_, err := certProvider.IssuerExists(ctx)
-		exitOnError(err, "Failed as cert provider does not exist")
+		exitOnError(err, "Failed cert provider issuer check")
 
 	}
 
