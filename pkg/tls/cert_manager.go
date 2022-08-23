@@ -102,6 +102,14 @@ func (cm *certManager) Domains() []string {
 	return cm.validDomains
 }
 
+func (cm *certManager) IssuerExists(ctx context.Context) (bool, error) {
+	_, err := cm.certClient.CertmanagerV1().Issuers(cm.certificateNS).Get(ctx, cm.IssuerID(), metav1.GetOptions{})
+	if err != nil {
+		return false, err
+	}
+	return true, nil
+}
+
 func (cm *certManager) GetCertificateSecret(ctx context.Context, request CertificateRequest) (*corev1.Secret, error) {
 	c, err := cm.certClient.CertmanagerV1().Certificates(cm.certificateNS).Get(ctx, request.Name, metav1.GetOptions{})
 	if err != nil {
