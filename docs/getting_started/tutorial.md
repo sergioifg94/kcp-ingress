@@ -180,7 +180,7 @@ We will run the following commands in a new tab:
    export KUBECONFIG=.kcp/admin.kubeconfig                                         
    ./bin/kubectl-kcp workspace use root:default:kcp-glbc-user
    kubectl get ns default -o yaml
-   ``
+   ```
 As we can see, there is a label named: `*state.internal.workload.kcp.dev/kcp-cluster-1: Sync*`:
 
    ![Screenshot from 2022-08-02 12-32-06](https://user-images.githubusercontent.com/73656840/182365628-22f04bb5-0818-46a3-8a12-3abc2e8451f3.png)
