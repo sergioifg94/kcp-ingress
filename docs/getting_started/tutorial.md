@@ -164,7 +164,7 @@ The sample script will remain paused until we press the enter key to migrate the
 
 ## Main Use Case
 
-### Demo: Providing ingress in a multi-cluster ingress scenario*
+### Demo: Providing ingress in a multi-cluster ingress scenario
 
 This section will show how GLBC is used to provide ingress in a multi-cluster ingress scenario.
 
@@ -185,7 +185,7 @@ As we can see, there is a label named: `*state.internal.workload.kcp.dev/kcp-clu
 
    ![Screenshot from 2022-08-02 12-32-06](https://user-images.githubusercontent.com/73656840/182365628-22f04bb5-0818-46a3-8a12-3abc2e8451f3.png)
 
-GLBC is telling `kcp` where to sync all of the work resources in the namespace. Meaning, since the namespaceis is set to `kcp-cluster-1` , the ingress will also have `kcp-cluster-1` set to it. 
+GLBC is telling `kcp` where to sync all of the work resources in the namespace. Meaning, since the namespace is is set to `kcp-cluster-1` , the ingress will also have `kcp-cluster-1` set to it. 
 
 <br>
 
@@ -226,7 +226,7 @@ Now that the DNS record has been successfully created, in a new tab in the termi
 
    ![Screenshot from 2022-08-02 12-44-15](https://user-images.githubusercontent.com/73656840/182368772-8a08a197-66d9-4d9c-9747-74ddaad0e4d7.png)
 
-This wmeans that `kcp-cluster-1` is up and running correctly.
+This means that `kcp-cluster-1` is up and running correctly.
 
 <br>
 
