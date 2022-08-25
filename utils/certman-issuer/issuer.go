@@ -1,27 +1,20 @@
 package main
 
 import (
-	"context"
 	"flag"
 	"fmt"
 	"log"
+	"os"
 
 	certman "github.com/jetstack/cert-manager/pkg/apis/certmanager/v1"
-	certmanclient "github.com/jetstack/cert-manager/pkg/client/clientset/versioned/typed/certmanager/v1"
-	"github.com/kuadrant/kcp-glbc/pkg/util/env"
-	genericapiserver "k8s.io/apiserver/pkg/server"
-
 	corev1 "k8s.io/api/core/v1"
-	apierrors "k8s.io/apimachinery/pkg/api/errors"
-	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/cli-runtime/pkg/printers"
 
-	"k8s.io/client-go/kubernetes"
-	"k8s.io/client-go/tools/clientcmd"
+	"github.com/kuadrant/kcp-glbc/pkg/util/env"
 )
 
 const (
-	defaultCertificateNS string = "cert-manager"
-	caSecretName         string = "glbc-ca"
+	caSecretName string = "glbc-ca"
 )
 
 type Issuer interface {
@@ -30,13 +23,13 @@ type Issuer interface {
 	GetTLSProvider() string
 }
 
-func newIssuer(tlsProvider, awsRegion, namespace string) Issuer {
+func newIssuer(tlsProvider, awsRegion string) Issuer {
 	var issuer Issuer
 	switch tlsProvider {
 	case CertProviderCA:
-		issuer = NewCAIssuer(namespace)
+		issuer = NewCAIssuer()
 	case CertProviderLEStaging, CertProviderLEProd:
-		issuer = NewLetsEncryptIssuer(tlsProvider, awsRegion, namespace)
+		issuer = NewLetsEncryptIssuer(tlsProvider, awsRegion)
 	default:
 		log.Fatalln(fmt.Errorf("unsupported TLS certificate issuer: %s", issuer.GetTLSProvider()))
 	}
@@ -44,83 +37,40 @@ func newIssuer(tlsProvider, awsRegion, namespace string) Issuer {
 }
 
 func main() {
+	var outputFile string
+	var tlsProvider = ""
+	var awsRegion = ""
 
-	// Control cluster client options
-	var glbcKubeconfig string
-	var tlsProvider string = ""
-	var issuerNamespace string = ""
-	var awsRegion string = ""
-
-	flag.StringVar(&glbcKubeconfig, "glbc-kubeconfig", "", "Path to the physical GLBC cluster kubeconfig")
+	flag.StringVar(&outputFile, "output-file", "./tmp/issuer.yaml", "Where to output the files")
 	flag.StringVar(&tlsProvider, "glbc-tls-provider", env.GetEnvString("GLBC_TLS_PROVIDER", "glbc-ca"), "The TLS certificate issuer, one of [glbc-ca, le-staging, le-production]")
-	flag.StringVar(&issuerNamespace, "issuer-namespace", env.GetEnvString("NAMESPACE", defaultCertificateNS), "Define namespace where issuer will be created")
 	flag.StringVar(&awsRegion, "region", env.GetEnvString("AWS_REGION", "eu-central-1"), "the region we should target with AWS clients")
 	flag.Parse()
 
-	issuer := newIssuer(tlsProvider, awsRegion, issuerNamespace)
-	glbcClientConfig, err := clientcmd.NewNonInteractiveDeferredLoadingClientConfig(
-		&clientcmd.ClientConfigLoadingRules{ExplicitPath: glbcKubeconfig},
-		&clientcmd.ConfigOverrides{}).ClientConfig()
+	printer := &printers.YAMLPrinter{}
+
+	//Create file and destination of file
+	issuerFile, err := os.Create(outputFile)
 	if err != nil {
-		log.Fatalln(fmt.Errorf("Failed to create K8S config %w", err))
+		log.Fatalln(fmt.Errorf("error creating issuer file : %v", err))
 	}
+	defer issuerFile.Close()
 
-	certManagerClient := certmanclient.NewForConfigOrDie(glbcClientConfig)
-
-	glbcKubeClient, err := kubernetes.NewForConfig(glbcClientConfig)
-	if err != nil {
-		log.Fatalln(fmt.Errorf("Failed to create K8S core client %w", err))
-	}
-
-	ctx := genericapiserver.SetupSignalContext()
-	if err := create(ctx, certManagerClient, glbcKubeClient, issuer); err != nil {
-		log.Fatalln(fmt.Errorf("failed to create issuer for : %s %w", tlsProvider, err))
-	}
-
-	log.Printf("Issuer %s successfully created in %s namespace ", tlsProvider, issuerNamespace)
-}
-
-func create(ctx context.Context, certManegerClient certmanclient.CertmanagerV1Interface, k8sClient kubernetes.Interface, issuerObject Issuer) error {
-
+	issuerObject := newIssuer(tlsProvider, awsRegion)
 	issuerSecret, err := issuerObject.GetSecret()
 	if err != nil {
-		return err
+		log.Fatalln(fmt.Errorf("failed to create issuer yaml file for : %s %w", tlsProvider, err))
 	}
+	issuerSecret.SetGroupVersionKind(corev1.SchemeGroupVersion.WithKind("Secret"))
 
 	issuer := issuerObject.GetIssuer()
+	issuer.SetGroupVersionKind(certman.SchemeGroupVersion.WithKind("Issuer"))
 
-	secretClientInterface := k8sClient.CoreV1().Secrets(issuer.GetNamespace())
-	secret, err := secretClientInterface.Get(ctx, issuerSecret.Name, metav1.GetOptions{})
-	if err != nil && !apierrors.IsNotFound(err) {
-		return err
-	} else if apierrors.IsNotFound(err) {
-		_, err = secretClientInterface.Create(ctx, issuerSecret, metav1.CreateOptions{})
-		if err != nil {
-			return err
-		}
-	} else {
-		issuerSecret.SetResourceVersion(secret.ResourceVersion)
-		_, err = secretClientInterface.Update(ctx, issuerSecret, metav1.UpdateOptions{})
-		if err != nil {
-			return err
-		}
+	if err := printer.PrintObj(issuer, issuerFile); err != nil {
+		log.Fatalln(fmt.Errorf("failed to generate issuer yaml : %s %w", tlsProvider, err))
+	}
+	if err := printer.PrintObj(issuerSecret, issuerFile); err != nil {
+		log.Fatalln(fmt.Errorf("failed to generate issuer secret yaml : %s %w", tlsProvider, err))
 	}
 
-	issuerClientInterface := certManegerClient.Issuers(issuer.GetNamespace())
-	issuerInstance, err := issuerClientInterface.Get(ctx, issuer.Name, metav1.GetOptions{})
-	if err != nil && !apierrors.IsNotFound(err) {
-		return err
-	} else if apierrors.IsNotFound(err) {
-		_, err = issuerClientInterface.Create(ctx, issuer, metav1.CreateOptions{})
-		if err != nil {
-			return err
-		}
-	} else {
-		issuer.SetResourceVersion(issuerInstance.GetResourceVersion())
-		_, err = issuerClientInterface.Update(ctx, issuer, metav1.UpdateOptions{})
-		if err != nil {
-			return err
-		}
-	}
-	return nil
+	log.Printf("Issuer %s yaml file successfully generated in %s directory ", tlsProvider, outputFile)
 }

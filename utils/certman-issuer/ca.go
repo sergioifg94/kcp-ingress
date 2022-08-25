@@ -21,15 +21,13 @@ const (
 
 type CAIssuer struct {
 	tlsProvider string
-	namespace   string
 }
 
 var _ Issuer = &CAIssuer{}
 
-func NewCAIssuer(namespace string) *CAIssuer {
+func NewCAIssuer() *CAIssuer {
 	return &CAIssuer{
 		tlsProvider: CertProviderCA,
-		namespace:   namespace,
 	}
 }
 
@@ -80,8 +78,7 @@ func (issuer *CAIssuer) GetSecret() (*corev1.Secret, error) {
 func (issuer *CAIssuer) GetIssuer() *certman.Issuer {
 	return &certman.Issuer{
 		ObjectMeta: metav1.ObjectMeta{
-			Namespace: issuer.namespace,
-			Name:      issuer.tlsProvider,
+			Name: issuer.tlsProvider,
 		},
 		Spec: certman.IssuerSpec{
 			IssuerConfig: certman.IssuerConfig{

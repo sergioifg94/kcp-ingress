@@ -203,7 +203,8 @@ jobs:
 
           echo "Create the default glbc-ca issuer"
           KUBECONFIG=.kcp/admin.kubeconfig ./bin/kubectl-kcp workspace use "root:default:kcp-glbc"
-          go run ./utils/certman-issuer/ --glbc-kubeconfig .kcp/admin.kubeconfig --issuer-namespace=kcp-glbc
+          go run ./utils/certman-issuer/ --output-file ${TEMP_DIR}/issuer.yaml
+          KUBECONFIG=.kcp/admin.kubeconfig kubectl apply -n kcp-glbc -f ${TEMP_DIR}/issuer.yaml
 
           echo "Export GLBC CI Cluster Config Enviornment"
           export $(cat ./config/deploy/local/controller-config.env.ci | xargs)
