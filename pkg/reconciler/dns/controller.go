@@ -94,16 +94,26 @@ func (c *Controller) process(ctx context.Context, key string) error {
 		return nil
 	}
 
-	current := object.(*v1.DNSRecord)
-	target := current.DeepCopy()
+	previous := object.(*v1.DNSRecord)
+	current := previous.DeepCopy()
 
-	if err = c.reconcile(ctx, target); err != nil {
+	if err = c.reconcile(ctx, current); err != nil {
 		return err
 	}
 
-	if !equality.Semantic.DeepEqual(current, target) {
-		_, err := c.dnsRecordClient.Cluster(logicalcluster.From(target)).KuadrantV1().DNSRecords(target.Namespace).Update(ctx, target, metav1.UpdateOptions{})
-		return err
+	if !equality.Semantic.DeepEqual(previous.Status, current.Status) {
+		refresh, err := c.dnsRecordClient.Cluster(logicalcluster.From(current)).KuadrantV1().DNSRecords(current.Namespace).UpdateStatus(ctx, current, metav1.UpdateOptions{})
+		if err != nil {
+			return err
+		}
+		current.ObjectMeta.ResourceVersion = refresh.ObjectMeta.ResourceVersion
+	}
+
+	if !equality.Semantic.DeepEqual(previous, current) {
+		_, err := c.dnsRecordClient.Cluster(logicalcluster.From(current)).KuadrantV1().DNSRecords(current.Namespace).Update(ctx, current, metav1.UpdateOptions{})
+		if err != nil {
+			return err
+		}
 	}
 
 	return nil
