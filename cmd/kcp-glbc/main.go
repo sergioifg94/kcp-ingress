@@ -6,6 +6,7 @@ import (
 	"fmt"
 	gonet "net"
 	"os"
+	"strings"
 	"sync"
 	"time"
 
@@ -34,11 +35,12 @@ import (
 	"github.com/kcp-dev/logicalcluster/v2"
 
 	kuadrantv1 "github.com/kuadrant/kcp-glbc/pkg/client/kuadrant/clientset/versioned"
-	"github.com/kuadrant/kcp-glbc/pkg/client/kuadrant/informers/externalversions"
+	kuadrantinformer "github.com/kuadrant/kcp-glbc/pkg/client/kuadrant/informers/externalversions"
 	pkgDns "github.com/kuadrant/kcp-glbc/pkg/dns"
 	"github.com/kuadrant/kcp-glbc/pkg/log"
 	"github.com/kuadrant/kcp-glbc/pkg/metrics"
 	"github.com/kuadrant/kcp-glbc/pkg/net"
+	"github.com/kuadrant/kcp-glbc/pkg/reconciler"
 	"github.com/kuadrant/kcp-glbc/pkg/reconciler/deployment"
 	"github.com/kuadrant/kcp-glbc/pkg/reconciler/dns"
 	"github.com/kuadrant/kcp-glbc/pkg/reconciler/domainverification"
@@ -73,8 +75,13 @@ var options struct {
 	Region string
 	// The port number of the metrics endpoint
 	MonitoringPort int
-	// The glbc export to use
+	// The glbc exports to use
 	ExportName string
+}
+
+type APIExportClusterInformers struct {
+	SharedInformerFactory         informers.SharedInformerFactory
+	KuadrantSharedInformerFactory kuadrantinformer.SharedInformerFactory
 }
 
 func init() {
@@ -82,7 +89,7 @@ func init() {
 
 	// KCP client options
 	flagSet.StringVar(&options.GLBCWorkspace, "glbc-workspace", env.GetEnvString("GLBC_WORKSPACE", "root:default:kcp-glbc"), "The GLBC workspace")
-	flagSet.StringVar(&options.ExportName, "glbc-export", env.GetEnvString("GLBC_EXPORT", "glbc"), "the name of the glbc api export to use")
+	flagSet.StringVar(&options.ExportName, "glbc-export", env.GetEnvString("GLBC_EXPORT", "glbc-root-default-kcp-glbc,glbc-root-default-kcp-glbc-user"), "comma separated list of glbc APIExport names")
 	flagSet.StringVar(&options.LogicalClusterTarget, "logical-cluster", env.GetEnvString("GLBC_LOGICAL_CLUSTER_TARGET", "*"), "set the target logical cluster")
 	// TLS certificate issuance options
 	flagSet.BoolVar(&options.TLSProviderEnabled, "glbc-tls-provided", env.GetEnvBool("GLBC_TLS_PROVIDED", true), "Whether to generate TLS certificates for hosts")
@@ -136,23 +143,6 @@ func main() {
 	kcpClient, err := kcp.NewClusterForConfig(kcpClientConfig)
 	exitOnError(err, "Failed to create KCP client")
 
-	glbcAPIExport, err := kcpClient.Cluster(logicalcluster.New(options.GLBCWorkspace)).ApisV1alpha1().APIExports().Get(ctx, options.ExportName, metav1.GetOptions{})
-	exitOnError(err, "Failed to get GLBC APIExport "+options.ExportName)
-
-	glbcVirtualWorkspaceURL, glbcIdentityHash := getAPIExportVirtualWorkspaceURLAndIdentityHash(glbcAPIExport)
-	log.Logger.Info(fmt.Sprintf("GLBC APIExport URL: %s, identityHash :%s", glbcVirtualWorkspaceURL, glbcIdentityHash))
-
-	glbcVWClientConfig := rest.CopyConfig(kcpClientConfig)
-	glbcVWClientConfig.Host = glbcVirtualWorkspaceURL
-
-	kcpKuadrantClient, err := kuadrantv1.NewClusterForConfig(glbcVWClientConfig)
-	exitOnError(err, "Failed to create KCP kuadrant client")
-	kcpKuadrantInformerFactory := externalversions.NewSharedInformerFactory(kcpKuadrantClient.Cluster(logicalcluster.New(options.LogicalClusterTarget)), resyncPeriod)
-
-	kcpKubeClient, err := kubernetes.NewClusterForConfig(glbcVWClientConfig)
-	exitOnError(err, "Failed to create KCP core client")
-	kcpKubeInformerFactory := informers.NewSharedInformerFactory(kcpKubeClient.Cluster(logicalcluster.New(options.LogicalClusterTarget)), resyncPeriod)
-
 	// certificate client targeting the glbc workspace
 	certClient := certmanclient.NewForConfigOrDie(kcpClientConfig)
 
@@ -197,62 +187,123 @@ func main() {
 
 	exitOnError(err, "Failed to create TLS certificate controller")
 
-	ingressController := ingress.NewController(&ingress.ControllerConfig{
-		KubeClient:               kcpKubeClient,
-		DnsRecordClient:          kcpKuadrantClient,
-		KuadrantInformer:         kcpKuadrantInformerFactory,
-		KCPSharedInformerFactory: kcpKubeInformerFactory,
-		CertificateInformer:      certificateInformerFactory,
-		GlbcInformerFactory:      glbcKubeInformerFactory,
-		Domain:                   options.Domain,
-		CertProvider:             certProvider,
-		HostResolver:             net.NewDefaultHostResolver(),
-		// For testing. TODO: Make configurable through flags/env variable
-		// HostResolver: &net.ConfigMapHostResolver{
-		// 	Name:      "hosts",
-		// 	Namespace: "default",
-		// },
-		CustomHostsEnabled: options.EnableCustomHosts,
-	})
+	apiExportNames := strings.Split(options.ExportName, ",")
+	log.Logger.Info(fmt.Sprintf("Instantiating controllers for APIExports: %v", apiExportNames))
 
-	dnsRecordController, err := dns.NewController(&dns.ControllerConfig{
-		DnsRecordClient:       kcpKuadrantClient,
-		SharedInformerFactory: kcpKuadrantInformerFactory,
-		DNSProvider:           options.DNSProvider,
-	})
-	exitOnError(err, "Failed to create DNSRecord controller")
+	var apiExportClusterInformers []APIExportClusterInformers
+	var controllers []Controller
+	for _, name := range apiExportNames {
+		glbcAPIExport, err := kcpClient.Cluster(logicalcluster.New(options.GLBCWorkspace)).ApisV1alpha1().APIExports().Get(ctx, name, metav1.GetOptions{})
+		exitOnError(err, "Failed to get GLBC APIExport "+name)
 
-	domainVerificationController, err := domainverification.NewController(&domainverification.ControllerConfig{
-		DomainVerificationClient: kcpKuadrantClient,
-		SharedInformerFactory:    kcpKuadrantInformerFactory,
-		DNSVerifier:              pkgDns.NewVerifier(gonet.DefaultResolver),
-	})
+		glbcVirtualWorkspaceURL, glbcIdentityHash := getAPIExportVirtualWorkspaceURLAndIdentityHash(glbcAPIExport)
+		log.Logger.Info(fmt.Sprintf("GLBC APIExport URL: %s, identityHash :%s", glbcVirtualWorkspaceURL, glbcIdentityHash))
 
-	exitOnError(err, "Failed to create DomainVerification controller")
+		glbcVWClientConfig := rest.CopyConfig(kcpClientConfig)
+		glbcVWClientConfig.Host = glbcVirtualWorkspaceURL
 
-	serviceController, err := service.NewController(&service.ControllerConfig{
-		ServicesClient:        kcpKubeClient,
-		SharedInformerFactory: kcpKubeInformerFactory,
-	})
-	exitOnError(err, "Failed to create Service controller")
+		kcpKubeClient, err := kubernetes.NewClusterForConfig(glbcVWClientConfig)
+		exitOnError(err, "Failed to create KCP core client")
+		kcpKubeInformerFactory := informers.NewSharedInformerFactory(kcpKubeClient.Cluster(logicalcluster.New(options.LogicalClusterTarget)), resyncPeriod)
 
-	deploymentController, err := deployment.NewController(&deployment.ControllerConfig{
-		DeploymentClient:      kcpKubeClient,
-		SharedInformerFactory: kcpKubeInformerFactory,
-	})
-	exitOnError(err, "Failed to create Deployment controller")
+		kcpKuadrantClient, err := kuadrantv1.NewClusterForConfig(glbcVWClientConfig)
+		exitOnError(err, "Failed to create KCP kuadrant client")
+		kcpKuadrantInformerFactory := kuadrantinformer.NewSharedInformerFactory(kcpKuadrantClient.Cluster(logicalcluster.New(options.LogicalClusterTarget)), resyncPeriod)
 
-	secretController, err := secret.NewController(&secret.ControllerConfig{
-		SecretsClient:         kcpKubeClient,
-		SharedInformerFactory: kcpKubeInformerFactory,
-	})
-	exitOnError(err, "Failed to create Secret controller")
+		clusterInformers := &APIExportClusterInformers{}
+		clusterInformers.SharedInformerFactory = kcpKubeInformerFactory
+		clusterInformers.KuadrantSharedInformerFactory = kcpKuadrantInformerFactory
 
-	kcpKubeInformerFactory.Start(ctx.Done())
-	kcpKubeInformerFactory.WaitForCacheSync(ctx.Done())
+		isControllerLeader := len(controllers) == 0
 
-	kcpKuadrantInformerFactory.Start(ctx.Done())
-	kcpKuadrantInformerFactory.WaitForCacheSync(ctx.Done())
+		ingressController := ingress.NewController(&ingress.ControllerConfig{
+			ControllerConfig: &reconciler.ControllerConfig{
+				NameSuffix: name,
+			},
+			KubeClient:               kcpKubeClient,
+			DnsRecordClient:          kcpKuadrantClient,
+			KuadrantInformer:         kcpKuadrantInformerFactory,
+			KCPSharedInformerFactory: kcpKubeInformerFactory,
+			CertificateInformer:      certificateInformerFactory,
+			GlbcInformerFactory:      glbcKubeInformerFactory,
+			Domain:                   options.Domain,
+			CertProvider:             certProvider,
+			HostResolver:             net.NewDefaultHostResolver(),
+			// For testing. TODO: Make configurable through flags/env variable
+			// HostResolver: &net.ConfigMapHostResolver{
+			// 	APIExportName:      "hosts",
+			// 	Namespace: "default",
+			// },
+			CustomHostsEnabled: options.EnableCustomHosts,
+		})
+		controllers = append(controllers, ingressController)
+
+		dnsRecordController, err := dns.NewController(&dns.ControllerConfig{
+			ControllerConfig: &reconciler.ControllerConfig{
+				NameSuffix: name,
+			},
+			DnsRecordClient:       kcpKuadrantClient,
+			SharedInformerFactory: kcpKuadrantInformerFactory,
+			DNSProvider:           options.DNSProvider,
+		})
+		exitOnError(err, "Failed to create DNSRecord controller")
+		controllers = append(controllers, dnsRecordController)
+
+		domainVerificationController, err := domainverification.NewController(&domainverification.ControllerConfig{
+			ControllerConfig: &reconciler.ControllerConfig{
+				NameSuffix: name,
+			},
+			DomainVerificationClient: kcpKuadrantClient,
+			SharedInformerFactory:    kcpKuadrantInformerFactory,
+			DNSVerifier:              pkgDns.NewVerifier(gonet.DefaultResolver),
+		})
+		exitOnError(err, "Failed to create DomainVerification controller")
+		controllers = append(controllers, domainVerificationController)
+
+		serviceController, err := service.NewController(&service.ControllerConfig{
+			ControllerConfig: &reconciler.ControllerConfig{
+				NameSuffix: name,
+			},
+			ServicesClient:        kcpKubeClient,
+			SharedInformerFactory: kcpKubeInformerFactory,
+		})
+		exitOnError(err, "Failed to create Service controller")
+		controllers = append(controllers, serviceController)
+
+		deploymentController, err := deployment.NewController(&deployment.ControllerConfig{
+			ControllerConfig: &reconciler.ControllerConfig{
+				NameSuffix: name,
+			},
+			DeploymentClient:      kcpKubeClient,
+			SharedInformerFactory: kcpKubeInformerFactory,
+		})
+		exitOnError(err, "Failed to create Deployment controller")
+		controllers = append(controllers, deploymentController)
+
+		// Secret controller should not have more than one instance
+		if isControllerLeader {
+			secretController, err := secret.NewController(&secret.ControllerConfig{
+				ControllerConfig: &reconciler.ControllerConfig{
+					NameSuffix: name,
+				},
+				SecretsClient:         kcpKubeClient,
+				SharedInformerFactory: kcpKubeInformerFactory,
+			})
+			exitOnError(err, "Failed to create Secret controller")
+
+			controllers = append(controllers, secretController)
+		}
+
+		apiExportClusterInformers = append(apiExportClusterInformers, *clusterInformers)
+	}
+
+	for _, clusterInformers := range apiExportClusterInformers {
+		clusterInformers.SharedInformerFactory.Start(ctx.Done())
+		clusterInformers.SharedInformerFactory.WaitForCacheSync(ctx.Done())
+
+		clusterInformers.KuadrantSharedInformerFactory.Start(ctx.Done())
+		clusterInformers.KuadrantSharedInformerFactory.WaitForCacheSync(ctx.Done())
+	}
 
 	if options.TLSProviderEnabled {
 		certificateInformerFactory.Start(ctx.Done())
@@ -261,13 +312,9 @@ func main() {
 		glbcKubeInformerFactory.WaitForCacheSync(ctx.Done())
 	}
 
-	start(gCtx, ingressController)
-	start(gCtx, dnsRecordController)
-	start(gCtx, domainVerificationController)
-
-	start(gCtx, serviceController)
-	start(gCtx, deploymentController)
-	start(gCtx, secretController)
+	for _, controller := range controllers {
+		start(gCtx, controller)
+	}
 
 	g.Go(func() error {
 		// wait until the controllers have return before stopping serving metrics

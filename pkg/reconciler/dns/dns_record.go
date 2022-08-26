@@ -13,6 +13,8 @@ import (
 	utilclock "k8s.io/apimachinery/pkg/util/clock"
 	utilerrors "k8s.io/apimachinery/pkg/util/errors"
 
+	"github.com/kcp-dev/logicalcluster/v2"
+
 	v1 "github.com/kuadrant/kcp-glbc/pkg/apis/kuadrant/v1"
 	"github.com/kuadrant/kcp-glbc/pkg/util/metadata"
 	"github.com/kuadrant/kcp-glbc/pkg/util/slice"
@@ -29,7 +31,7 @@ const (
 )
 
 func (c *Controller) reconcile(ctx context.Context, dnsRecord *v1.DNSRecord) error {
-	c.Logger.Info("Reconciling DNSRecord", "dnsRecord", dnsRecord, "Spec", dnsRecord.Spec)
+	c.Logger.V(3).Info("starting reconcile of dnsRecord ", "name", dnsRecord.Name, "namespace", dnsRecord.Namespace, "cluster", logicalcluster.From(dnsRecord))
 
 	// If the DNS record was deleted, clean up and return.
 	if dnsRecord.DeletionTimestamp != nil && !dnsRecord.DeletionTimestamp.IsZero() {

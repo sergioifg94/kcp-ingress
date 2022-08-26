@@ -20,11 +20,6 @@ DEPLOY_SCRIPT_DIR="$(dirname "${BASH_SOURCE[0]}")"
 source "${DEPLOY_SCRIPT_DIR}"/.setupEnv
 source "${DEPLOY_SCRIPT_DIR}"/.startUtils
 
-#Workspace
-GLBC_WORKSPACE=root:default:kcp-glbc
-GLBC_WORKSPACE_USER=root:default:kcp-glbc-user
-GLBC_EXPORT_NAME="glbc-${GLBC_WORKSPACE_USER//:/-}"
-
 ############################################################
 # Help                                                     #
 ############################################################
@@ -145,6 +140,11 @@ while getopts "hn:w:W:" arg; do
   esac
 done
 shift $((OPTIND-1))
+
+#Workspace
+: ${GLBC_WORKSPACE:=root:default:kcp-glbc}
+: ${GLBC_WORKSPACE_USER:=root:default:kcp-glbc-user}
+: ${GLBC_EXPORT_NAME:="glbc-${GLBC_WORKSPACE_USER//:/-}"}
 
 set -e pipefail
 

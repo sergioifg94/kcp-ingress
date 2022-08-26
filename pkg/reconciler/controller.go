@@ -16,6 +16,7 @@ package reconciler
 
 import (
 	"context"
+	"fmt"
 	"time"
 
 	"github.com/go-logr/logr"
@@ -35,6 +36,10 @@ type Controller struct {
 	Logger  logr.Logger
 }
 
+type ControllerConfig struct {
+	NameSuffix string
+}
+
 func NewController(name string, queue workqueue.RateLimitingInterface) *Controller {
 	controller := &Controller{
 		Name:   name,
@@ -43,6 +48,13 @@ func NewController(name string, queue workqueue.RateLimitingInterface) *Controll
 	}
 	initMetrics(controller)
 	return controller
+}
+
+func (c *ControllerConfig) GetName(defaultName string) string {
+	if c.NameSuffix != "" {
+		return fmt.Sprintf("%s/%s", defaultName, c.NameSuffix)
+	}
+	return defaultName
 }
 
 func (c *Controller) Enqueue(obj interface{}) {

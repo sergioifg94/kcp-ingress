@@ -2,6 +2,7 @@ package ingress
 
 import (
 	"context"
+	"strconv"
 	"strings"
 
 	networkingv1 "k8s.io/api/networking/v1"
@@ -10,6 +11,8 @@ import (
 	"k8s.io/apimachinery/pkg/util/runtime"
 
 	"k8s.io/client-go/tools/cache"
+
+	"github.com/kcp-dev/logicalcluster/v2"
 
 	"github.com/kuadrant/kcp-glbc/pkg/util/metadata"
 	"github.com/kuadrant/kcp-glbc/pkg/util/workloadMigration"
@@ -29,7 +32,7 @@ type reconciler interface {
 }
 
 func (c *Controller) reconcile(ctx context.Context, ingress *networkingv1.Ingress) error {
-	c.Logger.V(3).Info("starting reconcile of ingress ", ingress.Name, ingress.Namespace)
+	c.Logger.V(3).Info("starting reconcile of ingress ", "name", ingress.Name, "namespace", ingress.Namespace, "cluster", logicalcluster.From(ingress))
 	if ingress.DeletionTimestamp == nil {
 		metadata.AddFinalizer(ingress, cascadeCleanupFinalizer)
 	}
@@ -91,7 +94,7 @@ func (c *Controller) reconcile(ctx context.Context, ingress *networkingv1.Ingres
 			}
 		}
 	}
-	c.Logger.V(3).Info("ingress reconcile complete", len(errs), ingress.Namespace, ingress.Name)
+	c.Logger.V(3).Info("ingress reconcile complete", "errors", strconv.Itoa(len(errs)), "name", ingress.Name, "namespace", ingress.Namespace, "cluster", logicalcluster.From(ingress))
 	return utilserrors.NewAggregate(errs)
 }
 

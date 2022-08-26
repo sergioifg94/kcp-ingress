@@ -117,7 +117,7 @@ func TestMetrics(t *testing.T) {
 	kubeIdentityHash := binding.Status.BoundResources[0].Schema.IdentityHash
 
 	// Import GLBC APIs
-	binding = test.NewAPIBinding("glbc", WithExportReference(GLBCWorkspace, "glbc"), WithGLBCAcceptedPermissionClaims(kubeIdentityHash), InWorkspace(workspace))
+	binding = test.NewAPIBinding("glbc", WithExportReference(GLBCWorkspace, "glbc-root-default-kcp-glbc-user"), WithGLBCAcceptedPermissionClaims(kubeIdentityHash), InWorkspace(workspace))
 
 	// Wait until the APIBinding is actually in bound phase
 	test.Eventually(APIBinding(test, logicalcluster.From(binding).String(), binding.Name)).
