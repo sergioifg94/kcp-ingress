@@ -9,6 +9,8 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	utilserrors "k8s.io/apimachinery/pkg/util/errors"
 
+	"github.com/kcp-dev/logicalcluster/v2"
+
 	v1 "github.com/kuadrant/kcp-glbc/pkg/apis/kuadrant/v1"
 	"github.com/kuadrant/kcp-glbc/pkg/net"
 )
@@ -91,6 +93,7 @@ func (dsr *domainVerificationStatus) ensureDomainVerificationStatus(ctx context.
 }
 
 func (c *Controller) reconcile(ctx context.Context, domainVerification *v1.DomainVerification) error {
+	c.Logger.V(3).Info("starting reconcile of domainVerification ", "name", domainVerification.Name, "namespace", domainVerification.Namespace, "cluster", logicalcluster.From(domainVerification))
 	reconcilers := []reconciler{
 		&domainVerificationStatus{
 			dnsVerifier: c.dnsVerifier,

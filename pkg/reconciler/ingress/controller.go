@@ -6,7 +6,6 @@ import (
 	"strings"
 
 	"k8s.io/apimachinery/pkg/labels"
-
 	corev1 "k8s.io/api/core/v1"
 	networkingv1 "k8s.io/api/networking/v1"
 	"k8s.io/apimachinery/pkg/api/equality"
@@ -36,7 +35,7 @@ import (
 )
 
 const (
-	controllerName                      = "kcp-glbc-ingress"
+	defaultControllerName               = "kcp-glbc-ingress"
 	annotationIngressKey                = "kuadrant.dev/ingress-key"
 	annotationCertificateState          = "kuadrant.dev/certificate-status"
 	ANNOTATION_HCG_HOST                 = "kuadrant.dev/host.generated"
@@ -47,6 +46,7 @@ const (
 
 // NewController returns a new Controller which reconciles Ingress.
 func NewController(config *ControllerConfig) *Controller {
+	controllerName := config.GetName(defaultControllerName)
 	queue := workqueue.NewNamedRateLimitingQueue(workqueue.DefaultControllerRateLimiter(), controllerName)
 
 	hostResolver := config.HostResolver
@@ -77,7 +77,7 @@ func NewController(config *ControllerConfig) *Controller {
 	c.indexer = c.sharedInformerFactory.Networking().V1().Ingresses().Informer().GetIndexer()
 	c.ingressLister = c.sharedInformerFactory.Networking().V1().Ingresses().Lister()
 
-	// Watch for events related to Ingresses
+	// Watch Ingresses in the GLBC Virtual Workspace
 	c.sharedInformerFactory.Networking().V1().Ingresses().Informer().AddEventHandler(cache.ResourceEventHandlerFuncs{
 		AddFunc: func(obj interface{}) {
 			ingress := obj.(*networkingv1.Ingress)
@@ -100,13 +100,18 @@ func NewController(config *ControllerConfig) *Controller {
 		},
 	})
 
+	// Watch DomainVerifications in the GLBC Virtual Workspace
 	c.KuadrantInformerFactory.Kuadrant().V1().DomainVerifications().Informer().AddEventHandler(cache.ResourceEventHandlerFuncs{
 		AddFunc:    c.enqueueIngresses(c.ingressesFromDomainVerification),
 		UpdateFunc: c.enqueueIngressesFromUpdate(c.ingressesFromDomainVerification),
 		DeleteFunc: c.enqueueIngresses(c.ingressesFromDomainVerification),
 	})
 
-	// watch for certificates being addded and updated
+	// Watch Certificates in the GLBC Workspace
+	// This is getting events relating to certificates in the glbc deployments workspace/namespace.
+	// When more than one ingress controller is started, both will receive the same events, but only the one with the
+	// appropriate indexer for the corresponding virtual workspace where the ingress is accessible will be able to
+	// process the request.
 	c.certInformerFactory.Certmanager().V1().Certificates().Informer().AddEventHandler(cache.FilteringResourceEventHandler{
 		FilterFunc: func(obj interface{}) bool {
 			certificate, ok := obj.(*certman.Certificate)
@@ -156,8 +161,11 @@ func NewController(config *ControllerConfig) *Controller {
 		},
 	})
 
-	// watch for secrets in glbc namespace.
-	// increment secret metric enqueue ingress
+	// Watch TLS Secrets in the GLBC Workspace
+	// This is getting events relating to secrets in the glbc deployments workspace/namespace.
+	// When more than one ingress controller is started, both will receive the same events, but only the one with the
+	// appropriate indexer for the corresponding virtual workspace where the ingress is accessible will be able to
+	// process the request.
 	c.glbcInformerFactory.Core().V1().Secrets().Informer().AddEventHandler(cache.FilteringResourceEventHandler{
 		FilterFunc: certificateSecretFilter,
 		Handler: cache.ResourceEventHandlerFuncs{
@@ -192,7 +200,7 @@ func NewController(config *ControllerConfig) *Controller {
 		},
 	})
 
-	//watch for DNSRecords
+	// Watch DNSRecords in the GLBC Virtual Workspace
 	c.KuadrantInformerFactory.Kuadrant().V1().DNSRecords().Informer().AddEventHandler(cache.ResourceEventHandlerFuncs{
 		DeleteFunc: func(obj interface{}) {
 			//when a dns record is deleted we requeue the ingress (currently owner refs don't work in KCP)
@@ -221,6 +229,7 @@ func NewController(config *ControllerConfig) *Controller {
 }
 
 type ControllerConfig struct {
+	*basereconciler.ControllerConfig
 	KubeClient      kubernetes.ClusterInterface
 	DnsRecordClient kuadrantclientv1.ClusterInterface
 	// informer for

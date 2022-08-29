@@ -196,7 +196,7 @@ done
 KUBECONFIG=${KUBECONFIG_KCP_ADMIN} kubectl wait --timeout=300s --for=condition=Ready=true synctargets $CLUSTERS
 
 #5 Create the GLBC APIExport after all the clusters have synced
-KUBECONFIG=${KUBECONFIG_KCP_ADMIN} OUTPUT_DIR=${TEMP_DIR} GLBC_USER_WORKLOAD_CLUSTER_NAME=${KIND_CLUSTER_PREFIX}1 ${SCRIPT_DIR}/deploy.sh -c "none" | grep "GLBC APIExport created successfully"
+KUBECONFIG=${KUBECONFIG_KCP_ADMIN} OUTPUT_DIR=${TEMP_DIR} GLBC_USER_WORKLOAD_CLUSTER_NAME=${KIND_CLUSTER_PREFIX}1 ${SCRIPT_DIR}/deploy.sh -c "none" | grep "GLBC APIExport 'glbc-root-default-kcp-glbc' created successfully"
 
 #6. Deploy GLBC components
 KUBECONFIG=${KUBECONFIG_KCP_ADMIN} OUTPUT_DIR=${TEMP_DIR} GLBC_USER_WORKLOAD_CLUSTER_NAME=${KIND_CLUSTER_PREFIX}1 ${SCRIPT_DIR}/deploy.sh -c ${GLBC_DEPLOY_COMPONENTS}

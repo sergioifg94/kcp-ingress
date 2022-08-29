@@ -17,10 +17,11 @@ import (
 	"github.com/kuadrant/kcp-glbc/pkg/reconciler"
 )
 
-const controllerName = "kcp-glbc-secret"
+const defaultControllerName = "kcp-glbc-secret"
 
 // NewController returns a new Controller which reconciles Secrets.
 func NewController(config *ControllerConfig) (*Controller, error) {
+	controllerName := config.GetName(defaultControllerName)
 	queue := workqueue.NewNamedRateLimitingQueue(workqueue.DefaultControllerRateLimiter(), controllerName)
 	c := &Controller{
 		Controller:            reconciler.NewController(controllerName, queue),
@@ -42,6 +43,7 @@ func NewController(config *ControllerConfig) (*Controller, error) {
 }
 
 type ControllerConfig struct {
+	*reconciler.ControllerConfig
 	SecretsClient         kubernetes.ClusterInterface
 	SharedInformerFactory informers.SharedInformerFactory
 }

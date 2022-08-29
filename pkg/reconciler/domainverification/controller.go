@@ -16,19 +16,20 @@ import (
 	kuadrantv1 "github.com/kuadrant/kcp-glbc/pkg/client/kuadrant/clientset/versioned"
 	"github.com/kuadrant/kcp-glbc/pkg/client/kuadrant/informers/externalversions"
 	kuadrantv1list "github.com/kuadrant/kcp-glbc/pkg/client/kuadrant/listers/kuadrant/v1"
-	basereconcile "github.com/kuadrant/kcp-glbc/pkg/reconciler"
+	basereconciler "github.com/kuadrant/kcp-glbc/pkg/reconciler"
 )
 
 const (
-	controllerName = "kcp-glbc-domain-validation"
+	defaultControllerName = "kcp-glbc-domain-validation"
 	recheckDefault = time.Second * 5
 )
 
 // NewController returns a new Controller which reconciles DomainValidation.
 func NewController(config *ControllerConfig) (*Controller, error) {
+	controllerName := config.GetName(defaultControllerName)
 	queue := workqueue.NewNamedRateLimitingQueue(workqueue.DefaultControllerRateLimiter(), controllerName)
 	c := &Controller{
-		Controller:               basereconcile.NewController(controllerName, queue),
+		Controller:               basereconciler.NewController(controllerName, queue),
 		domainVerificationClient: config.DomainVerificationClient,
 		sharedInformerFactory:    config.SharedInformerFactory,
 		dnsVerifier:              config.DNSVerifier,
@@ -48,7 +49,7 @@ func NewController(config *ControllerConfig) (*Controller, error) {
 }
 
 type Controller struct {
-	*basereconcile.Controller
+	*basereconciler.Controller
 	indexer                  cache.Indexer
 	domainVerificationLister kuadrantv1list.DomainVerificationLister
 	domainVerificationClient kuadrantv1.ClusterInterface
@@ -57,6 +58,7 @@ type Controller struct {
 }
 
 type ControllerConfig struct {
+	*basereconciler.ControllerConfig
 	DomainVerificationClient kuadrantv1.ClusterInterface
 	SharedInformerFactory    externalversions.SharedInformerFactory
 	DNSVerifier              dnsVerifier

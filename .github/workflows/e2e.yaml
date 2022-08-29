@@ -172,7 +172,7 @@ jobs:
           KUBECONFIG=.kcp/admin.kubeconfig kubectl wait --timeout=300s --for=condition=Ready=true synctargets kcp-cluster-1 kcp-cluster-2
 
           echo "Create the GLBC APIExport after all the clusters have synced"
-          KUBECONFIG=.kcp/admin.kubeconfig OUTPUT_DIR=${TEMP_DIR} GLBC_USER_WORKLOAD_CLUSTER_NAME=kcp-cluster-1  ./utils/deploy.sh -c "none" | grep "GLBC APIExport created successfully"
+          KUBECONFIG=.kcp/admin.kubeconfig OUTPUT_DIR=${TEMP_DIR} GLBC_USER_WORKLOAD_CLUSTER_NAME=kcp-cluster-1  ./utils/deploy.sh -c "none" | grep "GLBC APIExport 'glbc-root-default-kcp-glbc' created successfully"
 
           echo "Deploy GLBC components (cert-manager)"
           KUBECONFIG=.kcp/admin.kubeconfig OUTPUT_DIR=${TEMP_DIR} GLBC_USER_WORKLOAD_CLUSTER_NAME=kcp-cluster-1 ./utils/deploy.sh -c "cert-manager"
@@ -185,20 +185,30 @@ jobs:
 
           echo "Check GLBC APIExport and APIBinding"
           KUBECONFIG=.kcp/admin.kubeconfig ./bin/kubectl-kcp workspace use "root:default:kcp-glbc"
-          KUBECONFIG=.kcp/admin.kubeconfig kubectl get apiexports "glbc"
-          KUBECONFIG=.kcp/admin.kubeconfig kubectl get apiexports "glbc" -o json > glbc-apiexport.json
+          KUBECONFIG=.kcp/admin.kubeconfig kubectl get apiexports "glbc-root-default-kcp-glbc"
+          KUBECONFIG=.kcp/admin.kubeconfig kubectl get apiexports "glbc-root-default-kcp-glbc" -o json > glbc-root-default-kcp-glbc-apiexport.json
+          KUBECONFIG=.kcp/admin.kubeconfig kubectl get apiexports "glbc-root-default-kcp-glbc-user"
+          KUBECONFIG=.kcp/admin.kubeconfig kubectl get apiexports "glbc-root-default-kcp-glbc-user" -o json > glbc-root-default-kcp-glbc-user-apiexport.json
+          KUBECONFIG=.kcp/admin.kubeconfig kubectl get apibindings glbc
+          KUBECONFIG=.kcp/admin.kubeconfig kubectl get apibindings glbc -o json > glbc-root-default-kcp-glbc-apibinding.json
 
           KUBECONFIG=.kcp/admin.kubeconfig ./bin/kubectl-kcp workspace use "root:default:kcp-glbc-user"
           KUBECONFIG=.kcp/admin.kubeconfig kubectl get apibindings glbc
-          KUBECONFIG=.kcp/admin.kubeconfig kubectl get apibindings glbc -o json > glbc-apibinding.json
+          KUBECONFIG=.kcp/admin.kubeconfig kubectl get apibindings glbc -o json > glbc-root-default-kcp-glbc-user-apibinding.json
 
-          cat glbc-apiexport.json
-          cat glbc-apibinding.json
+          cat glbc-root-default-kcp-glbc-apiexport.json
+          cat glbc-root-default-kcp-glbc-apibinding.json
+          cat glbc-root-default-kcp-glbc-user-apiexport.json
+          cat glbc-root-default-kcp-glbc-user-apibinding.json
 
           KUBECONFIG=.kcp/admin.kubeconfig ./bin/kubectl-kcp workspace use "root:default:kcp-glbc"
-          glbcurl=$(KUBECONFIG=.kcp/admin.kubeconfig kubectl get apiexport glbc -o json | jq -r .status.virtualWorkspaces[0].url)
-          echo ${glbcurl}
 
+          glbcurl=$(KUBECONFIG=.kcp/admin.kubeconfig kubectl get apiexport glbc-root-default-kcp-glbc-user -o json | jq -r .status.virtualWorkspaces[0].url)
+          echo ${glbcurl}
+          KUBECONFIG=.kcp/admin.kubeconfig kubectl --server ${glbcurl}/clusters/* api-resources
+
+          glbcurl=$(KUBECONFIG=.kcp/admin.kubeconfig kubectl get apiexport glbc-root-default-kcp-glbc -o json | jq -r .status.virtualWorkspaces[0].url)
+          echo ${glbcurl}
           KUBECONFIG=.kcp/admin.kubeconfig kubectl --server ${glbcurl}/clusters/* api-resources
 
           echo "Create the default glbc-ca issuer"

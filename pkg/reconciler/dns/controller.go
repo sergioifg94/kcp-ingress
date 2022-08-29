@@ -21,10 +21,11 @@ import (
 	"github.com/kuadrant/kcp-glbc/pkg/reconciler"
 )
 
-const controllerName = "kcp-glbc-dns"
+const defaultControllerName = "kcp-glbc-dns"
 
 // NewController returns a new Controller which reconciles DNSRecord.
 func NewController(config *ControllerConfig) (*Controller, error) {
+	controllerName := config.GetName(defaultControllerName)
 	queue := workqueue.NewNamedRateLimitingQueue(workqueue.DefaultControllerRateLimiter(), controllerName)
 	c := &Controller{
 		Controller:            reconciler.NewController(controllerName, queue),
@@ -69,6 +70,7 @@ func NewController(config *ControllerConfig) (*Controller, error) {
 }
 
 type ControllerConfig struct {
+	*reconciler.ControllerConfig
 	DnsRecordClient       kuadrantv1.ClusterInterface
 	SharedInformerFactory externalversions.SharedInformerFactory
 	DNSProvider           string
