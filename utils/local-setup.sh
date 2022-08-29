@@ -180,6 +180,7 @@ createSyncTarget $KCP_GLBC_CLUSTER_NAME 8081 8444 "glbc"
 kubectl apply -f ${TEMP_DIR}/glbc-syncer.yaml
 
 KUBECONFIG=${KUBECONFIG_KCP_ADMIN} ${KUBECTL_KCP_BIN} workspace use "${ORG_WORKSPACE}:kcp-glbc-compute"
+KUBECONFIG=${KUBECONFIG_KCP_ADMIN} kubectl annotate --overwrite synctarget "glbc" featuregates.experimental.workload.kcp.dev/advancedscheduling='true'
 KUBECONFIG=${KUBECONFIG_KCP_ADMIN} kubectl wait --timeout=300s --for=condition=Ready=true synctargets "glbc"
 
 #4. Create User sync target clusters and wait for them to be ready

@@ -22,7 +22,7 @@ source "${DEPLOY_SCRIPT_DIR}"/.startUtils
 
 #Workspace
 GLBC_WORKSPACE=root:default:kcp-glbc
-GLBC_WORKSPACE_USER=root:default:kcp-glbc-user
+GLBC_WORKSPACE_USER=root:default:kcp-glbc
 GLBC_EXPORT_NAME="glbc-${GLBC_WORKSPACE_USER//:/-}"
 
 ############################################################

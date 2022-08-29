@@ -143,8 +143,11 @@ deploy_cert_manager() {
   echo "Deploying Cert Manager"
   create_ns "cert-manager"
   kubectl apply -f ${KCP_GLBC_DIR}/config/cert-manager/cert-manager.yaml
-  echo "Waiting for Cert Manager deployments to be ready..."
-  kubectl -n cert-manager wait --timeout=300s --for=condition=Available deployments --all
+
+  # Commented as advanced scheduling conflicts with the representation of
+  # deployment availability
+  # echo "Waiting for Cert Manager deployments to be ready..."
+  # kubectl -n cert-manager wait --timeout=300s --for=condition=Available deployments --all
 }
 
 deploy_glbc() {
@@ -157,8 +160,11 @@ deploy_glbc() {
 
   echo "Deploying GLBC"
   ${KUSTOMIZE_BIN} build ${GLBC_KUSTOMIZATION} | kubectl apply -f -
-  echo "Waiting for GLBC deployments to be ready..."
-  kubectl -n ${GLBC_NAMESPACE} wait --timeout=300s --for=condition=Available deployments --all
+  
+  # Commented as advanced scheduling conflicts with the representation of
+  # deployment availability
+  # echo "Waiting for GLBC deployments to be ready..."
+  # kubectl -n ${GLBC_NAMESPACE} wait --timeout=300s --for=condition=Available deployments --all
 }
 
 deploy_glbc_observability() {
@@ -289,7 +295,7 @@ create_api_binding "kubernetes" "kubernetes" "${ORG_WORKSPACE}:${GLBC_WORKSPACE_
 # Setup GLBC APIExport                                     #
 ############################################################
 
-if ${DEPLOY_SCRIPT_DIR}/create_glbc_api_export.sh -w "${ORG_WORKSPACE}:${GLBC_WORKSPACE_USER}" -W "${ORG_WORKSPACE}:${GLBC_WORKSPACE}" -n "glbc" ; then
+if ${DEPLOY_SCRIPT_DIR}/create_glbc_api_export.sh -w "${ORG_WORKSPACE}:${GLBC_WORKSPACE}" -W "${ORG_WORKSPACE}:${GLBC_WORKSPACE}" -n "glbc" ; then
   echo "GLBC APIExport created successfully for ${ORG_WORKSPACE}:${GLBC_WORKSPACE_USER} workspace!"
 else
   echo "GLBC APIExport could not be created!"

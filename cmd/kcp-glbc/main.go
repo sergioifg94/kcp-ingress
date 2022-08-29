@@ -76,6 +76,8 @@ var options struct {
 	Region string
 	// The port number of the metrics endpoint
 	MonitoringPort int
+	// The port number of the webhooks server
+	WebhooksPort int
 }
 
 func init() {
@@ -95,6 +97,8 @@ func init() {
 	flag.StringVar(&options.Region, "region", env.GetEnvString("AWS_REGION", "eu-central-1"), "the region we should target with AWS clients")
 	//  Observability options
 	flagSet.IntVar(&options.MonitoringPort, "monitoring-port", 8080, "The port of the metrics endpoint (can be set to \"0\" to disable the metrics serving)")
+	// Webhook options
+	flagSet.IntVar(&options.WebhooksPort, "webhooks-port", 8443, "The port of the webhooks server")
 
 	opts := log.Options{
 		EncoderConfigOptions: []log.EncoderConfigOption{
@@ -274,7 +278,9 @@ func main() {
 	start(gCtx, secretController)
 
 	g.Go(func() error {
-		return admission.StartServer(gCtx)
+		return admission.StartServer(gCtx, &admission.WebhookConfig{
+			ServerPort: options.WebhooksPort,
+		})
 	})
 
 	g.Go(func() error {
