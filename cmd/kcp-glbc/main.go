@@ -6,6 +6,7 @@ import (
 	"fmt"
 	gonet "net"
 	"os"
+	"reflect"
 	"strings"
 	"sync"
 	"time"
@@ -124,6 +125,9 @@ func init() {
 var controllersGroup = sync.WaitGroup{}
 
 func main() {
+	// Logging GLBC configuration
+	printOptions()
+
 	// start listening on the metrics endpoint
 	metricsServer, err := metrics.NewServer(options.MonitoringPort)
 	exitOnError(err, "Failed to create metrics server")
@@ -355,4 +359,12 @@ func getAPIExportVirtualWorkspaceURLAndIdentityHash(export *apisv1alpha1.APIExpo
 	}
 
 	return export.Status.VirtualWorkspaces[0].URL, export.Status.IdentityHash
+}
+
+func printOptions() {
+	log.Logger.Info("GLBC Configuration options: ")
+	v := reflect.ValueOf(&options).Elem()
+	for i := 0; i < v.NumField(); i++ {
+		log.Logger.Info("GLBC Options: ", v.Type().Field(i).Name, v.Field(i).Interface())
+	}
 }
