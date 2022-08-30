@@ -5,7 +5,7 @@ This requires you to have access to a KCP instance to deploy GLBC to, if you wan
 
 **Prerequisite**
 
-* KCP version 0.5
+* KCP version 0.7
 
 **Useful Links**
 
@@ -146,18 +146,17 @@ kubectl -n kcp-glbc edit configmap kcp-glbc-controller-config
 | `GLBC_DNS_PROVIDER` |  The dns provider to use, one of [aws, fake] | fake |
 | `GLBC_DOMAIN` |  The domain to use when exposing ingresses via glbc | dev.hcpapps.net |
 | `GLBC_ENABLE_CUSTOM_HOSTS` | Allow custom hosts in glbc managed ingresses | false |
-| `GLBC_KCP_CONTEXT` | The kcp kube context | system:admin |
 | `GLBC_LOGICAL_CLUSTER_TARGET` | logical cluster to target | `*` |
 | `GLBC_TLS_PROVIDED` | Generate TLS certs for glbc managed hosts | false |
 | `GLBC_TLS_PROVIDER` | The TLS certificate issuer | glbc-ca |
 | `HCG_LE_EMAIL` | Email address to use during LE cert requests | kuadrant-dev@redhat.com |
-| `NAMESPACE` | Target namesapce of rcert-manager resources (issuers, certificates) | kcp-glbc |
+| `NAMESPACE` | Target namespace of cert-manager resources (issuers, certificates) | kcp-glbc |
 | `GLBC_WORKSPACE` | The GLBC workspace| root:default:kcp-glbc |
 
 ### Applying configuration changes
 
-Any of the described configurations can be modified after the initial creation of the resources, the deploymnet will however 
-need to be restarted after each change in order for them to come into affect.
+Any of the described configurations can be modified after the initial creation of the resources, the deployment will however 
+need to be restarted after each change in order for them to come into effect.
 
 `kubectl rollout restart deployment/kcp-glbc-controller-manager -n kcp-glbc`
 
