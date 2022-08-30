@@ -16,8 +16,8 @@ Use this tutorial to perform the following actions:
 * [Install](#installation)
 * [Provide GLBC credentials](#provide-glbc-with-aws-credentials-and-configuration)
 * [Run GLBC](#run-glbc)
-* [Deploy the sample service](deploy-the-sample-service)
-* [Verify sample service deployment](verify-sample-service-deployment)
+* [Deploy the sample service](#deploy-the-sample-service)
+* [Verify sample service deployment](#verify-sample-service-deployment)
 * [Demo: **Providing ingress in a multi-cluster ingress scenario**](#main-use-case)
 
 ---
@@ -85,14 +85,12 @@ The easiest way to do this is to perform the following steps:
    GLBC_DNS_PROVIDER=aws
    GLBC_DOMAIN=cz.hcpapps.net
    GLBC_ENABLE_CUSTOM_HOSTS=false
-   GLBC_KCP_CONTEXT=system:admin
    GLBC_LOGICAL_CLUSTER_TARGET=*
    GLBC_TLS_PROVIDED=true
    GLBC_TLS_PROVIDER=glbc-ca
    HCG_LE_EMAIL=kuadrant-dev@redhat.com
    NAMESPACE=kcp-glbc
    GLBC_WORKSPACE=root:default:kcp-glbc
-   GLBC_COMPUTE_WORKSPACE=root:default:kcp-glbc-user-compute
    ```
 
    The fields that might need to be edited include:
