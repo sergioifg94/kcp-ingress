@@ -53,6 +53,21 @@ func NewController(config *ControllerConfig) (*Controller, error) {
 	}
 	c.dnsZones = dnsZones
 
+	//Logging state of AWS credentials
+	awsIdKey := os.Getenv("AWS_ACCESS_KEY_ID")
+	if awsIdKey != "" {
+		c.Logger.Info("AWS Access Key set")
+	} else {
+		c.Logger.Info("AWS Access Key is NOT set")
+	}
+
+	awsSecretKey := os.Getenv("AWS_SECRET_ACCESS_KEY")
+	if awsSecretKey != "" {
+		c.Logger.Info("AWS Secret Key set")
+	} else {
+		c.Logger.Info("AWS Secret Key is NOT set")
+	}
+
 	c.sharedInformerFactory.Kuadrant().V1().DNSRecords().Informer().AddEventHandler(cache.ResourceEventHandlerFuncs{
 		AddFunc: func(obj interface{}) { c.Enqueue(obj) },
 		UpdateFunc: func(old, obj interface{}) {
