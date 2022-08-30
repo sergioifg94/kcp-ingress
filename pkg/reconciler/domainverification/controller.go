@@ -21,7 +21,7 @@ import (
 
 const (
 	defaultControllerName = "kcp-glbc-domain-validation"
-	recheckDefault = time.Second * 5
+	recheckDefault        = time.Second * 5
 )
 
 // NewController returns a new Controller which reconciles DomainValidation.
