@@ -16,8 +16,8 @@ Use this tutorial to perform the following actions:
 * [Install](#installation)
 * [Provide GLBC credentials](#provide-glbc-with-aws-credentials-and-configuration)
 * [Run GLBC](#run-glbc)
-* [Deploy the sample service](deploy-the-sample-service)
-* [Verify sample service deployment](verify-sample-service-deployment)
+* [Deploy the sample service](#deploy-the-sample-service)
+* [Verify sample service deployment](#verify-sample-service-deployment)
 * [Demo: **Providing ingress in a multi-cluster ingress scenario**](#main-use-case)
 
 ---
