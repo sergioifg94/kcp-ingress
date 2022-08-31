@@ -40,6 +40,8 @@ kubectl delete placement default
 echo "deploying workload resources in user workspace"
 kubectl apply -f ${SCRIPT_DIR}/../echo-service/echo.yaml
 
+sleep 2
+
 echo
 echo "=== useful commands:"
 echo "  - watch -n1 \"curl -k https://"$(kubectl get ingress ingress-nondomain -o json | jq ".metadata.annotations[\"kuadrant.dev/host.generated\"]" -r)"\" (N.B. Don't start this before A record exists in route53)"

@@ -57,12 +57,11 @@ func NewController(config *ControllerConfig) *Controller {
 
 	base := basereconciler.NewController(controllerName, queue)
 	c := &Controller{
-		Controller:            base,
-		kubeClient:            config.KubeClient,
-		certProvider:          config.CertProvider,
-		sharedInformerFactory: config.KCPSharedInformerFactory,
-		glbcInformerFactory:   config.GlbcInformerFactory,
-		//	dnsRecordClient:           config.DnsRecordClient,
+		Controller:                base,
+		kubeClient:                config.KubeClient,
+		certProvider:              config.CertProvider,
+		sharedInformerFactory:     config.KCPSharedInformerFactory,
+		glbcInformerFactory:       config.GlbcInformerFactory,
 		kuadrantClient:            config.DnsRecordClient,
 		domain:                    config.Domain,
 		hostResolver:              hostResolver,
@@ -71,7 +70,6 @@ func NewController(config *ControllerConfig) *Controller {
 		certInformerFactory:       config.CertificateInformer,
 		KuadrantInformerFactory:   config.KuadrantInformer,
 		advancedSchedulingEnabled: config.AdvancedSchedulingEnabled,
-		//	dnsRecordInformerFactory:  config.DNSRecordInformer,
 	}
 	c.Process = c.process
 	c.hostsWatcher.OnChange = c.Enqueue
@@ -232,13 +230,12 @@ func NewController(config *ControllerConfig) *Controller {
 
 type ControllerConfig struct {
 	*basereconciler.ControllerConfig
-	KubeClient               kubernetes.ClusterInterface
-	DnsRecordClient          kuadrantclientv1.ClusterInterface
-	KCPSharedInformerFactory informers.SharedInformerFactory
-	CertificateInformer      certmaninformer.SharedInformerFactory
-	GlbcInformerFactory      informers.SharedInformerFactory
-	KuadrantInformer         kuadrantInformer.SharedInformerFactory
-	//DNSRecordInformer         dnsrecordinformer.SharedInformerFactory
+	KubeClient                kubernetes.ClusterInterface
+	DnsRecordClient           kuadrantclientv1.ClusterInterface
+	KCPSharedInformerFactory  informers.SharedInformerFactory
+	CertificateInformer       certmaninformer.SharedInformerFactory
+	GlbcInformerFactory       informers.SharedInformerFactory
+	KuadrantInformer          kuadrantInformer.SharedInformerFactory
 	Domain                    string
 	CertProvider              tls.Provider
 	HostResolver              net.HostResolver
@@ -263,7 +260,6 @@ type Controller struct {
 	certInformerFactory       certmaninformer.SharedInformerFactory
 	glbcInformerFactory       informers.SharedInformerFactory
 	KuadrantInformerFactory   kuadrantInformer.SharedInformerFactory
-	//dnsRecordInformerFactory  dnsrecordinformer.SharedInformerFactory
 }
 
 func (c *Controller) enqueueIngressByKey(key string) {

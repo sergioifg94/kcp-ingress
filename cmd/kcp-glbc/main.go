@@ -283,7 +283,7 @@ func main() {
 		})
 		exitOnError(err, "Failed to create Deployment controller")
 
-		// Secret controller should not have more than one instance
+		// Secret controller should not have more than one instance and is only needed if using advanced scheduling
 		if isControllerLeader && options.AdvancedScheduling {
 			secretController, err := secret.NewController(&secret.ControllerConfig{
 				ControllerConfig: &reconciler.ControllerConfig{
@@ -296,6 +296,7 @@ func main() {
 
 			controllers = append(controllers, secretController)
 		}
+
 		if options.AdvancedScheduling {
 			log.Logger.Info("advanced scheduling enabled, starting deployment, service and secret controllers")
 			controllers = append(controllers, deploymentController)
@@ -321,13 +322,7 @@ func main() {
 	}
 
 	for _, controller := range controllers {
-
 		start(gCtx, controller)
-		if options.AdvancedScheduling {
-			//start(gCtx, serviceController)
-			//start(gCtx, deploymentController)
-			//start(gCtx, secretController)
-		}
 	}
 
 	g.Go(func() error {
