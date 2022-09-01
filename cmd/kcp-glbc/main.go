@@ -285,6 +285,7 @@ func main() {
 
 		// Secret controller should not have more than one instance and is only needed if using advanced scheduling
 		if isControllerLeader && options.AdvancedScheduling {
+			log.Logger.Info("advanced scheduling enabled, starting secrets controllers")
 			secretController, err := secret.NewController(&secret.ControllerConfig{
 				ControllerConfig: &reconciler.ControllerConfig{
 					NameSuffix: name,
@@ -298,7 +299,7 @@ func main() {
 		}
 
 		if options.AdvancedScheduling {
-			log.Logger.Info("advanced scheduling enabled, starting deployment, service and secret controllers")
+			log.Logger.Info("advanced scheduling enabled, starting deployment and service controllers")
 			controllers = append(controllers, deploymentController)
 			controllers = append(controllers, serviceController)
 		}

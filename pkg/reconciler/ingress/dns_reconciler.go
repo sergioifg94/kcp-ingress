@@ -60,13 +60,13 @@ func (r *dnsReconciler) reconcile(ctx context.Context, ingress *networkingv1.Ing
 	// get status blocks. An array is returned to allow for more than one placement
 	statuses, err := GetStatus(ingress)
 	if err != nil {
-		return reconcileStatusStop, err
+		return reconcileStatusContinue, err
 	}
 	//discover active and deleting targets and setup watchers for non ip load balancer results
 	for cluster, status := range statuses {
 		statusTargets, err := r.targetsFromIngressStatus(ctx, status)
 		if err != nil {
-			return reconcileStatusStop, err
+			return reconcileStatusContinue, err
 		}
 		deleteAnnotation := workloadMigration.WorkloadDeletingAnnotation + cluster.String()
 		if metadata.HasAnnotation(ingress, deleteAnnotation) {
@@ -107,7 +107,7 @@ func (r *dnsReconciler) reconcile(ctx context.Context, ingress *networkingv1.Ing
 		}
 		record, err := newDNSRecordForObject(ingress)
 		if err != nil {
-			return reconcileStatusStop, err
+			return reconcileStatusContinue, err
 		}
 		r.setEndpointFromTargets(managedHost, activeDNSTargetIPs, record)
 		// Create the resource in the cluster
@@ -115,7 +115,7 @@ func (r *dnsReconciler) reconcile(ctx context.Context, ingress *networkingv1.Ing
 			r.log.V(3).Info("creating DNSRecord ", "record", record.Name, "endpoints for DNSRecord", "endpoints", record.Spec.Endpoints)
 			existing, err = r.createDNS(ctx, record)
 			if err != nil {
-				return reconcileStatusStop, err
+				return reconcileStatusContinue, err
 			}
 			// metric to observe the ingress admission time
 			ingressObjectTimeToAdmission.
@@ -141,7 +141,6 @@ func newDNSRecordForObject(obj runtime.Object) (*v1.DNSRecord, error) {
 	if err != nil {
 		return nil, err
 	}
-	key := objectKey(obj)
 	record := &v1.DNSRecord{}
 
 	record.TypeMeta = metav1.TypeMeta{
@@ -171,7 +170,7 @@ func newDNSRecordForObject(obj runtime.Object) (*v1.DNSRecord, error) {
 		if record.Annotations == nil {
 			record.Annotations = map[string]string{}
 		}
-		record.Annotations[annotationIngressKey] = string(key)
+		record.Annotations[annotationIngressKey] = string(objectKey(obj))
 	}
 
 	metadata.CopyAnnotationsPredicate(objMeta, record, metadata.KeyPredicate(func(key string) bool {
