@@ -11,7 +11,7 @@ func HasAnnotation(obj metav1.Object, key string) bool {
 	if annotations == nil {
 		return false
 	}
-	_, ok := annotations[key]
+	_, ok := annotations[strings.TrimSpace(key)]
 	return ok
 }
 

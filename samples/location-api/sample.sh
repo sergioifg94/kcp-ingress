@@ -20,6 +20,13 @@ export KUBECONFIG=./.kcp/admin.kubeconfig
 BASE_WORKSPACE=root:default
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
+
+echo 
+echo "before running this script, ensure that you have set the flag --advanced-scheduling=true when starting GLBC"
+
+read -p "Press enter to continue"
+
+
 kubectl kcp workspace ${BASE_WORKSPACE}:kcp-glbc-user-compute
 
 echo "creating locations for sync targets in compute workspace"
@@ -32,6 +39,8 @@ kubectl delete placement default
 
 echo "deploying workload resources in user workspace"
 kubectl apply -f ${SCRIPT_DIR}/../echo-service/echo.yaml
+
+sleep 2
 
 echo
 echo "=== useful commands:"

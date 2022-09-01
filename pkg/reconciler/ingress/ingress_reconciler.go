@@ -7,8 +7,9 @@ import (
 
 	networkingv1 "k8s.io/api/networking/v1"
 
+	"k8s.io/apimachinery/pkg/runtime"
 	utilserrors "k8s.io/apimachinery/pkg/util/errors"
-	"k8s.io/apimachinery/pkg/util/runtime"
+	apiRuntime "k8s.io/apimachinery/pkg/util/runtime"
 
 	"k8s.io/client-go/tools/cache"
 
@@ -37,7 +38,9 @@ func (c *Controller) reconcile(ctx context.Context, ingress *networkingv1.Ingres
 		metadata.AddFinalizer(ingress, cascadeCleanupFinalizer)
 	}
 	//TODO evaluate where this actually belongs
-	workloadMigration.Process(ingress, c.Queue, c.Logger)
+	if c.advancedSchedulingEnabled {
+		workloadMigration.Process(ingress, c.Queue, c.Logger)
+	}
 
 	reconcilers := []reconciler{
 		//hostReconciler is first as the others depends on it for the host to be set on the ingress
@@ -85,7 +88,7 @@ func (c *Controller) reconcile(ctx context.Context, ingress *networkingv1.Ingres
 	if len(errs) == 0 {
 		if ingress.DeletionTimestamp != nil && !ingress.DeletionTimestamp.IsZero() {
 			metadata.RemoveFinalizer(ingress, cascadeCleanupFinalizer)
-			c.hostsWatcher.StopWatching(ingressKey(ingress), "")
+			c.hostsWatcher.StopWatching(objectKey(ingress), "")
 			//in 0.5.0 these are never cleaned up properly
 			for _, f := range ingress.Finalizers {
 				if strings.Contains(f, workloadMigration.SyncerFinalizer) {
@@ -98,8 +101,8 @@ func (c *Controller) reconcile(ctx context.Context, ingress *networkingv1.Ingres
 	return utilserrors.NewAggregate(errs)
 }
 
-func ingressKey(ingress *networkingv1.Ingress) interface{} {
-	key, _ := cache.MetaNamespaceKeyFunc(ingress)
+func objectKey(obj runtime.Object) cache.ExplicitKey {
+	key, _ := cache.MetaNamespaceKeyFunc(obj)
 	return cache.ExplicitKey(key)
 }
 
@@ -113,14 +116,14 @@ func (c *Controller) enqueueIngresses(getIngresses func(obj interface{}) ([]*net
 	return func(obj interface{}) {
 		ingresses, err := getIngresses(obj)
 		if err != nil {
-			runtime.HandleError(err)
+			apiRuntime.HandleError(err)
 			return
 		}
 
 		for _, ingress := range ingresses {
 			ingressKey, err := cache.MetaNamespaceKeyFunc(ingress)
 			if err != nil {
-				runtime.HandleError(err)
+				apiRuntime.HandleError(err)
 				continue
 			}
 

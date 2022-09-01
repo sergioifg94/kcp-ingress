@@ -4,6 +4,7 @@ import (
 	"context"
 
 	corev1 "k8s.io/api/core/v1"
+	v1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/equality"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/client-go/informers"
@@ -15,6 +16,7 @@ import (
 	"github.com/kcp-dev/logicalcluster/v2"
 
 	"github.com/kuadrant/kcp-glbc/pkg/reconciler"
+	basereconciler "github.com/kuadrant/kcp-glbc/pkg/reconciler"
 )
 
 const defaultControllerName = "kcp-glbc-secret"
@@ -24,16 +26,27 @@ func NewController(config *ControllerConfig) (*Controller, error) {
 	controllerName := config.GetName(defaultControllerName)
 	queue := workqueue.NewNamedRateLimitingQueue(workqueue.DefaultControllerRateLimiter(), controllerName)
 	c := &Controller{
-		Controller:            reconciler.NewController(controllerName, queue),
+		Controller:            basereconciler.NewController(controllerName, queue),
 		coreClient:            config.SecretsClient,
 		sharedInformerFactory: config.SharedInformerFactory,
 	}
 	c.Process = c.process
 
-	c.sharedInformerFactory.Core().V1().Secrets().Informer().AddEventHandler(cache.ResourceEventHandlerFuncs{
-		AddFunc:    func(obj interface{}) { c.Enqueue(obj) },
-		UpdateFunc: func(_, obj interface{}) { c.Enqueue(obj) },
-		DeleteFunc: func(obj interface{}) { c.Enqueue(obj) },
+	c.sharedInformerFactory.Core().V1().Secrets().Informer().AddEventHandler(cache.FilteringResourceEventHandler{
+		FilterFunc: func(obj interface{}) bool {
+			s := obj.(*v1.Secret)
+			if s.Labels != nil {
+				if _, hcgmanaged := s.Labels[basereconciler.LABEL_HCG_MANAGED]; hcgmanaged {
+					return true
+				}
+			}
+			return false
+		},
+		Handler: cache.ResourceEventHandlerFuncs{
+			AddFunc:    func(obj interface{}) { c.Enqueue(obj) },
+			UpdateFunc: func(_, obj interface{}) { c.Enqueue(obj) },
+			DeleteFunc: func(obj interface{}) { c.Enqueue(obj) },
+		},
 	})
 
 	c.indexer = c.sharedInformerFactory.Core().V1().Secrets().Informer().GetIndexer()

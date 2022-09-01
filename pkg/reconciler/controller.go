@@ -29,6 +29,8 @@ import (
 	"github.com/kuadrant/kcp-glbc/pkg/log"
 )
 
+const LABEL_HCG_MANAGED = "kuadrant.dev/hcg.managed"
+
 type Controller struct {
 	Name    string
 	Queue   workqueue.RateLimitingInterface

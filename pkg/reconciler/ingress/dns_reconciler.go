@@ -2,9 +2,6 @@ package ingress
 
 import (
 	"context"
-	"encoding/json"
-	"errors"
-	"fmt"
 	"strconv"
 	"strings"
 
@@ -13,8 +10,10 @@ import (
 	networkingv1 "k8s.io/api/networking/v1"
 	"k8s.io/apimachinery/pkg/api/equality"
 	k8errors "k8s.io/apimachinery/pkg/api/errors"
+	"k8s.io/apimachinery/pkg/api/meta"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	"k8s.io/client-go/tools/cache"
+	"k8s.io/apimachinery/pkg/runtime"
+	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/utils/pointer"
 
 	"github.com/kcp-dev/logicalcluster/v2"
@@ -27,11 +26,16 @@ import (
 	"github.com/kuadrant/kcp-glbc/pkg/util/workloadMigration"
 )
 
+const (
+	targetTypeHost = "HOST"
+	targetTypeIP   = "IP"
+)
+
 type dnsReconciler struct {
 	deleteDNS        func(ctx context.Context, ingress *networkingv1.Ingress) error
 	getDNS           func(ctx context.Context, ingress *networkingv1.Ingress) (*v1.DNSRecord, error)
 	createDNS        func(ctx context.Context, dns *v1.DNSRecord) (*v1.DNSRecord, error)
-	updateDNS        func(ctx context.Context, dns *v1.DNSRecord) error
+	updateDNS        func(ctx context.Context, dns *v1.DNSRecord) (*v1.DNSRecord, error)
 	watchHost        func(ctx context.Context, key interface{}, host string) bool
 	forgetHost       func(key interface{}, host string)
 	listHostWatchers func(key interface{}) []net.RecordWatcher
@@ -41,49 +45,59 @@ type dnsReconciler struct {
 
 func (r *dnsReconciler) reconcile(ctx context.Context, ingress *networkingv1.Ingress) (reconcileStatus, error) {
 	if ingress.DeletionTimestamp != nil && !ingress.DeletionTimestamp.IsZero() {
-		// delete DNSRecord
 		if err := r.deleteDNS(ctx, ingress); err != nil && !k8errors.IsNotFound(err) {
 			return reconcileStatusStop, err
 		}
 		return reconcileStatusContinue, nil
 	}
 
-	ingressStatus := &networkingv1.IngressStatus{}
-	var activeHosts []string
-	for k, v := range ingress.Annotations {
-		key := ingressKey(ingress)
-		if !strings.Contains(k, workloadMigration.WorkloadStatusAnnotation) {
-			continue
-		}
-		annotationParts := strings.Split(k, "/")
-		if len(annotationParts) < 2 {
-			r.log.Error(errors.New("invalid workloadStatus annotation format"), "could not process target")
-			continue
-		}
-		//skip IP record if cluster is being deleted by KCP
-		if metadata.HasAnnotation(ingress, workloadMigration.WorkloadDeletingAnnotation+annotationParts[1]) {
-			continue
-		}
-		err := json.Unmarshal([]byte(v), ingressStatus)
-		if err != nil {
-			return reconcileStatusStop, err
-		}
-		// Start watching for address changes in the LBs hostnames
-		for _, lbs := range ingressStatus.LoadBalancer.Ingress {
-			if lbs.Hostname != "" {
-				r.watchHost(ctx, key, lbs.Hostname)
-				activeHosts = append(activeHosts, lbs.Hostname)
-			}
-		}
+	key := objectKey(ingress)
+	managedHost := ingress.Annotations[ANNOTATION_HCG_HOST]
+	activeLBHosts := []string{}
+	activeDNSTargetIPs := map[string][]string{}
+	deletingTargetIPs := map[string][]string{}
 
-		hostRecordWatchers := r.listHostWatchers(key)
-		for _, watcher := range hostRecordWatchers {
-			if !slice.ContainsString(activeHosts, watcher.Host) {
-				r.forgetHost(key, watcher.Host)
+	// get status blocks. An array is returned to allow for more than one placement
+	statuses, err := GetStatus(ingress)
+	if err != nil {
+		return reconcileStatusContinue, err
+	}
+	//discover active and deleting targets and setup watchers for non ip load balancer results
+	for cluster, status := range statuses {
+		statusTargets, err := r.targetsFromIngressStatus(ctx, status)
+		if err != nil {
+			return reconcileStatusContinue, err
+		}
+		deleteAnnotation := workloadMigration.WorkloadDeletingAnnotation + cluster.String()
+		if metadata.HasAnnotation(ingress, deleteAnnotation) {
+			for host, target := range statusTargets {
+				deletingTargetIPs[host] = append(deletingTargetIPs[host], target.value...)
 			}
+			continue
+		}
+		for host, target := range statusTargets {
+			if metadata.HasAnnotation(ingress, deleteAnnotation) {
+				continue
+			}
+			if target.targetType == targetTypeHost {
+				r.watchHost(ctx, key, host)
+				activeLBHosts = append(activeLBHosts, host)
+			}
+			activeDNSTargetIPs[host] = append(activeDNSTargetIPs[host], target.value...)
 		}
 	}
-
+	//no non-deleting hosts have an IP yet, so continue using IPs of "losing" clusters
+	if len(activeDNSTargetIPs) == 0 && len(deletingTargetIPs) > 0 {
+		r.log.V(3).Info("setting the dns target to the deleting target as no new dns targets set yet")
+		activeDNSTargetIPs = deletingTargetIPs
+	}
+	// clean up any watchers no longer needed
+	hostRecordWatchers := r.listHostWatchers(key)
+	for _, watcher := range hostRecordWatchers {
+		if !slice.ContainsString(activeLBHosts, watcher.Host) {
+			r.forgetHost(key, watcher.Host)
+		}
+	}
 	// Attempt to retrieve the existing DNSRecord for this Ingress
 	existing, err := r.getDNS(ctx, ingress)
 	// If it doesn't exist, create it
@@ -91,55 +105,30 @@ func (r *dnsReconciler) reconcile(ctx context.Context, ingress *networkingv1.Ing
 		if !k8errors.IsNotFound(err) {
 			return reconcileStatusStop, err
 		}
-		// doesn't exist so Create the DNSRecord object
-		record := &v1.DNSRecord{}
-
-		record.TypeMeta = metav1.TypeMeta{
-			APIVersion: v1.SchemeGroupVersion.String(),
-			Kind:       "DNSRecord",
-		}
-		record.ObjectMeta = metav1.ObjectMeta{
-			Annotations: map[string]string{
-				logicalcluster.AnnotationKey: logicalcluster.From(ingress).String(),
-			},
-			Name:      ingress.Name,
-			Namespace: ingress.Namespace,
-		}
-
-		// Sets the Ingress as the owner reference
-		record.SetOwnerReferences([]metav1.OwnerReference{
-			{
-				APIVersion:         networkingv1.SchemeGroupVersion.String(),
-				Kind:               "Ingress",
-				Name:               ingress.Name,
-				UID:                ingress.UID,
-				Controller:         pointer.Bool(true),
-				BlockOwnerDeletion: pointer.Bool(true),
-			},
-		})
-		if err := r.setDnsRecordFromIngress(ctx, ingress, record); err != nil {
-			return reconcileStatusStop, err
-		}
-		// Create the resource in the cluster
-		existing, err = r.createDNS(ctx, record)
+		record, err := newDNSRecordForObject(ingress)
 		if err != nil {
-			return reconcileStatusStop, err
+			return reconcileStatusContinue, err
 		}
-
-		// metric to observe the ingress admission time
-		ingressObjectTimeToAdmission.
-			Observe(existing.CreationTimestamp.Time.Sub(ingress.CreationTimestamp.Time).Seconds())
+		r.setEndpointFromTargets(managedHost, activeDNSTargetIPs, record)
+		// Create the resource in the cluster
+		if len(record.Spec.Endpoints) > 0 {
+			r.log.V(3).Info("creating DNSRecord ", "record", record.Name, "endpoints for DNSRecord", "endpoints", record.Spec.Endpoints)
+			existing, err = r.createDNS(ctx, record)
+			if err != nil {
+				return reconcileStatusContinue, err
+			}
+			// metric to observe the ingress admission time
+			ingressObjectTimeToAdmission.
+				Observe(existing.CreationTimestamp.Time.Sub(ingress.CreationTimestamp.Time).Seconds())
+		}
 		return reconcileStatusContinue, nil
-
 	}
 	// If it does exist, update it
 	copyDNS := existing.DeepCopy()
-	if err := r.setDnsRecordFromIngress(ctx, ingress, existing); err != nil {
-		return reconcileStatusStop, err
-	}
-
+	r.setEndpointFromTargets(managedHost, activeDNSTargetIPs, copyDNS)
 	if !equality.Semantic.DeepEqual(copyDNS, existing) {
-		if err = r.updateDNS(ctx, existing); err != nil {
+		r.log.V(3).Info("updating DNSRecord ", "record", copyDNS.Name, "endpoints for DNSRecord", "endpoints", copyDNS.Spec.Endpoints)
+		if _, err = r.updateDNS(ctx, copyDNS); err != nil {
 			return reconcileStatusStop, err
 		}
 	}
@@ -147,131 +136,106 @@ func (r *dnsReconciler) reconcile(ctx context.Context, ingress *networkingv1.Ing
 	return reconcileStatusContinue, nil
 }
 
-func (r *dnsReconciler) setDnsRecordFromIngress(ctx context.Context, ingress *networkingv1.Ingress, dnsRecord *v1.DNSRecord) error {
-	key, err := cache.MetaNamespaceKeyFunc(ingress)
+func newDNSRecordForObject(obj runtime.Object) (*v1.DNSRecord, error) {
+	objMeta, err := meta.Accessor(obj)
 	if err != nil {
-		return fmt.Errorf("failed to get namespace key for ingress %s", err)
+		return nil, err
+	}
+	record := &v1.DNSRecord{}
+
+	record.TypeMeta = metav1.TypeMeta{
+		APIVersion: v1.SchemeGroupVersion.String(),
+		Kind:       "DNSRecord",
+	}
+	objGroupVersion := schema.GroupVersion{Group: obj.GetObjectKind().GroupVersionKind().Group, Version: obj.GetObjectKind().GroupVersionKind().Version}
+	// Sets the Ingress as the owner reference
+	record.SetOwnerReferences([]metav1.OwnerReference{
+		{
+			APIVersion:         objGroupVersion.String(),
+			Kind:               obj.GetObjectKind().GroupVersionKind().Kind,
+			Name:               objMeta.GetName(),
+			UID:                objMeta.GetUID(),
+			Controller:         pointer.Bool(true),
+			BlockOwnerDeletion: pointer.Bool(true),
+		},
+	})
+	record.ObjectMeta = metav1.ObjectMeta{
+		Annotations: map[string]string{
+			logicalcluster.AnnotationKey: logicalcluster.From(objMeta).String(),
+		},
+		Name:      objMeta.GetName(),
+		Namespace: objMeta.GetNamespace(),
+	}
+	if _, ok := record.Annotations[annotationIngressKey]; !ok {
+		if record.Annotations == nil {
+			record.Annotations = map[string]string{}
+		}
+		record.Annotations[annotationIngressKey] = string(objectKey(obj))
 	}
 
-	if _, ok := dnsRecord.Annotations[annotationIngressKey]; !ok {
-		if dnsRecord.Annotations == nil {
-			dnsRecord.Annotations = map[string]string{}
-		}
-		dnsRecord.Annotations[annotationIngressKey] = key
-	}
-	metadata.CopyAnnotationsPredicate(ingress, dnsRecord, metadata.KeyPredicate(func(key string) bool {
+	metadata.CopyAnnotationsPredicate(objMeta, record, metadata.KeyPredicate(func(key string) bool {
 		return strings.HasPrefix(key, ANNOTATION_HEALTH_CHECK_PREFIX)
 	}))
-	return r.setEndpointsFromIngress(ctx, ingress, dnsRecord)
+	return record, nil
+
 }
 
-func (r *dnsReconciler) setEndpointsFromIngress(ctx context.Context, ingress *networkingv1.Ingress, dnsRecord *v1.DNSRecord) error {
-	targets, err := r.targetsFromIngress(ctx, ingress)
-	if err != nil {
-		return err
-	}
-
-	hostname := ingress.Annotations[ANNOTATION_HCG_HOST]
-
-	// Build a map[Address]Endpoint with the current endpoints to assist
-	// finding endpoints that match the targets
+func (r *dnsReconciler) setEndpointFromTargets(dnsName string, dnsTargets map[string][]string, dnsRecord *v1.DNSRecord) {
 	currentEndpoints := make(map[string]*v1.Endpoint, len(dnsRecord.Spec.Endpoints))
 	for _, endpoint := range dnsRecord.Spec.Endpoints {
 		address, ok := endpoint.GetAddress()
 		if !ok {
 			continue
 		}
-
 		currentEndpoints[address] = endpoint
 	}
-
-	var newEndpoints []*v1.Endpoint
-
-	for _, ingressTargets := range targets {
-		for _, target := range ingressTargets {
-			var endpoint *v1.Endpoint
-			ok := false
-
+	var (
+		newEndpoints []*v1.Endpoint
+		endpoint     *v1.Endpoint
+	)
+	ok := false
+	for _, targets := range dnsTargets {
+		for _, target := range targets {
 			// If the endpoint for this target does not exist, add a new one
 			if endpoint, ok = currentEndpoints[target]; !ok {
 				endpoint = &v1.Endpoint{
 					SetIdentifier: target,
 				}
 			}
-
-			newEndpoints = append(newEndpoints, endpoint)
-
 			// Update the endpoint fields
-			endpoint.DNSName = hostname
+			endpoint.DNSName = dnsName
 			endpoint.RecordType = "A"
 			endpoint.Targets = []string{target}
 			endpoint.RecordTTL = 60
-			endpoint.SetProviderSpecific(aws.ProviderSpecificWeight, awsEndpointWeight(len(ingressTargets)))
+			endpoint.SetProviderSpecific(aws.ProviderSpecificWeight, awsEndpointWeight(len(targets)))
+			newEndpoints = append(newEndpoints, endpoint)
 		}
 	}
 
 	dnsRecord.Spec.Endpoints = newEndpoints
-	return nil
 }
 
-// targetsFromIngress returns a map of all the IPs associated with a single ingress(cluster)
-func (r *dnsReconciler) targetsFromIngress(ctx context.Context, ingress *networkingv1.Ingress) (map[string][]string, error) {
-	targets := map[string][]string{}
-	deletingTargets := map[string][]string{}
-
-	ingressStatus := &networkingv1.IngressStatus{}
-	//find all annotations of a workload status (indicates a synctarget for this resource)
-	_, annotations := metadata.HasAnnotationsContaining(ingress, workloadMigration.WorkloadStatusAnnotation)
-	for k, v := range annotations {
-		//get the cluster name
-		annotationParts := strings.Split(k, "/")
-		if len(annotationParts) < 2 {
-			r.log.Error(errors.New("invalid workloadStatus annotation format"), "skipping sync target")
-			continue
-		}
-		clusterName := annotationParts[1]
-
-		err := json.Unmarshal([]byte(v), ingressStatus)
-		if err != nil {
-			return nil, err
-		}
-		statusTargets, err := r.targetsFromIngressStatus(ctx, ingressStatus)
-		if err != nil {
-			return nil, err
-		}
-
-		if metadata.HasAnnotation(ingress, workloadMigration.WorkloadDeletingAnnotation+clusterName) {
-			for host, ips := range statusTargets {
-				deletingTargets[host] = append(deletingTargets[host], ips...)
-			}
-			continue
-		}
-		for host, ips := range statusTargets {
-			targets[host] = append(targets[host], ips...)
-		}
-	}
-	//no non-deleting hosts have an IP yet, so continue using IPs of "losing" clusters
-	if len(targets) == 0 && len(deletingTargets) > 0 {
-		return deletingTargets, nil
-	}
-
-	return targets, nil
+type target struct {
+	targetType string
+	value      []string
 }
 
-func (r *dnsReconciler) targetsFromIngressStatus(ctx context.Context, ingressStatus *networkingv1.IngressStatus) (map[string][]string, error) {
-	targets := map[string][]string{}
+func (r *dnsReconciler) targetsFromIngressStatus(ctx context.Context, ingressStatus *networkingv1.IngressStatus) (map[string]target, error) {
+	targets := map[string]target{}
 	for _, lb := range ingressStatus.LoadBalancer.Ingress {
 		if lb.IP != "" {
-			targets[lb.IP] = []string{lb.IP}
+			targets[lb.IP] = target{value: []string{lb.IP}, targetType: targetTypeIP}
 		}
 		if lb.Hostname != "" {
 			ips, err := r.DNSLookup(ctx, lb.Hostname)
 			if err != nil {
 				return nil, err
 			}
-			targets[lb.Hostname] = []string{}
+			targets[lb.Hostname] = target{value: []string{}, targetType: targetTypeHost}
 			for _, ip := range ips {
-				targets[lb.Hostname] = append(targets[lb.Hostname], ip.IP.String())
+				t := targets[lb.Hostname]
+				t.value = append(targets[lb.Hostname].value, ip.IP.String())
+				targets[lb.Hostname] = t
 			}
 		}
 	}
@@ -295,11 +259,12 @@ func awsEndpointWeight(numIPs int) string {
 	return strconv.Itoa(maxWeight / numIPs)
 }
 
-func (c *Controller) updateDNS(ctx context.Context, dns *v1.DNSRecord) error {
-	if _, err := c.kuadrantClient.Cluster(logicalcluster.From(dns)).KuadrantV1().DNSRecords(dns.Namespace).Update(ctx, dns, metav1.UpdateOptions{}); err != nil {
-		return err
+func (c *Controller) updateDNS(ctx context.Context, dns *v1.DNSRecord) (*v1.DNSRecord, error) {
+	updated, err := c.kuadrantClient.Cluster(logicalcluster.From(dns)).KuadrantV1().DNSRecords(dns.Namespace).Update(ctx, dns, metav1.UpdateOptions{})
+	if err != nil {
+		return nil, err
 	}
-	return nil
+	return updated, nil
 }
 
 func (c *Controller) deleteDNS(ctx context.Context, ingress *networkingv1.Ingress) error {
