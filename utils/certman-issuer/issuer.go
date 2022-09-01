@@ -41,7 +41,7 @@ func main() {
 	var tlsProvider = ""
 	var awsRegion = ""
 
-	flag.StringVar(&outputFile, "output-file", "./tmp/issuer.yaml", "Where to output the files")
+	flag.StringVar(&outputFile, "output-file", "./config/default/issuer.yaml", "Where to output the files")
 	flag.StringVar(&tlsProvider, "glbc-tls-provider", env.GetEnvString("GLBC_TLS_PROVIDER", "glbc-ca"), "The TLS certificate issuer, one of [glbc-ca, le-staging, le-production]")
 	flag.StringVar(&awsRegion, "region", env.GetEnvString("AWS_REGION", "eu-central-1"), "the region we should target with AWS clients")
 	flag.Parse()
