@@ -16,7 +16,7 @@ import (
 )
 
 var (
-	NoSuchHost = errors.New("No such host")
+	NoSuchHost = errors.New("no such host")
 )
 
 func IsNoSuchHostError(err error) bool {
@@ -80,6 +80,10 @@ func (r *ConfigMapHostResolver) TxtRecordExists(ctx context.Context, domain stri
 		return false, err
 	}
 
+	if configMap.Data == nil {
+		return false, NoSuchHost
+	}
+
 	ipsValue, ok := configMap.Data[domain]
 	if !ok {
 		return false, NoSuchHost
@@ -88,6 +92,7 @@ func (r *ConfigMapHostResolver) TxtRecordExists(ctx context.Context, domain stri
 	var values []struct {
 		TXT string
 	}
+
 	if err := json.Unmarshal([]byte(ipsValue), &values); err != nil {
 		return false, err
 	}

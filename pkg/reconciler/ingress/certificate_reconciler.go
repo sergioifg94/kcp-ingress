@@ -10,7 +10,6 @@ import (
 	certman "github.com/jetstack/cert-manager/pkg/apis/certmanager/v1"
 	cmmeta "github.com/jetstack/cert-manager/pkg/apis/meta/v1"
 
-	basereconciler "github.com/kuadrant/kcp-glbc/pkg/reconciler"
 	corev1 "k8s.io/api/core/v1"
 	networkingv1 "k8s.io/api/networking/v1"
 	"k8s.io/apimachinery/pkg/api/errors"
@@ -18,6 +17,8 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/client-go/tools/cache"
 	"k8s.io/utils/pointer"
+
+	basereconciler "github.com/kuadrant/kcp-glbc/pkg/reconciler"
 
 	"github.com/kcp-dev/logicalcluster/v2"
 
@@ -166,7 +167,7 @@ func (r *certificateReconciler) reconcile(ctx context.Context, ingress *networki
 
 	if ingress.DeletionTimestamp != nil && !ingress.DeletionTimestamp.IsZero() {
 		if err := r.deleteCertificate(ctx, certReq); err != nil && !strings.Contains(err.Error(), "not found") {
-			r.log.Info("error deleting certificate")
+			r.log.Info("error deleting certificate", "error", err)
 			return reconcileStatusStop, err
 		}
 		//TODO remove once owner refs work in kcp
@@ -258,7 +259,7 @@ func upsertTLS(ingress *networkingv1.Ingress, host, secretName string) {
 }
 
 func (c *Controller) deleteTLSSecret(ctx context.Context, workspace logicalcluster.Name, namespace, name string) error {
-	if err := c.kubeClient.Cluster(workspace).CoreV1().Secrets(namespace).Delete(ctx, name, metav1.DeleteOptions{}); err != nil && !k8serrors.IsNotFound(err) {
+	if err := c.KCPKubeClient.Cluster(workspace).CoreV1().Secrets(namespace).Delete(ctx, name, metav1.DeleteOptions{}); err != nil && !k8serrors.IsNotFound(err) {
 		return err
 	}
 	return nil
@@ -266,7 +267,7 @@ func (c *Controller) deleteTLSSecret(ctx context.Context, workspace logicalclust
 
 func (c *Controller) copySecret(ctx context.Context, workspace logicalcluster.Name, namespace string, secret *corev1.Secret) error {
 	secret.ResourceVersion = ""
-	secretClient := c.kubeClient.Cluster(workspace).CoreV1().Secrets(namespace)
+	secretClient := c.KCPKubeClient.Cluster(workspace).CoreV1().Secrets(namespace)
 	_, err := secretClient.Create(ctx, secret, metav1.CreateOptions{})
 	if err != nil && k8serrors.IsAlreadyExists(err) {
 		s, err := secretClient.Get(ctx, secret.Name, metav1.GetOptions{})

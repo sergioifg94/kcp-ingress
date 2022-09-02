@@ -89,15 +89,18 @@ func TestTLS(t *testing.T) {
 
 	// Create the Ingress
 	_, err = test.Client().Core().Cluster(logicalcluster.From(namespace)).NetworkingV1().Ingresses(namespace.Name).
-		Apply(test.Ctx(), IngressConfiguration(namespace.Name, name), ApplyOptions)
+		Apply(test.Ctx(), IngressConfiguration(namespace.Name, name, "test.gblb.com"), ApplyOptions)
 	test.Expect(err).NotTo(HaveOccurred())
 
 	// Wait until the Ingress is reconciled with the load balancer Ingresses
 	test.Eventually(Ingress(test, namespace, name)).WithTimeout(TestTimeoutMedium).Should(And(
 		WithTransform(Annotations, And(
 			HaveKey(ingressController.ANNOTATION_HCG_HOST),
-			HaveKey(ingressController.ANNOTATION_HCG_CUSTOM_HOST_REPLACED)),
-		),
+			HaveKey(ingressController.ANNOTATION_PENDING_CUSTOM_HOSTS),
+		)),
+		WithTransform(Labels, And(
+			HaveKey(ingressController.LABEL_HAS_PENDING_CUSTOM_HOSTS),
+		)),
 		WithTransform(LoadBalancerIngresses, HaveLen(1)),
 		Satisfy(HostsEqualsToGeneratedHost),
 	))

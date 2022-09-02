@@ -6,8 +6,9 @@ import (
 	"strings"
 
 	logicalcluster "github.com/kcp-dev/logicalcluster/v2"
-	"github.com/kuadrant/kcp-glbc/pkg/util/workloadMigration"
 	networkingv1 "k8s.io/api/networking/v1"
+
+	"github.com/kuadrant/kcp-glbc/pkg/util/workloadMigration"
 )
 
 //GetStatus will return a set of statuses for each targeted cluster
@@ -19,7 +20,6 @@ func GetStatus(i *networkingv1.Ingress) (map[logicalcluster.Name]*networkingv1.I
 			continue
 		}
 		annotationParts := strings.Split(k, "/")
-		fmt.Println("get status annoation parts", annotationParts)
 		if len(annotationParts) < 2 {
 			return nil, fmt.Errorf("advanced scheduling annotation malformed %s value %s", workloadMigration.WorkloadStatusAnnotation, i.Annotations[k])
 		}

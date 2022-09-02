@@ -24,7 +24,7 @@ type reconcileStatus int
 const (
 	reconcileStatusStop reconcileStatus = iota
 	reconcileStatusContinue
-	cascadeCleanupFinalizer  = "kaudrant.dev/cascade-cleanup"
+	cascadeCleanupFinalizer  = "kuadrant.dev/cascade-cleanup"
 	GeneratedRulesAnnotation = "kuadrant.dev/custom-hosts.generated"
 )
 
@@ -48,7 +48,6 @@ func (c *Controller) reconcile(ctx context.Context, ingress *networkingv1.Ingres
 			managedDomain:          c.domain,
 			log:                    c.Logger,
 			customHostsEnabled:     c.customHostsEnabled,
-			kuadrantClient:         c.kuadrantClient,
 			GetDomainVerifications: c.getDomainVerifications,
 		},
 		&certificateReconciler{

@@ -17,14 +17,22 @@ limitations under the License.
 package support
 
 import (
-	"github.com/onsi/gomega"
+	"encoding/json"
 
+	"github.com/onsi/gomega"
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	corev1apply "k8s.io/client-go/applyconfigurations/core/v1"
 
 	"github.com/kcp-dev/logicalcluster/v2"
 
 	kuadrantv1 "github.com/kuadrant/kcp-glbc/pkg/apis/kuadrant/v1"
+	"github.com/kuadrant/kcp-glbc/pkg/net"
+)
+
+const (
+	ConfigmapName      = "hosts"
+	ConfigmapNamespace = "kcp-glbc"
 )
 
 func GetDNSRecord(t Test, namespace *corev1.Namespace, name string) *kuadrantv1.DNSRecord {
@@ -72,4 +80,74 @@ func DNSRecordCondition(zoneID, condition string) func(record *kuadrantv1.DNSRec
 		}
 		return nil
 	}
+}
+
+type Record struct {
+	TXT string `json:"TXT,omitempty"`
+	A   string `json:"A,omitempty"`
+}
+
+type Zone []Record
+
+func AddRecord(t Test, host string, record Record) error {
+	currentZone, err := GetZone(t, host)
+	if err != nil && !net.IsNoSuchHostError(err) {
+		return err
+	}
+	currentZone = append(currentZone, record)
+	byteValue, err := json.Marshal(currentZone)
+	if err != nil {
+		return err
+	}
+	return setDNSRecord(t, host, string(byteValue))
+}
+
+func SetTXTRecord(t Test, host, value string) error {
+	return AddRecord(t, host, Record{TXT: value})
+}
+
+func SetARecord(t Test, host, value string) error {
+	return AddRecord(t, host, Record{A: value})
+}
+
+func GetZone(t Test, host string) (Zone, error) {
+	cfg, err := t.Client().Core().Cluster(GLBCWorkspace).CoreV1().ConfigMaps(ConfigmapNamespace).Get(t.Ctx(), ConfigmapName, metav1.GetOptions{})
+	if err != nil {
+		return nil, err
+	}
+	values := cfg.Data
+	results := Zone{}
+	if values == nil {
+		return results, nil
+	}
+	if value, ok := values[host]; ok {
+		json.Unmarshal([]byte(value), &results)
+		return results, nil
+	}
+	return results, net.NoSuchHost
+}
+
+//setDNSRecord - do not call this directly - use SetTXTRecord or SetARecord
+func setDNSRecord(t Test, key, value string) error {
+	cfg, err := t.Client().Core().Cluster(GLBCWorkspace).CoreV1().ConfigMaps(ConfigmapNamespace).Get(t.Ctx(), ConfigmapName, metav1.GetOptions{})
+	if err != nil {
+		return err
+	}
+	values := cfg.Data
+	if values == nil {
+		values = map[string]string{}
+	}
+	values[key] = value
+	return setDNSRecords(t, values)
+}
+
+//setDNSRecords - do not call this directly - use SetTXTRecord or SetARecord
+func setDNSRecords(t Test, values map[string]string) error {
+	_, err := t.Client().Core().Cluster(GLBCWorkspace).CoreV1().ConfigMaps(ConfigmapNamespace).Apply(
+		t.Ctx(),
+		corev1apply.ConfigMap(ConfigmapName, ConfigmapNamespace).WithData(values),
+		ApplyOptions,
+	)
+
+	return err
 }

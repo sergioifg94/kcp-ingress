@@ -20,8 +20,9 @@ import (
 	"encoding/json"
 	"strings"
 
-	"github.com/kuadrant/kcp-glbc/pkg/util/workloadMigration"
 	"github.com/onsi/gomega"
+
+	"github.com/kuadrant/kcp-glbc/pkg/util/workloadMigration"
 
 	corev1 "k8s.io/api/core/v1"
 	networkingv1 "k8s.io/api/networking/v1"
@@ -86,6 +87,33 @@ func HostsEqualsToGeneratedHost(ingress *networkingv1.Ingress) bool {
 		}
 	}
 	return equals
+}
+
+// IngressHosts returns each unique host used in the rules
+func IngressHosts(ingress *networkingv1.Ingress) map[string]string {
+	hosts := map[string]string{}
+	for _, rule := range ingress.Spec.Rules {
+		hosts[rule.Host] = rule.Host
+	}
+	return hosts
+}
+
+// IngressPendingHosts returns each unique host in the pending rules annotation
+func IngressPendingHosts(ingress *networkingv1.Ingress) map[string]string {
+	hosts := map[string]string{}
+	pendingRules := ingressController.Pending{}
+	pendingRulesAnnotation, ok := ingress.Annotations[ingressController.ANNOTATION_PENDING_CUSTOM_HOSTS]
+	if !ok {
+		return hosts
+	}
+	if err := json.Unmarshal([]byte(pendingRulesAnnotation), &pendingRules); err != nil {
+		return hosts
+	}
+
+	for _, rule := range pendingRules.Rules {
+		hosts[rule.Host] = rule.Host
+	}
+	return hosts
 }
 
 func HasTLSSecretForGeneratedHost(secret string) func(ingress *networkingv1.Ingress) bool {

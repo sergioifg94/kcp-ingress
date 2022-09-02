@@ -4,10 +4,12 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	v1 "github.com/kuadrant/kcp-glbc/pkg/apis/kuadrant/v1"
+	"testing"
+
 	"k8s.io/apimachinery/pkg/api/equality"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	"testing"
+
+	v1 "github.com/kuadrant/kcp-glbc/pkg/apis/kuadrant/v1"
 
 	networkingv1 "k8s.io/api/networking/v1"
 )
@@ -496,7 +498,7 @@ func TestProcessCustomHostValidation(t *testing.T) {
 			// Assert the expected generated rules matches the
 			// annotation
 			if testCase.expectedPendingRules.Rules != nil {
-				annotation, ok := ingress.Annotations[PendingCustomHostsAnnotation]
+				annotation, ok := ingress.Annotations[ANNOTATION_PENDING_CUSTOM_HOSTS]
 				if !ok {
 					t.Fatalf("expected GeneratedRulesAnnotation to be set")
 				}

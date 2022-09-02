@@ -18,10 +18,9 @@ import (
 	"k8s.io/client-go/tools/cache"
 	"k8s.io/client-go/util/workqueue"
 
-	kuadrantv1 "github.com/kuadrant/kcp-glbc/pkg/apis/kuadrant/v1"
-
-	tenancyv1alpha1 "github.com/kcp-dev/kcp/pkg/apis/tenancy/v1alpha1"
 	"github.com/kcp-dev/logicalcluster/v2"
+
+	kuadrantv1 "github.com/kuadrant/kcp-glbc/pkg/apis/kuadrant/v1"
 
 	certman "github.com/jetstack/cert-manager/pkg/apis/certmanager/v1"
 	certmaninformer "github.com/jetstack/cert-manager/pkg/client/informers/externalversions"
@@ -51,14 +50,16 @@ func NewController(config *ControllerConfig) *Controller {
 	hostResolver := config.HostResolver
 	switch impl := hostResolver.(type) {
 	case *net.ConfigMapHostResolver:
-		impl.Client = config.KubeClient.Cluster(tenancyv1alpha1.RootCluster)
+		impl.Client = config.KubeClient
 	}
+
 	hostResolver = net.NewSafeHostResolver(hostResolver)
 
 	base := basereconciler.NewController(controllerName, queue)
 	c := &Controller{
 		Controller:                base,
 		kubeClient:                config.KubeClient,
+		KCPKubeClient:             config.KCPKubeClient,
 		certProvider:              config.CertProvider,
 		sharedInformerFactory:     config.KCPSharedInformerFactory,
 		glbcInformerFactory:       config.GlbcInformerFactory,
@@ -230,7 +231,8 @@ func NewController(config *ControllerConfig) *Controller {
 
 type ControllerConfig struct {
 	*basereconciler.ControllerConfig
-	KubeClient                kubernetes.ClusterInterface
+	KCPKubeClient             kubernetes.ClusterInterface
+	KubeClient                kubernetes.Interface
 	DnsRecordClient           kuadrantclientv1.ClusterInterface
 	KCPSharedInformerFactory  informers.SharedInformerFactory
 	CertificateInformer       certmaninformer.SharedInformerFactory
@@ -241,11 +243,13 @@ type ControllerConfig struct {
 	HostResolver              net.HostResolver
 	CustomHostsEnabled        bool
 	AdvancedSchedulingEnabled bool
+	GLBCWorkspace             logicalcluster.Name
 }
 
 type Controller struct {
 	*basereconciler.Controller
-	kubeClient                kubernetes.ClusterInterface
+	kubeClient                kubernetes.Interface
+	KCPKubeClient             kubernetes.ClusterInterface
 	sharedInformerFactory     informers.SharedInformerFactory
 	kuadrantClient            kuadrantclientv1.ClusterInterface
 	indexer                   cache.Indexer
@@ -297,7 +301,7 @@ func (c *Controller) process(ctx context.Context, key string) error {
 	}
 	if !equality.Semantic.DeepEqual(current, target) {
 		c.Logger.V(3).Info("attempting update of changed ingress ", "ingress key ", key)
-		_, err := c.kubeClient.Cluster(logicalcluster.From(target)).NetworkingV1().Ingresses(target.Namespace).Update(ctx, target, metav1.UpdateOptions{})
+		_, err := c.KCPKubeClient.Cluster(logicalcluster.From(target)).NetworkingV1().Ingresses(target.Namespace).Update(ctx, target, metav1.UpdateOptions{})
 		return err
 	}
 
@@ -321,7 +325,7 @@ func (c *Controller) ingressesFromDomainVerification(obj interface{}) ([]*networ
 
 	// find all ingresses in this workspace with pending hosts that contain this domains
 	ingressList, err := c.ingressLister.Ingresses("").List(labels.SelectorFromSet(labels.Set{
-		PendingCustomHostsLabel: "true",
+		LABEL_HAS_PENDING_CUSTOM_HOSTS: "true",
 	}))
 	if err != nil {
 		return nil, err
@@ -330,7 +334,7 @@ func (c *Controller) ingressesFromDomainVerification(obj interface{}) ([]*networ
 	ingressesToEnqueue := []*networkingv1.Ingress{}
 
 	for _, ingress := range ingressList {
-		pendingRulesAnnotation, ok := ingress.Annotations[PendingCustomHostsAnnotation]
+		pendingRulesAnnotation, ok := ingress.Annotations[ANNOTATION_PENDING_CUSTOM_HOSTS]
 		if !ok {
 			continue
 		}

@@ -14,7 +14,6 @@ import (
 	networkingv1 "k8s.io/api/networking/v1"
 
 	v1 "github.com/kuadrant/kcp-glbc/pkg/apis/kuadrant/v1"
-	kuadrantclientv1 "github.com/kuadrant/kcp-glbc/pkg/client/kuadrant/clientset/versioned"
 	"github.com/kuadrant/kcp-glbc/pkg/util/metadata"
 )
 
@@ -22,13 +21,12 @@ type hostReconciler struct {
 	managedDomain          string
 	log                    logr.Logger
 	customHostsEnabled     bool
-	kuadrantClient         kuadrantclientv1.ClusterInterface
 	GetDomainVerifications func(ctx context.Context, ingress *networkingv1.Ingress) (*v1.DomainVerificationList, error)
 }
 
 const (
-	PendingCustomHostsAnnotation = "pendingCustomHosts"
-	PendingCustomHostsLabel      = "hasPendingCustomHosts"
+	ANNOTATION_PENDING_CUSTOM_HOSTS = "pendingCustomHosts"
+	LABEL_HAS_PENDING_CUSTOM_HOSTS  = "hasPendingCustomHosts"
 )
 
 type Pending struct {
@@ -97,7 +95,7 @@ func doProcessCustomHosts(ingress *networkingv1.Ingress, dvs *v1.DomainVerificat
 			continue
 		}
 
-		verified, err := IsDomainVerified(ingress, rule.Host, dvs.Items)
+		verified, err := IsDomainVerified(rule.Host, dvs.Items)
 		if err != nil {
 			return reconcileStatusContinue, err
 		}
@@ -117,7 +115,7 @@ func doProcessCustomHosts(ingress *networkingv1.Ingress, dvs *v1.DomainVerificat
 	ingress.Spec.Rules = verifiedRules
 
 	//test all the rules in the pending rules annotation to see if they are verified now
-	pendingRulesRaw := ingress.Annotations[PendingCustomHostsAnnotation]
+	pendingRulesRaw := ingress.Annotations[ANNOTATION_PENDING_CUSTOM_HOSTS]
 	pending := &Pending{}
 	if pendingRulesRaw != "" {
 		err := json.Unmarshal([]byte(pendingRulesRaw), pending)
@@ -132,7 +130,7 @@ func doProcessCustomHosts(ingress *networkingv1.Ingress, dvs *v1.DomainVerificat
 		generatedHostRule.Host = generatedHost
 		ingress.Spec.Rules = append(ingress.Spec.Rules, generatedHostRule)
 
-		verified, err := IsDomainVerified(ingress, pendingRule.Host, dvs.Items)
+		verified, err := IsDomainVerified(pendingRule.Host, dvs.Items)
 		if err != nil {
 			return reconcileStatusContinue, err
 		}
@@ -149,49 +147,50 @@ func doProcessCustomHosts(ingress *networkingv1.Ingress, dvs *v1.DomainVerificat
 	//put the new unverified rules in the list of pending rules and update the annotation
 	pending.Rules = append(preservedPendingRules, unverifiedRules...)
 	if len(pending.Rules) > 0 {
-		metadata.AddLabel(ingress, PendingCustomHostsLabel, "true")
+		metadata.AddLabel(ingress, LABEL_HAS_PENDING_CUSTOM_HOSTS, "true")
 		newAnnotation, err := json.Marshal(pending)
 		if err != nil {
 			return reconcileStatusContinue, err
 		}
-		ingress.Annotations[PendingCustomHostsAnnotation] = string(newAnnotation)
+		ingress.Annotations[ANNOTATION_PENDING_CUSTOM_HOSTS] = string(newAnnotation)
 		return reconcileStatusContinue, nil
 	}
-	metadata.RemoveLabel(ingress, PendingCustomHostsLabel)
-	metadata.RemoveAnnotation(ingress, PendingCustomHostsAnnotation)
+	metadata.RemoveLabel(ingress, LABEL_HAS_PENDING_CUSTOM_HOSTS)
+	metadata.RemoveAnnotation(ingress, ANNOTATION_PENDING_CUSTOM_HOSTS)
 	return reconcileStatusContinue, nil
 }
 
 // IsDomainVerified will take the host and recursively remove subdomains searching for a matching domainverification
 // that is verified. Until either a match is found, or the subdomains run out.
-func IsDomainVerified(ingress *networkingv1.Ingress, host string, dvs []v1.DomainVerification) (bool, error) {
+func IsDomainVerified(host string, dvs []v1.DomainVerification) (bool, error) {
+	if len(dvs) == 0 {
+		return false, nil
+	}
+	for _, dv := range dvs {
+		if dv.Spec.Domain == host && dv.Status.Verified {
+			return true, nil
+		}
+	}
+
 	parentHostParts := strings.SplitN(host, ".", 2)
 	//we've run out of sub-domains
 	if len(parentHostParts) < 2 {
 		return false, nil
 	}
 
-	parentHost := parentHostParts[1]
-
-	for _, dv := range dvs {
-		if dv.Spec.Domain == parentHost && dv.Status.Verified {
-			return true, nil
-		}
-	}
-
 	//recurse up the subdomains
-	return IsDomainVerified(ingress, parentHost, dvs)
+	return IsDomainVerified(parentHostParts[1], dvs)
 }
 
 func hostMatches(host, domain string) bool {
+	if host == domain {
+		return true
+	}
+
 	parentHostParts := strings.SplitN(host, ".", 2)
 
 	if len(parentHostParts) < 2 {
 		return false
-	}
-
-	if parentHostParts[1] == domain {
-		return true
 	}
 
 	return hostMatches(parentHostParts[1], domain)

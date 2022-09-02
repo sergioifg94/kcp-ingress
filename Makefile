@@ -158,7 +158,7 @@ clean-ld-config: clean-ld-env clean-ld-kubeconfig ## Remove local deployment fil
 
 LOCAL_SETUP_FLAGS=""
 ifeq ($(DO_BREW),true)
-	LOCAL_SETUP_FLAGS="-b"
+	LOCAL_SETUP_FLAGS:=-b
 endif
 
 .PHONY: local-setup
