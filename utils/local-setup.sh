@@ -207,9 +207,8 @@ KUBECONFIG=${KUBECONFIG_KCP_ADMIN} ${KUBECTL_KCP_BIN} workspace use "${ORG_WORKS
 # Create the kcp-glbc namespace, kcp-glbc-controller-manager service account and generate a kubeconfig for access
 KUBECONFIG=${KUBECONFIG_KCP_ADMIN} ${SCRIPT_DIR}/create_glbc_kubeconfig.sh -o ${KUBECONFIG_KCP_GLBC}
 
-# Create the default glbc-ca issuer
-go run ${SCRIPT_DIR}/certman-issuer/ --output-file ${TEMP_DIR}/issuer.yaml
-kubectl --kubeconfig=${KUBECONFIG_KCP_ADMIN} apply -n kcp-glbc -f ${TEMP_DIR}/issuer.yaml
+# Apply the default glbc-ca issuer
+kubectl --kubeconfig=${KUBECONFIG_KCP_ADMIN} apply -n kcp-glbc -f ./config/default/issuer.yaml
 
 #8. Switch to user workspace
 KUBECONFIG=${KUBECONFIG_KCP_ADMIN} ${KUBECTL_KCP_BIN} workspace use "${ORG_WORKSPACE}:kcp-glbc-user"

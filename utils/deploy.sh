@@ -151,10 +151,6 @@ deploy_glbc() {
   echo "Creating GLBC namespace"
   create_ns ${GLBC_NAMESPACE}
 
-  echo "Creating issuer"
-  go run ${DEPLOY_SCRIPT_DIR}/certman-issuer/ --output-file ${GLBC_KUSTOMIZATION}/issuer.yaml
-  kubectl apply -n ${GLBC_NAMESPACE} -f ${GLBC_KUSTOMIZATION}/issuer.yaml
-
   echo "Deploying GLBC"
   ${KUSTOMIZE_BIN} build ${GLBC_KUSTOMIZATION} | kubectl apply -f -
   echo "Waiting for GLBC deployments to be ready..."
