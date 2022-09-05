@@ -24,7 +24,7 @@ type reconcileStatus int
 const (
 	reconcileStatusStop reconcileStatus = iota
 	reconcileStatusContinue
-	cascadeCleanupFinalizer  = "kcp.dev/cascade-cleanup"
+	cascadeCleanupFinalizer  = "kaudrant.dev/cascade-cleanup"
 	GeneratedRulesAnnotation = "kuadrant.dev/custom-hosts.generated"
 )
 
