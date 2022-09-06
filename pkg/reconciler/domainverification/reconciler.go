@@ -27,12 +27,12 @@ type reconciler interface {
 	Name() string
 }
 
-type dnsVerifier interface {
+type DNSVerifier interface {
 	TxtRecordExists(ctx context.Context, domain string, value string) (bool, error)
 }
 
 type domainVerificationStatus struct {
-	dnsVerifier dnsVerifier
+	dnsVerifier DNSVerifier
 	requeAfter  func(item interface{}, duration time.Duration)
 	name        string
 }

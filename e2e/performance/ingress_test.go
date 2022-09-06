@@ -16,10 +16,11 @@ import (
 	networkingv1 "k8s.io/api/networking/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 
-	. "github.com/kuadrant/kcp-glbc/e2e/performance/support"
 	kuadrantv1 "github.com/kuadrant/kcp-glbc/pkg/apis/kuadrant/v1"
 	ingressController "github.com/kuadrant/kcp-glbc/pkg/reconciler/ingress"
 	"github.com/kuadrant/kcp-glbc/pkg/util/env"
+
+	. "github.com/kuadrant/kcp-glbc/e2e/performance/support"
 )
 
 func createTestIngress(t Test, namespace *corev1.Namespace) *networkingv1.Ingress {
@@ -92,8 +93,11 @@ func TestIngress(t *testing.T) {
 		test.Eventually(Ingress(test, namespace, ingress.Name)).WithTimeout(TestTimeoutMedium).Should(And(
 			WithTransform(Annotations, And(
 				HaveKey(ingressController.ANNOTATION_HCG_HOST),
-				HaveKey(ingressController.ANNOTATION_HCG_CUSTOM_HOST_REPLACED)),
-			),
+				HaveKey(ingressController.ANNOTATION_PENDING_CUSTOM_HOSTS),
+			)),
+			WithTransform(Labels, And(
+				HaveKey(ingressController.LABEL_HAS_PENDING_CUSTOM_HOSTS),
+			)),
 			WithTransform(LoadBalancerIngresses, HaveLen(1)),
 		))
 	}

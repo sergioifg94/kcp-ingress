@@ -3,10 +3,12 @@ package domainverification
 import (
 	"context"
 	"fmt"
+	"sync"
 	"time"
 
 	"k8s.io/apimachinery/pkg/api/equality"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/tools/cache"
 	"k8s.io/client-go/util/workqueue"
 
@@ -16,6 +18,7 @@ import (
 	kuadrantv1 "github.com/kuadrant/kcp-glbc/pkg/client/kuadrant/clientset/versioned"
 	"github.com/kuadrant/kcp-glbc/pkg/client/kuadrant/informers/externalversions"
 	kuadrantv1list "github.com/kuadrant/kcp-glbc/pkg/client/kuadrant/listers/kuadrant/v1"
+	"github.com/kuadrant/kcp-glbc/pkg/net"
 	basereconciler "github.com/kuadrant/kcp-glbc/pkg/reconciler"
 )
 
@@ -27,12 +30,23 @@ const (
 // NewController returns a new Controller which reconciles DomainValidation.
 func NewController(config *ControllerConfig) (*Controller, error) {
 	controllerName := config.GetName(defaultControllerName)
+
+	dnsVerifier := config.DNSVerifier
+	switch impl := dnsVerifier.(type) {
+	case *net.ConfigMapHostResolver:
+		impl.Client = config.KubeClient
+	}
+
+	dnsVerifier = NewSafeDNSVerifier(dnsVerifier)
+
 	queue := workqueue.NewNamedRateLimitingQueue(workqueue.DefaultControllerRateLimiter(), controllerName)
 	c := &Controller{
 		Controller:               basereconciler.NewController(controllerName, queue),
+		KubeClient:               config.KubeClient,
+		KCPKubeClient:            config.KCPKubeClient,
 		domainVerificationClient: config.DomainVerificationClient,
 		sharedInformerFactory:    config.SharedInformerFactory,
-		dnsVerifier:              config.DNSVerifier,
+		dnsVerifier:              dnsVerifier,
 	}
 	c.Process = c.process
 
@@ -53,15 +67,20 @@ type Controller struct {
 	indexer                  cache.Indexer
 	domainVerificationLister kuadrantv1list.DomainVerificationLister
 	domainVerificationClient kuadrantv1.ClusterInterface
+	KCPKubeClient            kubernetes.ClusterInterface
+	KubeClient               kubernetes.Interface
 	sharedInformerFactory    externalversions.SharedInformerFactory
-	dnsVerifier              dnsVerifier
+	dnsVerifier              DNSVerifier
 }
 
 type ControllerConfig struct {
 	*basereconciler.ControllerConfig
+	KCPKubeClient            kubernetes.ClusterInterface
+	KubeClient               *kubernetes.Clientset
 	DomainVerificationClient kuadrantv1.ClusterInterface
 	SharedInformerFactory    externalversions.SharedInformerFactory
-	DNSVerifier              dnsVerifier
+	DNSVerifier              DNSVerifier
+	GLBCWorkspace            logicalcluster.Name
 }
 
 func (c *Controller) process(ctx context.Context, key string) error {
@@ -71,7 +90,7 @@ func (c *Controller) process(ctx context.Context, key string) error {
 	}
 
 	if !exists {
-		c.Logger.Info("DomainVerfication was deleted", "key", key)
+		c.Logger.Info("DomainVerification was deleted", "key", key)
 		return nil
 	}
 
@@ -98,4 +117,22 @@ func (c *Controller) process(ctx context.Context, key string) error {
 	}
 
 	return nil
+}
+
+type SafeDNSVerifier struct {
+	DNSVerifier
+
+	mu sync.Mutex
+}
+
+func NewSafeDNSVerifier(inner DNSVerifier) *SafeDNSVerifier {
+	return &SafeDNSVerifier{
+		DNSVerifier: inner,
+	}
+}
+
+func (r *SafeDNSVerifier) TxtRecordExists(ctx context.Context, domain string, value string) (bool, error) {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	return r.DNSVerifier.TxtRecordExists(ctx, domain, value)
 }

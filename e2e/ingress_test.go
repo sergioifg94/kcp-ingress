@@ -9,18 +9,18 @@ import (
 	"strings"
 	"testing"
 
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+
 	"github.com/kuadrant/kcp-glbc/pkg/util/workloadMigration"
 
 	. "github.com/onsi/gomega"
 	. "github.com/onsi/gomega/gstruct"
 
+	apisv1alpha1 "github.com/kcp-dev/kcp/pkg/apis/apis/v1alpha1"
+	"github.com/kcp-dev/logicalcluster/v2"
 	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
 	networkingv1 "k8s.io/api/networking/v1"
-	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-
-	apisv1alpha1 "github.com/kcp-dev/kcp/pkg/apis/apis/v1alpha1"
-	"github.com/kcp-dev/logicalcluster/v2"
 
 	. "github.com/kuadrant/kcp-glbc/e2e/support"
 	kuadrantv1 "github.com/kuadrant/kcp-glbc/pkg/apis/kuadrant/v1"
@@ -78,16 +78,30 @@ func TestIngress(t *testing.T) {
 	test.Expect(err).NotTo(HaveOccurred())
 
 	// Create the Ingress
+	customHost := "test.gblb-custom.com"
 	_, err = test.Client().Core().Cluster(logicalcluster.From(namespace)).NetworkingV1().Ingresses(namespace.Name).
-		Apply(test.Ctx(), IngressConfiguration(namespace.Name, name), ApplyOptions)
+		Apply(test.Ctx(), IngressConfiguration(namespace.Name, name, customHost), ApplyOptions)
+	test.Expect(err).NotTo(HaveOccurred())
+
+	// Create the dummy zone file configmap
+	_, err = test.Client().Core().Cluster(GLBCWorkspace).CoreV1().ConfigMaps(ConfigmapNamespace).
+		Create(test.Ctx(), &corev1.ConfigMap{
+			ObjectMeta: metav1.ObjectMeta{
+				Name:      ConfigmapName,
+				Namespace: ConfigmapNamespace,
+			},
+		}, metav1.CreateOptions{})
 	test.Expect(err).NotTo(HaveOccurred())
 
 	// Wait until the Ingress is reconciled with the load balancer Ingresses
 	test.Eventually(Ingress(test, namespace, name)).WithTimeout(TestTimeoutMedium).Should(And(
 		WithTransform(Annotations, And(
 			HaveKey(ingressController.ANNOTATION_HCG_HOST),
-			HaveKey(ingressController.ANNOTATION_HCG_CUSTOM_HOST_REPLACED)),
-		),
+			HaveKey(ingressController.ANNOTATION_PENDING_CUSTOM_HOSTS),
+		)),
+		WithTransform(Labels, And(
+			HaveKey(ingressController.LABEL_HAS_PENDING_CUSTOM_HOSTS),
+		)),
 		WithTransform(LoadBalancerIngresses, HaveLen(1)),
 		Satisfy(HostsEqualsToGeneratedHost),
 	))
@@ -127,7 +141,53 @@ func TestIngress(t *testing.T) {
 			})),
 	))
 
-	// Finally, delete the resources
+	// Create a domain verification for the custom domain
+	test.Client().Kuadrant().Cluster(logicalcluster.From(ingress)).KuadrantV1().DomainVerifications().Create(test.Ctx(), &kuadrantv1.DomainVerification{
+		ObjectMeta: metav1.ObjectMeta{
+			Name: customHost,
+		},
+		Spec: kuadrantv1.DomainVerificationSpec{
+			Domain: customHost,
+		},
+	}, metav1.CreateOptions{})
+
+	// see domain verification is not verified
+	test.Eventually(DomainVerification(test, logicalcluster.From(ingress), customHost)).WithTimeout(TestTimeoutMedium).Should(And(
+		WithTransform(DomainVerificationFor, Equal(customHost)),
+		WithTransform(DomainVerified, Equal(false)),
+		WithTransform(DomainToken, Not(Equal(""))),
+	))
+
+	// see custom host is not active in ingress
+	// see custom host is in pending annotation
+	test.Eventually(Ingress(test, namespace, name)).WithTimeout(TestTimeoutMedium).Should(And(
+		WithTransform(IngressHosts, Not(ContainElement(customHost))),
+		WithTransform(IngressPendingHosts, ContainElement(customHost)),
+	))
+
+	// get domainVerification in order to read required token
+	dv, err := test.Client().Kuadrant().Cluster(logicalcluster.From(ingress)).KuadrantV1().DomainVerifications().Get(test.Ctx(), customHost, metav1.GetOptions{})
+	test.Expect(err).NotTo(HaveOccurred())
+
+	// set TXT record in DNS
+	err = SetTXTRecord(test, customHost, dv.Status.Token)
+	test.Expect(err).NotTo(HaveOccurred())
+
+	// see domain verification is verified
+	test.Eventually(DomainVerification(test, logicalcluster.From(ingress), customHost)).WithTimeout(TestTimeoutMedium).Should(And(
+		WithTransform(DomainVerificationFor, Equal(customHost)),
+		WithTransform(DomainVerified, Equal(true)),
+		WithTransform(DomainToken, Equal(dv.Status.Token)),
+	))
+
+	// see custom host is active in ingress
+	// see custom host cleared from pending annotations
+	test.Eventually(Ingress(test, namespace, name)).WithTimeout(TestTimeoutMedium).Should(And(
+		WithTransform(IngressPendingHosts, Not(ContainElement(customHost))),
+		WithTransform(IngressHosts, ContainElement(customHost)),
+	))
+
+	//Finally, delete the resources
 	test.Expect(test.Client().Core().Cluster(logicalcluster.From(namespace)).NetworkingV1().Ingresses(namespace.Name).
 		Delete(test.Ctx(), name, metav1.DeleteOptions{})).
 		To(Succeed())
@@ -136,5 +196,11 @@ func TestIngress(t *testing.T) {
 		To(Succeed())
 	test.Expect(test.Client().Core().Cluster(logicalcluster.From(namespace)).AppsV1().Deployments(namespace.Name).
 		Delete(test.Ctx(), name, metav1.DeleteOptions{})).
+		To(Succeed())
+	test.Expect(test.Client().Kuadrant().Cluster(logicalcluster.From(namespace)).KuadrantV1().DomainVerifications().
+		Delete(test.Ctx(), dv.Name, metav1.DeleteOptions{})).
+		To(Succeed())
+	test.Expect(test.Client().Core().Cluster(GLBCWorkspace).CoreV1().ConfigMaps(ConfigmapNamespace).
+		Delete(test.Ctx(), ConfigmapName, metav1.DeleteOptions{})).
 		To(Succeed())
 }

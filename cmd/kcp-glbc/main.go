@@ -101,6 +101,7 @@ func init() {
 	flagSet.StringVar(&options.Domain, "domain", env.GetEnvString("GLBC_DOMAIN", "dev.hcpapps.net"), "The domain to use to expose ingresses")
 	flagSet.BoolVar(&options.EnableCustomHosts, "enable-custom-hosts", env.GetEnvBool("GLBC_ENABLE_CUSTOM_HOSTS", false), "Flag to enable hosts to be custom")
 	flag.StringVar(&options.DNSProvider, "dns-provider", env.GetEnvString("GLBC_DNS_PROVIDER", "fake"), "The DNS provider being used [aws, fake]")
+
 	flagSet.BoolVar(&options.AdvancedScheduling, "advanced-scheduling", env.GetEnvBool("GLBC_ADVANCED_SCHEDULING", false), "enabled the GLBC advanced scheduling integration")
 
 	// // AWS Route53 options
@@ -224,26 +225,25 @@ func main() {
 
 		isControllerLeader := len(controllers) == 0
 
+		dnsClient, domainVerifier := getDNSUtilities(os.Getenv("GLBC_HOST_RESOLVER"))
+
 		ingressController := ingress.NewController(&ingress.ControllerConfig{
 			ControllerConfig: &reconciler.ControllerConfig{
 				NameSuffix: name,
 			},
-			KubeClient:               kcpKubeClient,
-			DnsRecordClient:          kcpKuadrantClient,
-			KuadrantInformer:         kcpKuadrantInformerFactory,
-			KCPSharedInformerFactory: kcpKubeInformerFactory,
-			CertificateInformer:      certificateInformerFactory,
-			GlbcInformerFactory:      glbcKubeInformerFactory,
-			Domain:                   options.Domain,
-			CertProvider:             certProvider,
-			HostResolver:             net.NewDefaultHostResolver(),
-			// For testing. TODO: Make configurable through flags/env variable
-			// HostResolver: &net.ConfigMapHostResolver{
-			// 	APIExportName:      "hosts",
-			// 	Namespace: "default",
-			// },
-			CustomHostsEnabled:        options.EnableCustomHosts,
+			KCPKubeClient:             kcpKubeClient,
+			KubeClient:                kubeClient,
+			DnsRecordClient:           kcpKuadrantClient,
+			KuadrantInformer:          kcpKuadrantInformerFactory,
+			KCPSharedInformerFactory:  kcpKubeInformerFactory,
+			CertificateInformer:       certificateInformerFactory,
+			GlbcInformerFactory:       glbcKubeInformerFactory,
+			Domain:                    options.Domain,
+			CertProvider:              certProvider,
+			HostResolver:              dnsClient,
 			AdvancedSchedulingEnabled: options.AdvancedScheduling,
+			CustomHostsEnabled:        options.EnableCustomHosts,
+			GLBCWorkspace:             logicalcluster.New(options.GLBCWorkspace),
 		})
 		controllers = append(controllers, ingressController)
 
@@ -262,9 +262,12 @@ func main() {
 			ControllerConfig: &reconciler.ControllerConfig{
 				NameSuffix: name,
 			},
+			KCPKubeClient:            kcpKubeClient,
+			KubeClient:               kubeClient,
 			DomainVerificationClient: kcpKuadrantClient,
 			SharedInformerFactory:    kcpKuadrantInformerFactory,
-			DNSVerifier:              pkgDns.NewVerifier(gonet.DefaultResolver),
+			DNSVerifier:              domainVerifier,
+			GLBCWorkspace:            logicalcluster.New(options.GLBCWorkspace),
 		})
 		exitOnError(err, "Failed to create DomainVerification controller")
 		controllers = append(controllers, domainVerificationController)
@@ -376,5 +379,24 @@ func printOptions() {
 	v := reflect.ValueOf(&options).Elem()
 	for i := 0; i < v.NumField(); i++ {
 		log.Logger.Info("GLBC Options: ", v.Type().Field(i).Name, v.Field(i).Interface())
+	}
+}
+
+func getDNSUtilities(hostResolverType string) (net.HostResolver, domainverification.DNSVerifier) {
+	switch hostResolverType {
+	case "default":
+		log.Logger.Info("using default host resolver")
+		return net.NewDefaultHostResolver(), pkgDns.NewVerifier(gonet.DefaultResolver)
+	case "e2e-mock":
+		log.Logger.Info("using e2e-mock host resolver")
+		resolver := &net.ConfigMapHostResolver{
+			Name:      "hosts",
+			Namespace: "kcp-glbc",
+		}
+
+		return resolver, resolver
+	default:
+		log.Logger.Info("using default host resolver")
+		return net.NewDefaultHostResolver(), pkgDns.NewVerifier(gonet.DefaultResolver)
 	}
 }

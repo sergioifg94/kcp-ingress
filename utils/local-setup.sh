@@ -22,7 +22,7 @@ source "${LOCAL_SETUP_DIR}"/.setupEnv
 
 DO_BREW="false"
 
-usage() { echo "usage: ./local-setup.sh -c <number of clusters>" 1>&2; exit 1; }
+usage() { echo "usage: ./local-setup.sh -c <number of clusters> <-b>" 1>&2; exit 1; }
 while getopts ":bc:" arg; do
   case "${arg}" in
     c)
