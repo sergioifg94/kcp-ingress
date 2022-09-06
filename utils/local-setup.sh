@@ -78,7 +78,7 @@ KCP_SYNCER_IMAGE="ghcr.io/kcp-dev/kcp/syncer:${KCP_VERSION}"
 
 for ((i=1;i<=$NUM_CLUSTERS;i++))
 do
-	CLUSTERS="${CLUSTERS}${KIND_CLUSTER_PREFIX}${i} "
+  CLUSTERS="${CLUSTERS}${KIND_CLUSTER_PREFIX}${i} "
 done
 
 mkdir -p ${TEMP_DIR}
@@ -183,15 +183,17 @@ KUBECONFIG=${KUBECONFIG_KCP_ADMIN} ${KUBECTL_KCP_BIN} workspace use "${GLBC_WORK
 KUBECONFIG=${KUBECONFIG_KCP_ADMIN} kubectl wait --timeout=300s --for=condition=Ready=true synctargets "glbc"
 
 #4. Create User sync target clusters and wait for them to be ready
-echo "Creating $NUM_CLUSTERS kcp SyncTarget cluster(s)"
-port80=8082
-port443=8445
-for cluster in $CLUSTERS; do
-  createKINDSyncTarget "$cluster" $port80 $port443
-  port80=$((port80 + 1))
-  port443=$((port443 + 1))
-done
-KUBECONFIG=${KUBECONFIG_KCP_ADMIN} kubectl wait --timeout=300s --for=condition=Ready=true synctargets $CLUSTERS
+if [ -n "$CLUSTERS" ]; then
+  echo "Creating $NUM_CLUSTERS kcp SyncTarget cluster(s)"
+  port80=8082
+  port443=8445
+  for cluster in $CLUSTERS; do
+    createKINDSyncTarget "$cluster" $port80 $port443
+    port80=$((port80 + 1))
+    port443=$((port443 + 1))
+  done
+  KUBECONFIG=${KUBECONFIG_KCP_ADMIN} kubectl wait --timeout=300s --for=condition=Ready=true synctargets $CLUSTERS
+fi
 
 #5.Create the GLBC APIExport after all the clusters have synced and deploy GLBC components (cert-manager)
 KUBECONFIG=${KUBECONFIG_KCP_ADMIN} OUTPUT_DIR=${TEMP_DIR} ${SCRIPT_DIR}/deploy.sh -c ${GLBC_DEPLOY_COMPONENTS}
