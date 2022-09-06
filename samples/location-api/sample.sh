@@ -17,11 +17,11 @@
 #
 
 export KUBECONFIG=./.kcp/admin.kubeconfig
-BASE_WORKSPACE=root:default
+BASE_WORKSPACE=root:kuadrant
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
 
-echo 
+echo
 echo "before running this script, ensure that you have set the flag --advanced-scheduling=true when starting GLBC"
 
 read -p "Press enter to continue"

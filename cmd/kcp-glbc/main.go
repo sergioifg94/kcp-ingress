@@ -91,8 +91,8 @@ func init() {
 	flagSet := flag.CommandLine
 
 	// KCP client options
-	flagSet.StringVar(&options.GLBCWorkspace, "glbc-workspace", env.GetEnvString("GLBC_WORKSPACE", "root:default:kcp-glbc"), "The GLBC workspace")
-	flagSet.StringVar(&options.ExportName, "glbc-export", env.GetEnvString("GLBC_EXPORT", "glbc-root-default-kcp-glbc,glbc-root-default-kcp-glbc-user"), "comma separated list of glbc APIExport names")
+	flagSet.StringVar(&options.GLBCWorkspace, "glbc-workspace", env.GetEnvString("GLBC_WORKSPACE", "root:kuadrant"), "The GLBC workspace")
+	flagSet.StringVar(&options.ExportName, "glbc-export", env.GetEnvString("GLBC_EXPORT", "glbc-root-kuadrant"), "comma separated list of glbc APIExport names")
 	flagSet.StringVar(&options.LogicalClusterTarget, "logical-cluster", env.GetEnvString("GLBC_LOGICAL_CLUSTER_TARGET", "*"), "set the target logical cluster")
 	// TLS certificate issuance options
 	flagSet.BoolVar(&options.TLSProviderEnabled, "glbc-tls-provided", env.GetEnvBool("GLBC_TLS_PROVIDED", true), "Whether to generate TLS certificates for hosts")

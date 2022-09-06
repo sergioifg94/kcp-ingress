@@ -9,5 +9,5 @@ spec:
     version: v1alpha1
   locationSelectors:
     - {}
-  locationWorkspace: root:default:kcp-glbc-user-compute
+  locationWorkspace: root:kuadrant
   namespaceSelector: {}

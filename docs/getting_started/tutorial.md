@@ -44,14 +44,7 @@ This script performs the following actions:
 * Deploys and configures the ingress controllers in each cluster
 * Downloads kcp at the latest version integrated with GLBC
 * Starts the kcp server
-* Creates kcp workspaces for GLBC and user resources:
-    * `kcp-glbc`
-    * `kcp-glbc-compute`
-    * `kcp-glbc-user`
-    * `kcp-glbc-user-compute`
-* Add workload clusters to the `*-compute` workspaces
-    * `kcp-glbc-compute`: 1x kind cluster
-    * `kcp-glbc-user-compute`: 2x kind clusters
+* Adds Kind clusters as sync targets 
 * Deploy GLBC dependencies (`cert-manager`) into the `kcp-glbc` workspace.
 
 -----
@@ -90,7 +83,7 @@ The easiest way to do this is to perform the following steps:
    GLBC_TLS_PROVIDER=glbc-ca
    HCG_LE_EMAIL=kuadrant-dev@redhat.com
    NAMESPACE=kcp-glbc
-   GLBC_WORKSPACE=root:default:kcp-glbc
+   GLBC_WORKSPACE=root:kuadrant
    ```
 
    The fields that might need to be edited include:
@@ -138,7 +131,7 @@ The sample script will remain paused until we press the enter key to migrate the
 1. In a new terminal, verify that the ingress was created after deploying the sample service:
    ```bash
    export KUBECONFIG=.kcp/admin.kubeconfig                                         
-   ./bin/kubectl-kcp workspace use root:default:kcp-glbc-user
+   ./bin/kubectl-kcp workspace use root:kuadrant
    kubectl get ingress
    ```
    ```bash
@@ -149,7 +142,7 @@ The sample script will remain paused until we press the enter key to migrate the
 1. Verify that the DNS record was created:
    ```bash
    export KUBECONFIG=.kcp/admin.kubeconfig                                         
-   ./bin/kubectl-kcp workspace use root:default:kcp-glbc-user
+   ./bin/kubectl-kcp workspace use root:kuadrant
    kubectl get dnsrecords ingress-nondomain -o yaml
    ```
    We might not get an output just yet until the DNS record exists in `route53`. This may take several minutes.
@@ -176,7 +169,7 @@ We will run the following commands in a new tab:
 
    ```bash
    export KUBECONFIG=.kcp/admin.kubeconfig                                         
-   ./bin/kubectl-kcp workspace use root:default:kcp-glbc-user
+   ./bin/kubectl-kcp workspace use root:kuadrant
    kubectl get ns default -o yaml
    ```
 As we can see, there is a label named: `*state.internal.workload.kcp.dev/kcp-cluster-1: Sync*`:
@@ -193,7 +186,7 @@ We can run the watch command in a new tab to start watching the ingress:
 
    ```bash
    export KUBECONFIG=.kcp/admin.kubeconfig                                         
-   ./bin/kubectl-kcp workspace use root:default:kcp-glbc-user
+   ./bin/kubectl-kcp workspace use root:kuadrant
    watch -n1 -d 'kubectl get ingress ingress-nondomain -o yaml | yq eval ".metadata" - | grep -v "kubernetes.io"'
    ```
 
@@ -206,7 +199,7 @@ Alternatively, we can also run the following command in another tab to start wat
 
    ```bash
    export KUBECONFIG=.kcp/admin.kubeconfig                                         
-   ./bin/kubectl-kcp workspace use root:default:kcp-glbc-user
+   ./bin/kubectl-kcp workspace use root:kuadrant
    watch -n1 'kubectl get dnsrecords ingress-nondomain -o yaml | yq eval ".spec" -'
    ```
    
