@@ -98,7 +98,7 @@ func init() {
 	//  Observability options
 	flagSet.IntVar(&options.MonitoringPort, "monitoring-port", 8080, "The port of the metrics endpoint (can be set to \"0\" to disable the metrics serving)")
 	// Webhook options
-	flagSet.IntVar(&options.WebhooksPort, "webhooks-port", 8443, "The port of the webhooks server")
+	flagSet.IntVar(&options.WebhooksPort, "webhooks-port", env.GetEnvInt("GLBC_WEBHOOKS_PORT", 0), "The port of the webhooks server")
 
 	opts := log.Options{
 		EncoderConfigOptions: []log.EncoderConfigOption{
@@ -199,6 +199,7 @@ func main() {
 	exitOnError(err, "Failed to create TLS certificate controller")
 
 	ingressController := ingress.NewController(&ingress.ControllerConfig{
+		Client:                   kubeClient,
 		KubeClient:               kcpKubeClient,
 		DnsRecordClient:          kcpKuadrantClient,
 		DNSRecordInformer:        kcpKuadrantInformerFactory,
@@ -214,7 +215,7 @@ func main() {
 		// 	Namespace: "default",
 		// },
 		CustomHostsEnabled: options.EnableCustomHosts,
-		// TLSChannel:         tlsChn,
+		GLBCWorkspace:      options.GLBCWorkspace,
 	})
 
 	dnsRecordController, err := dns.NewController(&dns.ControllerConfig{
@@ -277,11 +278,13 @@ func main() {
 	start(gCtx, deploymentController)
 	start(gCtx, secretController)
 
-	g.Go(func() error {
-		return admission.StartServer(gCtx, &admission.WebhookConfig{
-			ServerPort: options.WebhooksPort,
+	if options.WebhooksPort != 0 {
+		g.Go(func() error {
+			return admission.StartServer(gCtx, &admission.WebhookConfig{
+				ServerPort: options.WebhooksPort,
+			})
 		})
-	})
+	}
 
 	g.Go(func() error {
 		// wait until the controllers have return before stopping serving metrics

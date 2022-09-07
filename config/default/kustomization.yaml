@@ -6,3 +6,5 @@ bases:
 - ../rbac
 - ../manager
 - ../manager/config
+# Uncomment to deploy webhook related resources
+# - ../webhooks

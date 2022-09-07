@@ -3,8 +3,9 @@ package ingress
 import (
 	"context"
 	"encoding/json"
-	"k8s.io/apimachinery/pkg/labels"
 	"strings"
+
+	"k8s.io/apimachinery/pkg/labels"
 
 	kuadrantv1 "github.com/kuadrant/kcp-glbc/pkg/apis/kuadrant/v1"
 	corev1 "k8s.io/api/core/v1"
@@ -56,6 +57,7 @@ func NewController(config *ControllerConfig) *Controller {
 	base := basereconciler.NewController(controllerName, queue)
 	c := &Controller{
 		Controller:               base,
+		client:                   config.Client,
 		kubeClient:               config.KubeClient,
 		certProvider:             config.CertProvider,
 		sharedInformerFactory:    config.KCPSharedInformerFactory,
@@ -67,6 +69,7 @@ func NewController(config *ControllerConfig) *Controller {
 		customHostsEnabled:       config.CustomHostsEnabled,
 		certInformerFactory:      config.CertificateInformer,
 		dnsRecordInformerFactory: config.DNSRecordInformer,
+		glbcWorkspace:            config.GLBCWorkspace,
 	}
 	c.Process = c.process
 	c.hostsWatcher.OnChange = c.Enqueue
@@ -218,6 +221,7 @@ func NewController(config *ControllerConfig) *Controller {
 }
 
 type ControllerConfig struct {
+	Client          kubernetes.Interface
 	KubeClient      kubernetes.ClusterInterface
 	DnsRecordClient kuadrantclientv1.ClusterInterface
 	// informer for
@@ -229,11 +233,13 @@ type ControllerConfig struct {
 	CertProvider             tls.Provider
 	HostResolver             net.HostResolver
 	CustomHostsEnabled       bool
+	GLBCWorkspace            string
 }
 
 type Controller struct {
 	*basereconciler.Controller
 	kubeClient               kubernetes.ClusterInterface
+	client                   kubernetes.Interface
 	sharedInformerFactory    informers.SharedInformerFactory
 	kuadrantClient           kuadrantclientv1.ClusterInterface
 	indexer                  cache.Indexer
@@ -247,6 +253,7 @@ type Controller struct {
 	certInformerFactory      certmaninformer.SharedInformerFactory
 	glbcInformerFactory      informers.SharedInformerFactory
 	dnsRecordInformerFactory dnsrecordinformer.SharedInformerFactory
+	glbcWorkspace            string
 }
 
 func (c *Controller) enqueueIngressByKey(key string) {

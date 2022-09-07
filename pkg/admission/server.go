@@ -29,7 +29,7 @@ func StartServer(ctx context.Context, config *WebhookConfig) error {
 	}
 	webhook.InjectLogger(logger)
 
-	mux.Handle("/validating", webhook)
+	mux.Handle("/domainverifications", webhook)
 
 	return http.ListenAndServe(fmt.Sprintf(":%d", config.ServerPort), mux)
 }

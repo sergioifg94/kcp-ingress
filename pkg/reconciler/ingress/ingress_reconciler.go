@@ -2,8 +2,9 @@ package ingress
 
 import (
 	"context"
-	"k8s.io/apimachinery/pkg/util/runtime"
 	"strings"
+
+	"k8s.io/apimachinery/pkg/util/runtime"
 
 	networkingv1 "k8s.io/api/networking/v1"
 	"k8s.io/client-go/tools/cache"
@@ -62,6 +63,10 @@ func (c *Controller) reconcile(ctx context.Context, ingress *networkingv1.Ingres
 			forgetHost:       c.hostsWatcher.StopWatching,
 			listHostWatchers: c.hostsWatcher.ListHostRecordWatchers,
 			log:              c.Logger,
+		},
+		&webhookReconciler{
+			kubeClient:    c.client,
+			glbcWorkspace: c.glbcWorkspace,
 		},
 	}
 	var errs []error

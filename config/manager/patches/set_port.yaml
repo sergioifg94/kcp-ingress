@@ -1,0 +1,13 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: kcp-glbc-controller-manager
+spec:
+  template:
+    spec:
+      containers:
+      - name: manager
+        ports:
+          - name: webhooks
+            containerPort: 8443
+            protocol: TCP

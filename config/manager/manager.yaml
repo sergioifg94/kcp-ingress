@@ -41,9 +41,6 @@ spec:
             - name: metrics
               containerPort: 8080
               protocol: TCP
-            - name: webhooks
-              containerPort: 8443
-              protocol: TCP
           resources:
             limits:
               cpu: 500m
