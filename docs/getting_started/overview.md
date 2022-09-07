@@ -26,3 +26,6 @@ The following benefits/use cases envisioned for GLBC include:
 See the [architecture diagram](https://github.com/Kuadrant/kcp-glbc/blob/main/docs/architecture.md) for more information. 
 
 # Terms to Know
+KCP : The upstream open source project that provides the technology for the control plane service and workload service.
+
+Global Load Balancer Controller (GLBC): The upstream open source project that provides the global load balancing capabilities to enable multi cluster ingress

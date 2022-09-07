@@ -182,7 +182,7 @@ KIND ?= $(LOCALBIN)/kind
 ## Tool Versions
 KUSTOMIZE_VERSION ?= v4.5.4
 CONTROLLER_TOOLS_VERSION ?= v0.8.0
-KIND_VERSION ?= v0.11.1
+KIND_VERSION ?= v0.14.0
 
 .PHONY: kcp
 kcp: $(KCP) ## Download kcp locally if necessary.
