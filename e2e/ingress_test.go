@@ -52,7 +52,7 @@ func TestIngress(t *testing.T) {
 	kubeIdentityHash := binding.Status.BoundResources[0].Schema.IdentityHash
 
 	// Import GLBC APIs
-	binding = test.NewAPIBinding("glbc", WithExportReference(GLBCWorkspace, GLBCExportName), WithGLBCAcceptedPermissionClaims(kubeIdentityHash), InWorkspace(workspace))
+	binding = test.NewAPIBinding("glbc", WithExportReference(GLBCWorkspace, GLBCExportName), WithGLBCAcceptablePermissionClaims(kubeIdentityHash), InWorkspace(workspace))
 
 	// Wait until the APIBinding is actually in bound phase
 	test.Eventually(APIBinding(test, logicalcluster.From(binding).String(), binding.Name)).

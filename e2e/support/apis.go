@@ -61,54 +61,66 @@ func (o *withExportReference) applyTo(to interface{}) error {
 
 var _ Option = &withExportReference{}
 
-func WithGLBCAcceptedPermissionClaims(identityHash string) Option {
-	return &withGLBCAcceptedPermissionClaims{
-		acceptedPermissionClaims: []apisv1alpha1.PermissionClaim{
+func WithGLBCAcceptablePermissionClaims(identityHash string) Option {
+	return &withGLBCAcceptablePermissionClaims{
+		acceptablePermissionClaims: []apisv1alpha1.AcceptablePermissionClaim{
 			{
-				GroupResource: apisv1alpha1.GroupResource{
-					Group:    "",
-					Resource: "secrets",
+				PermissionClaim: apisv1alpha1.PermissionClaim{
+					GroupResource: apisv1alpha1.GroupResource{
+						Group:    "",
+						Resource: "secrets",
+					},
 				},
+				State: apisv1alpha1.ClaimAccepted,
 			},
 			{
-				GroupResource: apisv1alpha1.GroupResource{
-					Group:    "",
-					Resource: "services",
+				PermissionClaim: apisv1alpha1.PermissionClaim{
+					GroupResource: apisv1alpha1.GroupResource{
+						Group:    "",
+						Resource: "services",
+					},
+					IdentityHash: identityHash,
 				},
-				IdentityHash: identityHash,
+				State: apisv1alpha1.ClaimAccepted,
 			},
 			{
-				GroupResource: apisv1alpha1.GroupResource{
-					Group:    "apps",
-					Resource: "deployments",
+				PermissionClaim: apisv1alpha1.PermissionClaim{
+					GroupResource: apisv1alpha1.GroupResource{
+						Group:    "apps",
+						Resource: "deployments",
+					},
+					IdentityHash: identityHash,
 				},
-				IdentityHash: identityHash,
+				State: apisv1alpha1.ClaimAccepted,
 			},
 			{
-				GroupResource: apisv1alpha1.GroupResource{
-					Group:    "networking.k8s.io",
-					Resource: "ingresses",
+				PermissionClaim: apisv1alpha1.PermissionClaim{
+					GroupResource: apisv1alpha1.GroupResource{
+						Group:    "networking.k8s.io",
+						Resource: "ingresses",
+					},
+					IdentityHash: identityHash,
 				},
-				IdentityHash: identityHash,
+				State: apisv1alpha1.ClaimAccepted,
 			},
 		},
 	}
 }
 
-type withGLBCAcceptedPermissionClaims struct {
-	acceptedPermissionClaims []apisv1alpha1.PermissionClaim
+type withGLBCAcceptablePermissionClaims struct {
+	acceptablePermissionClaims []apisv1alpha1.AcceptablePermissionClaim
 }
 
-func (o *withGLBCAcceptedPermissionClaims) applyTo(to interface{}) error {
+func (o *withGLBCAcceptablePermissionClaims) applyTo(to interface{}) error {
 	binding, ok := to.(*apisv1alpha1.APIBinding)
 	if !ok {
 		return fmt.Errorf("cannot apply WithExportReference option to %q", to)
 	}
-	binding.Spec.AcceptedPermissionClaims = o.acceptedPermissionClaims
+	binding.Spec.PermissionClaims = o.acceptablePermissionClaims
 	return nil
 }
 
-var _ Option = &withGLBCAcceptedPermissionClaims{}
+var _ Option = &withGLBCAcceptablePermissionClaims{}
 
 func createAPIBinding(t Test, name string, options ...Option) *apisv1alpha1.APIBinding {
 	binding := &apisv1alpha1.APIBinding{
