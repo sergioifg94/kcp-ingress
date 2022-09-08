@@ -36,7 +36,7 @@ Clone the repo and run the following command:
 ```bash
 make local-setup
 ```
-> NOTE: If errors are encountered during the local-setup, refer to the Troubleshooting Installation document.
+> NOTE: If errors are encountered during the local-setup, refer to the [Troubleshooting Installation](https://github.com/Kuadrant/kcp-glbc/blob/main/docs/troubleshooting.md) document.
 
 This script performs the following actions: 
 * Builds all the binaries
