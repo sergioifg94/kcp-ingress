@@ -8,7 +8,7 @@ import (
 	corev1 "k8s.io/api/core/v1"
 	networkingv1 "k8s.io/api/networking/v1"
 	"k8s.io/apimachinery/pkg/api/equality"
-	"k8s.io/apimachinery/pkg/api/errors"
+	k8serrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/labels"
 	"k8s.io/apimachinery/pkg/util/runtime"
@@ -18,9 +18,11 @@ import (
 	"k8s.io/client-go/tools/cache"
 	"k8s.io/client-go/util/workqueue"
 
-	"github.com/kcp-dev/logicalcluster/v2"
-
+	"github.com/kuadrant/kcp-glbc/pkg/access"
+	"github.com/kuadrant/kcp-glbc/pkg/access/reconcilers"
 	kuadrantv1 "github.com/kuadrant/kcp-glbc/pkg/apis/kuadrant/v1"
+
+	"github.com/kcp-dev/logicalcluster/v2"
 
 	certman "github.com/jetstack/cert-manager/pkg/apis/certmanager/v1"
 	certmaninformer "github.com/jetstack/cert-manager/pkg/client/informers/externalversions"
@@ -34,12 +36,7 @@ import (
 )
 
 const (
-	defaultControllerName               = "kcp-glbc-ingress"
-	annotationIngressKey                = "kuadrant.dev/ingress-key"
-	annotationCertificateState          = "kuadrant.dev/certificate-status"
-	ANNOTATION_HCG_HOST                 = "kuadrant.dev/host.generated"
-	ANNOTATION_HEALTH_CHECK_PREFIX      = "kuadrant.experimental/health-"
-	ANNOTATION_HCG_CUSTOM_HOST_REPLACED = "kuadrant.dev/custom-hosts.replaced"
+	defaultControllerName = "kcp-glbc-ingress"
 )
 
 // NewController returns a new Controller which reconciles Ingress.
@@ -125,7 +122,7 @@ func NewController(config *ControllerConfig) *Controller {
 			if _, ok := certificate.Labels[basereconciler.LABEL_HCG_MANAGED]; !ok {
 				return false
 			}
-			if _, ok := certificate.Annotations[annotationIngressKey]; ok {
+			if _, ok := certificate.Annotations[access.ANNOTATION_INGRESS_KEY]; ok {
 				return true
 			}
 			return true
@@ -133,7 +130,7 @@ func NewController(config *ControllerConfig) *Controller {
 		Handler: cache.ResourceEventHandlerFuncs{
 			AddFunc: func(obj interface{}) {
 				certificate := obj.(*certman.Certificate)
-				certificateAddedHandler(certificate)
+				reconcilers.CertificateAddedHandler(certificate)
 			},
 			UpdateFunc: func(oldObj, newObj interface{}) {
 				oldCert := oldObj.(*certman.Certificate)
@@ -142,10 +139,10 @@ func NewController(config *ControllerConfig) *Controller {
 					return
 				}
 
-				enq := certificateUpdatedHandler(oldCert, newCert)
-				if enq == enqueue(true) {
+				enq := reconcilers.CertificateUpdatedHandler(oldCert, newCert)
+				if enq {
 
-					ingressKey := newCert.Annotations[annotationIngressKey]
+					ingressKey := newCert.Annotations[access.ANNOTATION_INGRESS_KEY]
 					c.Logger.V(3).Info("reqeuing ingress certificate updated", "certificate", newCert.Name, "ingresskey", ingressKey)
 					c.enqueueIngressByKey(ingressKey)
 				}
@@ -154,8 +151,8 @@ func NewController(config *ControllerConfig) *Controller {
 				certificate := obj.(*certman.Certificate)
 				// handle metric requeue ingress if the cert is deleted and the ingress still exists
 				// covers a manual deletion of cert and will ensure a new cert is created
-				certificateDeletedHandler(certificate)
-				ingressKey := certificate.Annotations[annotationIngressKey]
+				reconcilers.CertificateDeletedHandler(certificate)
+				ingressKey := certificate.Annotations[access.ANNOTATION_INGRESS_KEY]
 				c.Logger.V(3).Info("reqeuing ingress certificate deleted", "certificate", certificate.Name, "ingresskey", ingressKey)
 				c.enqueueIngressByKey(ingressKey)
 			},
@@ -168,13 +165,13 @@ func NewController(config *ControllerConfig) *Controller {
 	// appropriate indexer for the corresponding virtual workspace where the ingress is accessible will be able to
 	// process the request.
 	c.glbcInformerFactory.Core().V1().Secrets().Informer().AddEventHandler(cache.FilteringResourceEventHandler{
-		FilterFunc: certificateSecretFilter,
+		FilterFunc: reconcilers.CertificateSecretFilter,
 		Handler: cache.ResourceEventHandlerFuncs{
 			AddFunc: func(obj interface{}) {
 				secret := obj.(*corev1.Secret)
 				issuer := secret.Annotations[tls.TlsIssuerAnnotation]
 				tlsCertificateSecretCount.WithLabelValues(issuer).Inc()
-				ingressKey := secret.Annotations[annotationIngressKey]
+				ingressKey := secret.Annotations[access.ANNOTATION_INGRESS_KEY]
 				c.Logger.V(3).Info("reqeuing ingress certificate tls secret created", "secret", secret.Name, "ingresskey", ingressKey)
 				c.enqueueIngressByKey(ingressKey)
 			},
@@ -184,7 +181,7 @@ func NewController(config *ControllerConfig) *Controller {
 				if oldSecret.ResourceVersion != newSecret.ResourceVersion {
 					// we only care if the secret data changed
 					if !equality.Semantic.DeepEqual(oldSecret.Data, newSecret.Data) {
-						ingressKey := newSecret.Annotations[annotationIngressKey]
+						ingressKey := newSecret.Annotations[access.ANNOTATION_INGRESS_KEY]
 						c.Logger.V(3).Info("reqeuing ingress certificate tls secret updated", "secret", newSecret.Name, "ingresskey", ingressKey)
 						c.enqueueIngressByKey(ingressKey)
 					}
@@ -194,7 +191,7 @@ func NewController(config *ControllerConfig) *Controller {
 				secret := obj.(*corev1.Secret)
 				issuer := secret.Annotations[tls.TlsIssuerAnnotation]
 				tlsCertificateSecretCount.WithLabelValues(issuer).Dec()
-				ingressKey := secret.Annotations[annotationIngressKey]
+				ingressKey := secret.Annotations[access.ANNOTATION_INGRESS_KEY]
 				c.Logger.V(3).Info("reqeuing ingress certificate tls secret deleted", "secret", secret.Name, "ingresskey", ingressKey)
 				c.enqueueIngressByKey(ingressKey)
 			},
@@ -210,7 +207,7 @@ func NewController(config *ControllerConfig) *Controller {
 				return
 			}
 			// if we have a ingress key stored we can re queue the ingresss
-			if ingressKey, ok := dns.Annotations[annotationIngressKey]; ok {
+			if ingressKey, ok := dns.Annotations[access.ANNOTATION_INGRESS_KEY]; ok {
 				c.Logger.V(3).Info("reqeuing ingress dns record deleted", "cluster", logicalcluster.From(dns), "namespace", dns.Namespace, "name", dns.Name, "ingresskey", ingressKey)
 				c.enqueueIngressByKey(ingressKey)
 			}
@@ -219,7 +216,7 @@ func NewController(config *ControllerConfig) *Controller {
 			newdns := newObj.(*kuadrantv1.DNSRecord)
 			olddns := oldObj.(*kuadrantv1.DNSRecord)
 			if olddns.ResourceVersion != newdns.ResourceVersion {
-				ingressKey := newObj.(*kuadrantv1.DNSRecord).Annotations[annotationIngressKey]
+				ingressKey := newObj.(*kuadrantv1.DNSRecord).Annotations[access.ANNOTATION_INGRESS_KEY]
 				c.Logger.V(3).Info("reqeuing ingress dns record deleted", "cluster", logicalcluster.From(newdns), "namespace", newdns.Namespace, "name", newdns.Name, "ingresskey", ingressKey)
 				c.enqueueIngressByKey(ingressKey)
 			}
@@ -270,7 +267,7 @@ func (c *Controller) enqueueIngressByKey(key string) {
 	ingress, err := c.getIngressByKey(key)
 	//no need to handle not found as the ingress is gone
 	if err != nil {
-		if errors.IsNotFound(err) {
+		if k8serrors.IsNotFound(err) {
 			return
 		}
 		runtime.HandleError(err)
@@ -282,7 +279,7 @@ func (c *Controller) enqueueIngressByKey(key string) {
 func (c *Controller) process(ctx context.Context, key string) error {
 	object, exists, err := c.indexer.GetByKey(key)
 	if err != nil {
-		if errors.IsNotFound(err) {
+		if k8serrors.IsNotFound(err) {
 			return nil
 		}
 		return err
@@ -302,6 +299,16 @@ func (c *Controller) process(ctx context.Context, key string) error {
 	if !equality.Semantic.DeepEqual(current, target) {
 		c.Logger.V(3).Info("attempting update of changed ingress ", "ingress key ", key)
 		_, err := c.KCPKubeClient.Cluster(logicalcluster.From(target)).NetworkingV1().Ingresses(target.Namespace).Update(ctx, target, metav1.UpdateOptions{})
+		// TODO PB 09/09/2022 remove this if statement when this bug is resolved: https://github.com/kcp-dev/kcp/issues/1891
+		if err != nil && strings.Contains(err.Error(), "the object has been modified") {
+			refresh, refreshErr := c.KCPKubeClient.Cluster(logicalcluster.From(target)).NetworkingV1().Ingresses(target.Namespace).Get(ctx, target.Name, metav1.GetOptions{})
+			// error getting refresh object, return original error
+			if refreshErr != nil {
+				return err
+			}
+			target.ResourceVersion = refresh.ResourceVersion
+			_, err = c.KCPKubeClient.Cluster(logicalcluster.From(target)).NetworkingV1().Ingresses(target.Namespace).Update(ctx, target, metav1.UpdateOptions{})
+		}
 		return err
 	}
 
@@ -314,7 +321,7 @@ func (c *Controller) getIngressByKey(key string) (*networkingv1.Ingress, error) 
 		return nil, err
 	}
 	if !exists {
-		return nil, errors.NewNotFound(networkingv1.Resource("ingress"), key)
+		return nil, k8serrors.NewNotFound(networkingv1.Resource("ingress"), key)
 	}
 	return i.(*networkingv1.Ingress), nil
 }
@@ -325,7 +332,7 @@ func (c *Controller) ingressesFromDomainVerification(obj interface{}) ([]*networ
 
 	// find all ingresses in this workspace with pending hosts that contain this domains
 	ingressList, err := c.ingressLister.Ingresses("").List(labels.SelectorFromSet(labels.Set{
-		LABEL_HAS_PENDING_CUSTOM_HOSTS: "true",
+		access.LABEL_HAS_PENDING_HOSTS: "true",
 	}))
 	if err != nil {
 		return nil, err
@@ -334,18 +341,18 @@ func (c *Controller) ingressesFromDomainVerification(obj interface{}) ([]*networ
 	ingressesToEnqueue := []*networkingv1.Ingress{}
 
 	for _, ingress := range ingressList {
-		pendingRulesAnnotation, ok := ingress.Annotations[ANNOTATION_PENDING_CUSTOM_HOSTS]
+		pendingRulesAnnotation, ok := ingress.Annotations[access.ANNOTATION_PENDING_CUSTOM_HOSTS]
 		if !ok {
 			continue
 		}
 
-		var pendingRules Pending
+		var pendingRules access.Pending
 		if err := json.Unmarshal([]byte(pendingRulesAnnotation), &pendingRules); err != nil {
 			return nil, err
 		}
 
 		for _, potentialPending := range pendingRules.Rules {
-			if !hostMatches(potentialPending.Host, domain) {
+			if !HostMatches(strings.ToLower(strings.TrimSpace(potentialPending.Host)), domain) {
 				continue
 			}
 
@@ -354,4 +361,69 @@ func (c *Controller) ingressesFromDomainVerification(obj interface{}) ([]*networ
 	}
 
 	return ingressesToEnqueue, nil
+}
+
+func (c *Controller) getDomainVerifications(ctx context.Context, accessor access.Accessor) (*kuadrantv1.DomainVerificationList, error) {
+	return c.kuadrantClient.Cluster(logicalcluster.From(accessor.GetMetadataObject())).KuadrantV1().DomainVerifications().List(ctx, metav1.ListOptions{})
+}
+
+func (c *Controller) deleteTLSSecret(ctx context.Context, workspace logicalcluster.Name, namespace, name string) error {
+	if err := c.KCPKubeClient.Cluster(workspace).CoreV1().Secrets(namespace).Delete(ctx, name, metav1.DeleteOptions{}); err != nil && !k8serrors.IsNotFound(err) {
+		return err
+	}
+	return nil
+}
+
+func (c *Controller) copySecret(ctx context.Context, workspace logicalcluster.Name, namespace string, secret *corev1.Secret) error {
+	secret.ResourceVersion = ""
+	secretClient := c.KCPKubeClient.Cluster(workspace).CoreV1().Secrets(namespace)
+	_, err := secretClient.Create(ctx, secret, metav1.CreateOptions{})
+	if err != nil && k8serrors.IsAlreadyExists(err) {
+		s, err := secretClient.Get(ctx, secret.Name, metav1.GetOptions{})
+		if err != nil {
+			return err
+		}
+		s.Data = secret.Data
+		if _, err := secretClient.Update(ctx, s, metav1.UpdateOptions{}); err != nil {
+			return err
+		}
+		return nil
+	}
+	if err != nil {
+		return err
+	}
+	return nil
+
+}
+
+func (c *Controller) updateDNS(ctx context.Context, dns *kuadrantv1.DNSRecord) (*kuadrantv1.DNSRecord, error) {
+	updated, err := c.kuadrantClient.Cluster(logicalcluster.From(dns)).KuadrantV1().DNSRecords(dns.Namespace).Update(ctx, dns, metav1.UpdateOptions{})
+	if err != nil {
+		return nil, err
+	}
+	return updated, nil
+}
+
+func (c *Controller) deleteDNS(ctx context.Context, accessor access.Accessor) error {
+	return c.kuadrantClient.Cluster(logicalcluster.From(accessor.GetMetadataObject())).KuadrantV1().DNSRecords(accessor.GetNamespaceName().Namespace).Delete(ctx, accessor.GetNamespaceName().Name, metav1.DeleteOptions{})
+}
+
+func (c *Controller) getDNS(ctx context.Context, accessor access.Accessor) (*kuadrantv1.DNSRecord, error) {
+	return c.kuadrantClient.Cluster(logicalcluster.From(accessor.GetMetadataObject())).KuadrantV1().DNSRecords(accessor.GetNamespaceName().Namespace).Get(ctx, accessor.GetNamespaceName().Name, metav1.GetOptions{})
+}
+
+func (c *Controller) createDNS(ctx context.Context, dnsRecord *kuadrantv1.DNSRecord) (*kuadrantv1.DNSRecord, error) {
+	return c.kuadrantClient.Cluster(logicalcluster.From(dnsRecord)).KuadrantV1().DNSRecords(dnsRecord.Namespace).Create(ctx, dnsRecord, metav1.CreateOptions{})
+}
+
+func HostMatches(host, domain string) bool {
+	if host == domain {
+		return true
+	}
+
+	parentHostParts := strings.SplitN(host, ".", 2)
+	if len(parentHostParts) < 2 {
+		return false
+	}
+	return HostMatches(parentHostParts[1], domain)
 }

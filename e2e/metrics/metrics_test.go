@@ -25,6 +25,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/kuadrant/kcp-glbc/pkg/access"
 	"github.com/kuadrant/kcp-glbc/pkg/util/workloadMigration"
 
 	. "github.com/onsi/gomega"
@@ -43,7 +44,6 @@ import (
 
 	. "github.com/kuadrant/kcp-glbc/e2e/support"
 	kuadrantv1 "github.com/kuadrant/kcp-glbc/pkg/apis/kuadrant/v1"
-	ingressController "github.com/kuadrant/kcp-glbc/pkg/reconciler/ingress"
 )
 
 const issuer = "glbc-ca"
@@ -165,17 +165,17 @@ func TestMetrics(t *testing.T) {
 			},
 		)),
 	))
-	secretName := fmt.Sprintf("hcg-tls-%s", name)
+	secretName := fmt.Sprintf("hcg-tls-ingress-%s", name)
 
 	// Wait until the Ingress is reconciled with the load balancer Ingresses
 	test.Eventually(Ingress(test, namespace, name)).WithTimeout(TestTimeoutMedium).Should(And(
 		// Host spec
 		WithTransform(Annotations, And(
-			HaveKey(ingressController.ANNOTATION_HCG_HOST),
-			HaveKey(ingressController.ANNOTATION_PENDING_CUSTOM_HOSTS),
+			HaveKey(access.ANNOTATION_HCG_HOST),
+			HaveKey(access.ANNOTATION_PENDING_CUSTOM_HOSTS),
 		)),
 		WithTransform(Labels, And(
-			HaveKey(ingressController.LABEL_HAS_PENDING_CUSTOM_HOSTS),
+			HaveKey(access.LABEL_HAS_PENDING_HOSTS),
 		)),
 		// Rules spec
 		Satisfy(HostsEqualsToGeneratedHost),
@@ -191,7 +191,7 @@ func TestMetrics(t *testing.T) {
 	test.Eventually(Secret(test, namespace, secretName)).WithTimeout(TestTimeoutMedium).Should(
 		WithTransform(Certificate, PointTo(
 			MatchFields(IgnoreExtras, map[string]types.GomegaMatcher{
-				"DNSNames": ConsistOf(ingress.Annotations[ingressController.ANNOTATION_HCG_HOST]),
+				"DNSNames": ConsistOf(ingress.Annotations[access.ANNOTATION_HCG_HOST]),
 			}),
 		)),
 	)
@@ -213,7 +213,7 @@ func TestMetrics(t *testing.T) {
 		WithTransform(DNSRecordEndpoints, HaveLen(1)),
 		WithTransform(DNSRecordEndpoints, ContainElement(MatchFieldsP(IgnoreExtras,
 			Fields{
-				"DNSName":          Equal(ingress.Annotations[ingressController.ANNOTATION_HCG_HOST]),
+				"DNSName":          Equal(ingress.Annotations[access.ANNOTATION_HCG_HOST]),
 				"Targets":          ConsistOf(ingressStatus.LoadBalancer.Ingress[0].IP),
 				"RecordType":       Equal("A"),
 				"RecordTTL":        Equal(kuadrantv1.TTL(60)),
