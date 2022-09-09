@@ -26,6 +26,7 @@ import (
 
 	"github.com/kcp-dev/logicalcluster/v2"
 
+	"github.com/kuadrant/kcp-glbc/pkg/access"
 	kuadrantv1 "github.com/kuadrant/kcp-glbc/pkg/apis/kuadrant/v1"
 	"github.com/kuadrant/kcp-glbc/pkg/net"
 )
@@ -79,6 +80,13 @@ func DNSRecordCondition(zoneID, condition string) func(record *kuadrantv1.DNSRec
 			return nil
 		}
 		return nil
+	}
+}
+
+func DNSRecordToIngressCertReady(t Test, namespace *corev1.Namespace, name string) func(dnsrecord *kuadrantv1.DNSRecord) string {
+	return func(dnsrecord *kuadrantv1.DNSRecord) string {
+		ing := GetIngress(t, namespace, dnsrecord.Name)
+		return ing.Annotations[access.ANNOTATION_CERTIFICATE_STATE]
 	}
 }
 

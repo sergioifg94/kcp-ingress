@@ -143,6 +143,8 @@ func TestIngress(t *testing.T) {
 
 	// Check a DNSRecord for the Ingress is created with the expected Spec
 	test.Eventually(DNSRecord(test, namespace, name)).Should(And(
+		// ensure the ingress certificate is marked as ready when the DNSrecord is created
+		WithTransform(DNSRecordToIngressCertReady(test, namespace, name), Equal("ready")),
 		WithTransform(DNSRecordEndpoints, HaveLen(1)),
 		WithTransform(DNSRecordEndpoints, ContainElement(MatchFieldsP(IgnoreExtras,
 			Fields{

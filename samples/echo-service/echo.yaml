@@ -49,3 +49,8 @@ spec:
                 name: echo
                 port:
                   number: 80
+  tls:
+  - hosts:
+      - host.whatever.com
+    secretName: testsecret-tls
+                    

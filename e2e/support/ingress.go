@@ -25,11 +25,10 @@ import (
 	"github.com/kuadrant/kcp-glbc/pkg/access"
 	"github.com/kuadrant/kcp-glbc/pkg/util/workloadMigration"
 
+	"github.com/kcp-dev/logicalcluster/v2"
 	corev1 "k8s.io/api/core/v1"
 	networkingv1 "k8s.io/api/networking/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-
-	"github.com/kcp-dev/logicalcluster/v2"
 )
 
 func GetIngress(t Test, namespace *corev1.Namespace, name string) *networkingv1.Ingress {
