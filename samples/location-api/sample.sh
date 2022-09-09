@@ -17,7 +17,6 @@
 #
 
 export KUBECONFIG=./.kcp/admin.kubeconfig
-BASE_WORKSPACE=root:kuadrant
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
 
@@ -27,17 +26,19 @@ echo "before running this script, ensure that you have set the flag --advanced-s
 read -p "Press enter to continue"
 
 
-kubectl kcp workspace ${BASE_WORKSPACE}:kcp-glbc-user-compute
-
-echo "creating locations for sync targets in compute workspace"
+kubectl kcp workspace root:kuadrant
+echo "creating locations for sync targets in root:kuadrant workspace"
 kubectl apply -f ${SCRIPT_DIR}/locations.yaml
 
-echo "creating placement in user workspace"
-kubectl kcp workspace ${BASE_WORKSPACE}:kcp-glbc-user
+echo "creating placement in home workspace"
+kubectl kcp workspace '~'
+echo "creating apibindings in home workspace"
+kubectl apply -f ./config/deploy/local/kcp-glbc/apiexports/root-kuadrant-kubernetes-apibinding.yaml
+kubectl apply -f ./config/deploy/local/kcp-glbc/apiexports/root-kuadrant-glbc-apibinding.yaml
 kubectl apply -f ${SCRIPT_DIR}/placement-1.yaml
 kubectl delete placement default
 
-echo "deploying workload resources in user workspace"
+echo "deploying workload resources in home workspace"
 kubectl apply -f ${SCRIPT_DIR}/../echo-service/echo.yaml
 
 sleep 2
@@ -53,8 +54,8 @@ echo
 
 read -p "Press enter to trigger migration from kcp-cluster-1 to kcp-cluster-2"
 
-echo "creating placement 2 in user workspace"
-kubectl kcp workspace ${BASE_WORKSPACE}:kcp-glbc-user
+echo "creating placement 2 in home workspace"
+kubectl kcp workspace '~'
 kubectl create -f ${SCRIPT_DIR}/placement-2.yaml
 kubectl delete placement placement-1
 
@@ -65,10 +66,8 @@ echo "resetting placement"
 kubectl apply -f ${SCRIPT_DIR}/reset-placement.yaml
 kubectl delete placement placement-2
 
-echo "deleting locations"
-kubectl kcp workspace ${BASE_WORKSPACE}:kcp-glbc-user-compute
-
-echo "deleting locations for sync targets in compute workspace"
+kubectl kcp workspace root:kuadrant
+echo "deleting locations for sync targets in root:kuadrant workspace"
 kubectl delete -f ${SCRIPT_DIR}/locations.yaml
 
-kubectl kcp workspace ${BASE_WORKSPACE}:kcp-glbc-user
+kubectl kcp workspace '~'
