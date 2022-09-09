@@ -66,26 +66,31 @@ jobs:
         uses: actions/setup-go@v2
         with:
           go-version: v1.17
+      - name: Get Kind version
+        run: |
+          KIND_VERSION=$(cat Makefile | grep "KIND_VERSION ?=" | awk '{print $3}')
+          echo "KIND_VERSION=${KIND_VERSION}" >> $GITHUB_ENV
+          echo ${KIND_VERSION}
       - name: Kubernetes KinD GLBC Cluster
         uses: helm/kind-action@v1.2.0
         with:
           cluster_name: kcp-cluster-glbc-control
           node_image: kindest/node:v1.21.1@sha256:fae9a58f17f18f06aeac9772ca8b5ac680ebbed985e266f711d936e91d113bad
-          version: v0.11.0
+          version: ${{ env.KIND_VERSION }}
           config: ./e2e/kind.yaml
       - name: Kubernetes KinD Cluster 1
         uses: helm/kind-action@v1.2.0
         with:
           cluster_name: kcp-cluster-1
           node_image: kindest/node:v1.21.1@sha256:fae9a58f17f18f06aeac9772ca8b5ac680ebbed985e266f711d936e91d113bad
-          version: v0.11.0
+          version: ${{ env.KIND_VERSION }}
           config: ./e2e/kind.yaml
       - name: Kubernetes KinD Cluster 2
         uses: helm/kind-action@v1.2.0
         with:
           cluster_name: kcp-cluster-2
           node_image: kindest/node:v1.21.1@sha256:fae9a58f17f18f06aeac9772ca8b5ac680ebbed985e266f711d936e91d113bad
-          version: v0.11.0
+          version: ${{ env.KIND_VERSION }}
           config: ./e2e/kind.yaml
       - name: Info
         run: |
