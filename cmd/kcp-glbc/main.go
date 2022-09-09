@@ -16,6 +16,7 @@ import (
 	"golang.org/x/sync/errgroup"
 
 	// Make sure our workqueue MetricsProvider is the first to register
+	"github.com/kuadrant/kcp-glbc/pkg/access/reconcilers"
 	_ "github.com/kuadrant/kcp-glbc/pkg/reconciler"
 
 	certmanclient "github.com/jetstack/cert-manager/pkg/client/clientset/versioned"
@@ -186,10 +187,10 @@ func main() {
 		exitOnError(err, "Failed to create cert provider")
 
 		ingress.InitMetrics(certProvider)
+		reconcilers.InitMetrics(certProvider)
 
 		_, err := certProvider.IssuerExists(ctx)
 		exitOnError(err, "Failed cert provider issuer check")
-
 	}
 
 	glbcKubeInformerFactory := informers.NewSharedInformerFactoryWithOptions(kubeClient, time.Minute, informers.WithNamespace(namespace))

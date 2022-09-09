@@ -4,7 +4,6 @@ go 1.18
 
 require (
 	github.com/aws/aws-sdk-go v1.40.21
-	github.com/ghodss/yaml v1.0.0
 	github.com/go-logr/logr v1.2.3
 	github.com/go-logr/zapr v1.2.0
 	github.com/gocarina/gocsv v0.0.0-20220531201732-5f969b02b902
@@ -14,10 +13,10 @@ require (
 	github.com/jetstack/cert-manager v1.7.1
 	github.com/kcp-dev/kcp v0.7.1
 	github.com/kcp-dev/kcp/pkg/apis v0.7.1
-	github.com/kcp-dev/logicalcluster v1.1.1
 	github.com/kcp-dev/logicalcluster/v2 v2.0.0-alpha.1
 	github.com/miekg/dns v1.1.34
 	github.com/onsi/gomega v1.17.0
+	github.com/openshift/api v3.9.0+incompatible
 	github.com/prometheus/client_golang v1.12.1
 	github.com/prometheus/client_model v0.2.0
 	github.com/prometheus/common v0.32.1

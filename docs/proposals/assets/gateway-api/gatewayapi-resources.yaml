@@ -214,7 +214,7 @@ spec:
                                 point to express processing that may be done in Gateway
                                 implementations. Some examples include request or
                                 response modification, implementing authentication
-                                strategies, rate-limiting, and traffic shaping. API
+                                strategies, rate-limiting, and access shaping. API
                                 guarantee/conformance is defined based on the type
                                 of the filter.
                               properties:
@@ -569,8 +569,8 @@ spec:
                             an implementation supports. Weight is not a percentage
                             and the sum of weights does not need to equal 100. \n
                             If only one backend is specified and it has a weight
-                            greater than 0, 100% of the traffic is forwarded to
-                            that backend. If weight is set to 0, no traffic should
+                            greater than 0, 100% of the access is forwarded to
+                            that backend. If weight is set to 0, no access should
                             be forwarded for this entry. If unspecified, weight
                             defaults to 1. \n Support for this field varies based
                             on the context where used."
@@ -602,7 +602,7 @@ spec:
                           processing that may be done in Gateway implementations.
                           Some examples include request or response modification,
                           implementing authentication strategies, rate-limiting, and
-                          traffic shaping. API guarantee/conformance is defined based
+                          access shaping. API guarantee/conformance is defined based
                           on the type of the filter.
                         properties:
                           extensionRef:
@@ -1619,8 +1619,8 @@ spec:
                             an implementation supports. Weight is not a percentage
                             and the sum of weights does not need to equal 100. \n
                             If only one backend is specified and it has a weight
-                            greater than 0, 100% of the traffic is forwarded to
-                            that backend. If weight is set to 0, no traffic should
+                            greater than 0, 100% of the access is forwarded to
+                            that backend. If weight is set to 0, no access should
                             be forwarded for this entry. If unspecified, weight
                             defaults to 1. \n Support for this field varies based
                             on the context where used."
@@ -1868,7 +1868,7 @@ spec:
       schema:
         description: "The TLSRoute resource is similar to TCPRoute, but can be configured
         to match against TLS-specific metadata. This allows more flexibility in
-        matching streams for a given TLS listener. \n If you need to forward traffic
+        matching streams for a given TLS listener. \n If you need to forward access
         to a single target for a TLS listener, you could choose to use a TCPRoute
         with a TLS listener."
         properties:
@@ -2093,8 +2093,8 @@ spec:
                             an implementation supports. Weight is not a percentage
                             and the sum of weights does not need to equal 100. \n
                             If only one backend is specified and it has a weight
-                            greater than 0, 100% of the traffic is forwarded to
-                            that backend. If weight is set to 0, no traffic should
+                            greater than 0, 100% of the access is forwarded to
+                            that backend. If weight is set to 0, no access should
                             be forwarded for this entry. If unspecified, weight
                             defaults to 1. \n Support for this field varies based
                             on the context where used."
@@ -2340,8 +2340,8 @@ spec:
           type: date
       name: v1alpha2
       schema:
-        description: UDPRoute provides a way to route UDP traffic. When combined with
-          a Gateway listener, it can be used to forward traffic on the port specified
+        description: UDPRoute provides a way to route UDP access. When combined with
+          a Gateway listener, it can be used to forward access on the port specified
           by the listener to a set of backends specified by the UDPRoute.
         properties:
           apiVersion:
@@ -2518,8 +2518,8 @@ spec:
                             an implementation supports. Weight is not a percentage
                             and the sum of weights does not need to equal 100. \n
                             If only one backend is specified and it has a weight
-                            greater than 0, 100% of the traffic is forwarded to
-                            that backend. If weight is set to 0, no traffic should
+                            greater than 0, 100% of the access is forwarded to
+                            that backend. If weight is set to 0, no access should
                             be forwarded for this entry. If unspecified, weight
                             defaults to 1. \n Support for this field varies based
                             on the context where used."

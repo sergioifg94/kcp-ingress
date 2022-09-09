@@ -22,6 +22,7 @@ import (
 
 	"github.com/onsi/gomega"
 
+	"github.com/kuadrant/kcp-glbc/pkg/access"
 	"github.com/kuadrant/kcp-glbc/pkg/util/workloadMigration"
 
 	corev1 "k8s.io/api/core/v1"
@@ -29,8 +30,6 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 
 	"github.com/kcp-dev/logicalcluster/v2"
-
-	ingressController "github.com/kuadrant/kcp-glbc/pkg/reconciler/ingress"
 )
 
 func GetIngress(t Test, namespace *corev1.Namespace, name string) *networkingv1.Ingress {
@@ -82,7 +81,7 @@ func IngressTLS(ingress *networkingv1.Ingress) []networkingv1.IngressTLS {
 func HostsEqualsToGeneratedHost(ingress *networkingv1.Ingress) bool {
 	equals := true
 	for _, rule := range ingress.Spec.Rules {
-		if rule.Host != Annotations(ingress)[ingressController.ANNOTATION_HCG_HOST] {
+		if rule.Host != Annotations(ingress)[access.ANNOTATION_HCG_HOST] {
 			equals = false
 		}
 	}
@@ -101,8 +100,8 @@ func IngressHosts(ingress *networkingv1.Ingress) map[string]string {
 // IngressPendingHosts returns each unique host in the pending rules annotation
 func IngressPendingHosts(ingress *networkingv1.Ingress) map[string]string {
 	hosts := map[string]string{}
-	pendingRules := ingressController.Pending{}
-	pendingRulesAnnotation, ok := ingress.Annotations[ingressController.ANNOTATION_PENDING_CUSTOM_HOSTS]
+	pendingRules := access.Pending{}
+	pendingRulesAnnotation, ok := ingress.Annotations[access.ANNOTATION_PENDING_CUSTOM_HOSTS]
 	if !ok {
 		return hosts
 	}
@@ -118,7 +117,7 @@ func IngressPendingHosts(ingress *networkingv1.Ingress) map[string]string {
 
 func HasTLSSecretForGeneratedHost(secret string) func(ingress *networkingv1.Ingress) bool {
 	return func(ingress *networkingv1.Ingress) bool {
-		hostname := ingress.Annotations[ingressController.ANNOTATION_HCG_HOST]
+		hostname := ingress.Annotations[access.ANNOTATION_HCG_HOST]
 		for _, tls := range ingress.Spec.TLS {
 			if len(tls.Hosts) == 1 && tls.Hosts[0] == hostname && tls.SecretName == secret {
 				return true

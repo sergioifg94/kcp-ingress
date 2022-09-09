@@ -20,7 +20,6 @@ import (
 	"time"
 
 	"github.com/go-logr/logr"
-
 	"k8s.io/apimachinery/pkg/util/runtime"
 	"k8s.io/apimachinery/pkg/util/wait"
 	"k8s.io/client-go/tools/cache"
