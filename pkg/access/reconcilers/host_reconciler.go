@@ -10,6 +10,7 @@ import (
 	"github.com/kuadrant/kcp-glbc/pkg/access"
 	v1 "github.com/kuadrant/kcp-glbc/pkg/apis/kuadrant/v1"
 	kuadrantclientv1 "github.com/kuadrant/kcp-glbc/pkg/client/kuadrant/clientset/versioned"
+	"github.com/kuadrant/kcp-glbc/pkg/util/metadata"
 )
 
 type HostReconciler struct {
@@ -21,19 +22,19 @@ type HostReconciler struct {
 }
 
 func (r *HostReconciler) Reconcile(ctx context.Context, accessor access.Accessor) (access.ReconcileStatus, error) {
-	if !accessor.HasAnnotation(access.ANNOTATION_HCG_HOST) {
+	if !metadata.HasAnnotation(accessor, access.ANNOTATION_HCG_HOST) {
 		// Let's assign it a global hostname if any
 		generatedHost := fmt.Sprintf("%s.%s", xid.New(), r.ManagedDomain)
-		accessor.AddAnnotation(access.ANNOTATION_HCG_HOST, generatedHost)
+		metadata.AddAnnotation(accessor, access.ANNOTATION_HCG_HOST, generatedHost)
 		//we need this host set and saved on the accessor before we go any further so force an update
 		// if this is not saved we end up with a new host and the certificate can have the wrong host
 		return access.ReconcileStatusStop, nil
 	}
 	if !r.CustomHostsEnabled {
-		hcgHost, _ := accessor.GetAnnotation(access.ANNOTATION_HCG_HOST)
+		hcgHost := accessor.GetAnnotations()[access.ANNOTATION_HCG_HOST]
 		replacedHosts := accessor.ReplaceCustomHosts(hcgHost)
 		if len(replacedHosts) > 0 {
-			accessor.AddAnnotation(access.ANNOTATION_HCG_CUSTOM_HOST_REPLACED, fmt.Sprintf(" replaced custom hosts %v to the glbc host due to custom host policy not being allowed", replacedHosts))
+			metadata.AddAnnotation(accessor, access.ANNOTATION_HCG_CUSTOM_HOST_REPLACED, fmt.Sprintf(" replaced custom hosts %v to the glbc host due to custom host policy not being allowed", replacedHosts))
 		}
 		return access.ReconcileStatusContinue, nil
 	}

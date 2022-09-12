@@ -52,9 +52,9 @@ func TestDNSReconciler(t *testing.T) {
 
 	// sets up 2 ingresses one with status in the advanced scheduling annotation and one in the regular status block
 	setupAccessors := func(managedHost string, ingressStatus networkingv1.IngressStatus) []access.Accessor {
-		var ingresses = []*networkingv1.Ingress{}
+		var accessors []access.Accessor
 		for i := 0; i <= 1; i++ {
-			ing := networkingv1.Ingress{
+			ing := &networkingv1.Ingress{
 				ObjectMeta: metav1.ObjectMeta{
 					Name: fmt.Sprintf("ingress-%d", i),
 					Annotations: map[string]string{
@@ -77,16 +77,11 @@ func TestDNSReconciler(t *testing.T) {
 			} else {
 				ing.Status = ingressStatus
 			}
-			ingresses = append(ingresses, &ing)
+			accessor := access.NewIngressAccessor(ing)
+			accessor.GetAnnotations()
+			accessors = append(accessors, accessor)
 		}
-		accessors := []access.Accessor{}
-		for _, i := range ingresses {
-			a, e := access.NewAccessor(i)
-			if e != nil {
-				t.Fatalf("unexpected error: %v", e.Error())
-			}
-			accessors = append(accessors, a)
-		}
+
 		return accessors
 	}
 
@@ -128,7 +123,7 @@ func TestDNSReconciler(t *testing.T) {
 	}{{
 		Name: "test DNSRecord is created with correct values when it doesn't exist",
 		getDNS: func(ctx context.Context, accessor access.Accessor) (*v1.DNSRecord, error) {
-			return nil, errors.NewNotFound(v1.Resource("dnsrecord"), accessor.GetNamespaceName().Name)
+			return nil, errors.NewNotFound(v1.Resource("dnsrecord"), accessor.GetName())
 		},
 		accessors: setupAccessors("test.cb.example.com", networkingv1.IngressStatus{
 			LoadBalancer: corev1.LoadBalancerStatus{

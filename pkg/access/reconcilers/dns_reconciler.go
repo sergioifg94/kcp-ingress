@@ -48,8 +48,8 @@ func (r *DnsReconciler) Reconcile(ctx context.Context, accessor access.Accessor)
 		return access.ReconcileStatusContinue, nil
 	}
 
-	key := objectKey(accessor.GetRuntimeObject())
-	managedHost, _ := accessor.GetAnnotation(access.ANNOTATION_HCG_HOST)
+	key := objectKey(accessor)
+	managedHost := accessor.GetAnnotations()[access.ANNOTATION_HCG_HOST]
 	r.Log.Info("got managed host", "host", managedHost)
 	var activeLBHosts []string
 	activeDNSTargetIPs := map[string][]string{}
@@ -61,14 +61,14 @@ func (r *DnsReconciler) Reconcile(ctx context.Context, accessor access.Accessor)
 	}
 	for cluster, targets := range targets {
 		deleteAnnotation := workloadMigration.WorkloadDeletingAnnotation + cluster.String()
-		if accessor.HasAnnotation(deleteAnnotation) {
+		if metadata.HasAnnotation(accessor, deleteAnnotation) {
 			for host, target := range targets {
 				deletingTargetIPs[host] = append(deletingTargetIPs[host], target.Value...)
 			}
 			continue
 		}
 		for host, target := range targets {
-			if accessor.HasAnnotation(deleteAnnotation) {
+			if metadata.HasAnnotation(accessor, deleteAnnotation) {
 				continue
 			}
 			if target.TargetType == dns.TargetTypeHost {
@@ -98,7 +98,7 @@ func (r *DnsReconciler) Reconcile(ctx context.Context, accessor access.Accessor)
 		if !k8errors.IsNotFound(err) {
 			return access.ReconcileStatusStop, err
 		}
-		record, err := newDNSRecordForObject(accessor.GetRuntimeObject())
+		record, err := newDNSRecordForObject(accessor)
 		if err != nil {
 			return access.ReconcileStatusContinue, err
 		}
@@ -111,7 +111,7 @@ func (r *DnsReconciler) Reconcile(ctx context.Context, accessor access.Accessor)
 				return access.ReconcileStatusContinue, err
 			}
 			// metric to observe the accessor admission time
-			IngressObjectTimeToAdmission.Observe(existing.CreationTimestamp.Time.Sub(accessor.GetMetadataObject().GetCreationTimestamp().Time).Seconds())
+			IngressObjectTimeToAdmission.Observe(existing.CreationTimestamp.Time.Sub(accessor.GetCreationTimestamp().Time).Seconds())
 		}
 		return access.ReconcileStatusContinue, nil
 	}

@@ -12,6 +12,7 @@ import (
 
 	"github.com/kuadrant/kcp-glbc/pkg/access"
 	basereconciler "github.com/kuadrant/kcp-glbc/pkg/reconciler"
+	"github.com/kuadrant/kcp-glbc/pkg/util/metadata"
 
 	corev1 "k8s.io/api/core/v1"
 	networkingv1 "k8s.io/api/networking/v1"
@@ -133,12 +134,12 @@ func CertificateName(accessor access.Accessor) string {
 	// Removes chars which are invalid characters for cert manager certificate names. RFC 1123 subdomain must consist of
 	// lower case alphanumeric characters, '-' or '.', and must start and end with an alphanumeric character
 
-	return strings.ToLower(strings.ReplaceAll(fmt.Sprintf("%s-%s-%s-%s", logicalcluster.From(accessor.GetMetadataObject()), accessor.GetKind(), accessor.GetNamespaceName().Namespace, accessor.GetNamespaceName().Name), ":", ""))
+	return strings.ToLower(strings.ReplaceAll(fmt.Sprintf("%s-%s-%s-%s", logicalcluster.From(accessor), accessor.GetKind(), accessor.GetNamespace(), accessor.GetName()), ":", ""))
 }
 
 // TLSSecretName returns the name for the secret in the end user namespace
 func TLSSecretName(accessor access.Accessor) string {
-	return strings.ToLower(fmt.Sprintf("hcg-tls-%s-%s", accessor.GetKind(), accessor.GetNamespaceName().Name))
+	return strings.ToLower(fmt.Sprintf("hcg-tls-%s-%s", accessor.GetKind(), accessor.GetName()))
 }
 
 func (r *CertificateReconciler) Reconcile(ctx context.Context, accessor access.Accessor) (access.ReconcileStatus, error) {
@@ -147,9 +148,9 @@ func (r *CertificateReconciler) Reconcile(ctx context.Context, accessor access.A
 	labels := map[string]string{
 		basereconciler.LABEL_HCG_MANAGED: "true",
 	}
-	key, err := cache.MetaNamespaceKeyFunc(accessor.GetMetadataObject())
+	key, err := cache.MetaNamespaceKeyFunc(accessor)
 
-	managedHost, _ := accessor.GetAnnotation(access.ANNOTATION_HCG_HOST)
+	managedHost := accessor.GetAnnotations()[access.ANNOTATION_HCG_HOST]
 
 	if err != nil {
 		return access.ReconcileStatusStop, err
@@ -170,7 +171,7 @@ func (r *CertificateReconciler) Reconcile(ctx context.Context, accessor access.A
 			return access.ReconcileStatusStop, err
 		}
 		//TODO remove once owner refs work in kcp
-		if err := r.DeleteSecret(ctx, logicalcluster.From(accessor.GetMetadataObject()), accessor.GetNamespaceName().Namespace, tlsSecretName); err != nil && !strings.Contains(err.Error(), "not found") {
+		if err := r.DeleteSecret(ctx, logicalcluster.From(accessor), accessor.GetNamespace(), tlsSecretName); err != nil && !strings.Contains(err.Error(), "not found") {
 			r.Log.Info("error deleting certificate secret")
 			return access.ReconcileStatusStop, err
 		}
@@ -188,28 +189,28 @@ func (r *CertificateReconciler) Reconcile(ctx context.Context, accessor access.A
 				if err != nil {
 					return access.ReconcileStatusStop, err
 				}
-				accessor.AddAnnotation(access.ANNOTATION_CERTIFICATE_STATE, string(status))
+				metadata.AddAnnotation(accessor, access.ANNOTATION_CERTIFICATE_STATE, string(status))
 				return access.ReconcileStatusContinue, nil
 			}
 			return access.ReconcileStatusStop, err
 		}
-		accessor.AddAnnotation(access.ANNOTATION_CERTIFICATE_STATE, "ready") // todo remove hardcoded string
+		metadata.AddAnnotation(accessor, access.ANNOTATION_CERTIFICATE_STATE, "ready") // todo remove hardcoded string
 		//copy over the secret to the accessor namesapce
 		scopy := secret.DeepCopy()
 		scopy.SetOwnerReferences([]metav1.OwnerReference{
 			{
 				APIVersion:         networkingv1.SchemeGroupVersion.String(),
 				Kind:               accessor.GetKind(),
-				Name:               accessor.GetNamespaceName().Name,
-				UID:                accessor.GetMetadataObject().GetUID(),
+				Name:               accessor.GetName(),
+				UID:                accessor.GetUID(),
 				Controller:         pointer.Bool(true),
 				BlockOwnerDeletion: pointer.Bool(true),
 			},
 		})
 
-		scopy.Namespace = accessor.GetNamespaceName().Namespace
+		scopy.Namespace = accessor.GetNamespace()
 		scopy.Name = tlsSecretName
-		if err := r.CopySecret(ctx, logicalcluster.From(accessor.GetMetadataObject()), accessor.GetNamespaceName().Namespace, scopy); err != nil {
+		if err := r.CopySecret(ctx, logicalcluster.From(accessor), accessor.GetNamespace(), scopy); err != nil {
 			return access.ReconcileStatusStop, err
 		}
 	}

@@ -6,6 +6,13 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
+func GetAnnotation(obj metav1.Object, key string) string {
+	if !HasAnnotation(obj, key) {
+		return ""
+	}
+	return obj.GetAnnotations()[key]
+}
+
 func HasAnnotation(obj metav1.Object, key string) bool {
 	annotations := obj.GetAnnotations()
 	if annotations == nil {
