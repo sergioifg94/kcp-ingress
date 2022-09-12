@@ -27,7 +27,7 @@ GLBC_WORKSPACE=root:kuadrant
 #Syn Targets
 : ${GLBC_SYNC_TARGET_NAME:=glbc}
 
-: ${KCP_VERSION:="release-0.7"}
+: ${KCP_VERSION:="release-0.8"}
 KCP_SYNCER_IMAGE="ghcr.io/kcp-dev/kcp/syncer:${KCP_VERSION}"
 
 # GLBC Deployment

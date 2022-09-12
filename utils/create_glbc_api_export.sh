@@ -101,18 +101,22 @@ spec:
     workspace:
       path: ${path}
       exportName: ${exportName}
-  acceptedPermissionClaims:
+  permissionClaims:
     - group: ""
       resource: "secrets"
+      state: "Accepted"
     - group: ""
       resource: "services"
       identityHash: ${identityHash}
+      state: "Accepted"
     - group: "apps"
       resource: "deployments"
       identityHash: ${identityHash}
+      state: "Accepted"
     - group: "networking.k8s.io"
       resource: "ingresses"
       identityHash: ${identityHash}
+      state: "Accepted"
 EOF
   kubectl wait --timeout=120s --for=condition=Ready=true apibinding $name
 }
