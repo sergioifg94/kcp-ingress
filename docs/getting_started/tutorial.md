@@ -103,7 +103,7 @@ After all the above is configured correctly, for the demo, we can run the first 
           cd to/the/repo
    ```
 
-Using the same tab in the terminal, run the following command to run GLBC and use `controller-config.env` and `aws-credentials.env`. We will be able to curl the domain in the tutorial and visualize how the workload migrates from `cluster-1` to `cluster-2`.
+Using the same tab in the terminal, run the following command to run GLBC and use `controller-config.env` and `aws-credentials.env`. We will be able to curl the domain in the tutorial and visualize how the workload migrates from `kcp-cluster-1` to `kcp-cluster-2`.
 
    ```bash
    (export $(cat ./config/deploy/local/kcp-glbc/controller-config.env | xargs) && export $(cat ./config/deploy/local/kcp-glbc/aws-credentials.env | xargs) && KUBECONFIG=./tmp/kcp.kubeconfig ./bin/kcp-glbc)
@@ -135,15 +135,15 @@ apibinding.apis.kcp.dev/glbc created
 placement.scheduling.kcp.dev/placement-1 created
 placement.scheduling.kcp.dev "default" deleted
 deploying workload resources in home workspace
-service/httpecho-both created
-deployment.apps/echo-deployment created
-ingress.networking.k8s.io/ingress-nondomain created
+service/echo created
+deployment.apps/echo created
+ingress.networking.k8s.io/echo created
 
 === useful commands:
   - watch -n1 "curl -k https://ccdncilkjgm3i9jmt6c0.cz.hcpapps.net" (N.B. Don't start this before A record exists in route53)
-  - watch -n1 'kubectl get dnsrecords ingress-nondomain -o yaml | yq eval ".spec" -'
+  - watch -n1 'kubectl get dnsrecords echo -o yaml | yq eval ".spec" -'
   - watch -n1 'dig ccdncilkjgm3i9jmt6c0.cz.hcpapps.net'
-  - watch -n1 -d 'kubectl get ingress ingress-nondomain -o yaml | yq eval ".metadata" - | grep -v "kubernetes.io"'
+  - watch -n1 -d 'kubectl get ingress echo -o yaml | yq eval ".metadata" - | grep -v "kubernetes.io"'
 
 
 Press enter to trigger migration from kcp-cluster-1 to kcp-cluster-2
@@ -163,15 +163,15 @@ The sample script will remain paused until we press the enter key to migrate the
    kubectl get ingress
    ```
    ```bash
-   NAME                AGE
-   ingress-nondomain   81s
+   NAME       AGE
+   echo       81s
    ```
 
 1. Verify that the DNS record was created:
    ```bash
    export KUBECONFIG=.kcp/admin.kubeconfig                                         
    ./bin/kubectl-kcp workspace use '~'
-   kubectl get dnsrecords ingress-nondomain -o yaml
+   kubectl get dnsrecords echo -o yaml
    ```
    We might not get an output just yet until the DNS record exists in `route53`. This may take several minutes.
 
@@ -187,7 +187,7 @@ The sample script will remain paused until we press the enter key to migrate the
 
 This section will show how GLBC is used to provide ingress in a multi-cluster ingress scenario.
 
-For this tutorial, after following along the with the [Installation](#installation) section of this document, we should already have `kcp` and GLBC running, and also have had deployed the sample service which would have created a placement resource, an ingress named *"ingress-nondomain"* and a DNS record. Note, the "default" namespace is where we are putting all the sample resources at the moment.
+For this tutorial, after following along the with the [Installation](#installation) section of this document, we should already have `kcp` and GLBC running, and also have had deployed the sample service which would have created a placement resource, an ingress named *"echo"* and a DNS record. Note, the "default" namespace is where we are putting all the sample resources at the moment.
 
 <br>
 
@@ -202,7 +202,7 @@ We will run the following commands in a new tab:
    ```
 As we can see, there is a label named something like: `*state.workload.kcp.dev/5MivhNIs7DjM7dK95I2K7TpWe7aUGMU4WHqjWn: Sync*`:
 
-GLBC is telling `kcp` where to sync all of the work resources in the namespace. Meaning, since the namespace is set to `5MivhNIs7DjM7dK95I2K7TpWe7aUGMU4WHqjWn` (cluster-1) , the ingress will also have `5MivhNIs7DjM7dK95I2K7TpWe7aUGMU4WHqjWn` (cluster-1) set to it. 
+GLBC is telling `kcp` where to sync all of the work resources in the namespace. Meaning, since the namespace is set to `5MivhNIs7DjM7dK95I2K7TpWe7aUGMU4WHqjWn` (kcp-cluster-1) , the ingress will also have `5MivhNIs7DjM7dK95I2K7TpWe7aUGMU4WHqjWn` (kcp-cluster-1) set to it. 
 
 <br>
 
@@ -213,10 +213,10 @@ We can run the watch command in a new tab to start watching the ingress:
    ```bash
    export KUBECONFIG=.kcp/admin.kubeconfig                                         
    ./bin/kubectl-kcp workspace use '~'
-   watch -n1 -d 'kubectl get ingress ingress-nondomain -o yaml | yq eval ".metadata" - | grep -v "kubernetes.io"'
+   watch -n1 -d 'kubectl get ingress echo -o yaml | yq eval ".metadata" - | grep -v "kubernetes.io"'
    ```
 
-As we can see in the first annotation, the load balancer for `cluster-1` will have an IP address, after the DNS record is created:
+As we can see in the first annotation, the load balancer for `kcp-cluster-1` will have an IP address, after the DNS record is created:
 
    ![Screenshot from 2022-09-09 19-11-06](https://user-images.githubusercontent.com/73656840/189416748-fb94527e-509c-44c0-b680-300691721acb.png)
 
@@ -226,7 +226,7 @@ Alternatively, we can also run the following command in another tab to start wat
    ```bash
    export KUBECONFIG=.kcp/admin.kubeconfig                                         
    ./bin/kubectl-kcp workspace use '~'
-   watch -n1 'kubectl get dnsrecords ingress-nondomain -o yaml | yq eval ".spec" -'
+   watch -n1 'kubectl get dnsrecords echo -o yaml | yq eval ".spec" -'
    ```
    
 <br>
@@ -243,7 +243,7 @@ Now that the DNS record has been successfully created, in a new tab in the termi
 
    ![Screenshot from 2022-08-02 12-44-15](https://user-images.githubusercontent.com/73656840/182368772-8a08a197-66d9-4d9c-9747-74ddaad0e4d7.png)
 
-This means that cluster-1 is up and running correctly.
+This means that kcp-cluster-1 is up and running correctly.
 
 <br>
 
@@ -251,19 +251,19 @@ This means that cluster-1 is up and running correctly.
 
 As we continue with the following steps, we will want to be observing the tab where we are watching our domain. This way, we will notice that during the workload migration, there is no interruptions and no down time.
 
-To proceed with the workload migration, we will go to the tab where we deployed the sample service, and press the enter key to "trigger migration from `cluster-1` to `cluster-2`. This deletes `placement-1` and creates `placement-2` which points to `cluster-2`. This will also change the label in the "default" namespace mentioned before: `*state.internal.workload.kcp.dev/5MivhNIs7DjM7dK95I2K7TpWe7aUGMU4WHqjWn: Sync*` to the other cluster.
+To proceed with the workload migration, we will go to the tab where we deployed the sample service, and press the enter key to "trigger migration from `kcp-cluster-1` to `kcp-cluster-2`. This deletes `placement-1` and creates `placement-2` which points to `kcp-cluster-2`. This will also change the label in the "default" namespace mentioned before: `*state.internal.workload.kcp.dev/5MivhNIs7DjM7dK95I2K7TpWe7aUGMU4WHqjWn: Sync*` to the other cluster.
 
    ![Screenshot from 2022-09-09 19-26-36](https://user-images.githubusercontent.com/73656840/189419200-17dd3086-82f1-4bf7-ae95-70bc4f3e8b87.png)
 
 
-In the tab where we are watching the ingress, we can observe that the label in the ingress has changed from `cluster-1` to `cluster-2`. KCP has propagated that label down from the namespace to everything in it. Everything in the namespace gets the same label. Because of that label, `kcp` is syncing it to `cluster-2`.
+In the tab where we are watching the ingress, we can observe that the label in the ingress has changed from `kcp-cluster-1` to `kcp-cluster-2`. KCP has propagated that label down from the namespace to everything in it. Everything in the namespace gets the same label. Because of that label, `kcp` is syncing it to `kcp-cluster-2`.
 
    ![Screenshot from 2022-09-09 19-22-43](https://user-images.githubusercontent.com/73656840/189418521-66a70b94-4f7e-47de-bbd0-1987d0a2dcce.png)
 
 
-Moreover, in the annotations we also have a status there for `cluster-2` and it has an IP address in it meaning that it has indeed synced to `cluster-2`. We will also find another annotation named "*deletion.internal.workload.kcp.dev/kcp-cluster-1*", which is code coming from the GLBC which is saying "Don't remove this work from `cluster-1` until the DNS has propagated."
+Moreover, in the annotations we also have a status there for `kcp-cluster-2` and it has an IP address in it meaning that it has indeed synced to `kcp-cluster-2`. We will also find another annotation named "*deletion.internal.workload.kcp.dev/kcp-cluster-1*", which is code coming from the GLBC which is saying "Don't remove this work from `kcp-cluster-1` until the DNS has propagated."
 
-For that reason we can also observe another annotation named "*finalizers.workload.kcp.dev/cluster-1: kuadrant.dev/glbc-migration*" which remains there because GLBC is saying to `kcp` "Don't get rid of this yet, as we're waiting for it to come up to another cluster before you remove it from `cluster-1`. After it has completely migrated and sufficient time has been allowed for DNS propagation, the finalizer for `cluster-1` will no longer be there and the workload will be deleted from `cluster-1`. Account for the DNS propagation time of the TTL (usually 60 seconds) * 2.
+For that reason we can also observe another annotation named "*finalizers.workload.kcp.dev/kcp-cluster-1: kuadrant.dev/glbc-migration*" which remains there because GLBC is saying to `kcp` "Don't get rid of this yet, as we're waiting for it to come up to another cluster before you remove it from `kcp-cluster-1`. After it has completely migrated and sufficient time has been allowed for DNS propagation, the finalizer for `kcp-cluster-1` will no longer be there and the workload will be deleted from `kcp-cluster-1`. Account for the DNS propagation time of the TTL (usually 60 seconds) * 2.
 
    ![Screenshot from 2022-09-09 19-25-07](https://user-images.githubusercontent.com/73656840/189418887-2efd4977-17dc-4d1e-b888-ca32b58d862a.png)
 
@@ -272,7 +272,7 @@ We will notice that in the tab where we are curling the domain, we will always b
 
    ![Screenshot from 2022-08-02 12-55-24](https://user-images.githubusercontent.com/73656840/182368597-1ec0ade2-9849-4414-849f-ac342680d11b.png)
 
-This shows that the workload has successfully migrated from `cluster-1` to `cluster-2` without any interruption.
+This shows that the workload has successfully migrated from `kcp-cluster-1` to `kcp-cluster-2` without any interruption.
 
 <br>
 
