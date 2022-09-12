@@ -64,10 +64,10 @@ func (c *Controller) reconcile(ctx context.Context, ingress access.Accessor) err
 		},
 	}
 	var errs []error
-
 	for _, r := range reconcilers {
 		status, err := r.Reconcile(ctx, ingress)
 		if err != nil {
+			c.Logger.Error(err, "reconciler error: ", ingress)
 			errs = append(errs, err)
 		}
 		if status == access.ReconcileStatusStop {
@@ -77,6 +77,7 @@ func (c *Controller) reconcile(ctx context.Context, ingress access.Accessor) err
 
 	if len(errs) == 0 {
 		if ingress.GetDeletionTimestamp() != nil && !ingress.GetDeletionTimestamp().IsZero() {
+			c.Logger.Info("reconcile ingress deleted ", "ingress", ingress)
 			metadata.RemoveFinalizer(ingress, cascadeCleanupFinalizer)
 			c.hostsWatcher.StopWatching(objectKey(ingress), "")
 			//in 0.5.0 these are never cleaned up properly

@@ -72,9 +72,9 @@ type CertManagerConfig struct {
 	CertProvider CertProvider
 	LEConfig     *LEConfig
 	Region       string
-	// client targeting the control cluster
+	// client targeting the glbc workspace cluster
 	K8sClient kubernetes.Interface
-	// namespace in the control cluster where we create certificates
+	// namespace in the control workspace where we create certificates
 	CertificateNS string
 	// set of domains we allow certs to be created for
 	ValidDomains []string

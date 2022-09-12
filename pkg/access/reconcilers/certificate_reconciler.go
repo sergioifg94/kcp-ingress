@@ -179,6 +179,10 @@ func (r *CertificateReconciler) Reconcile(ctx context.Context, accessor access.A
 	}
 
 	err = r.CreateCertificate(ctx, certReq)
+	if err != nil && !errors.IsAlreadyExists(err) {
+		return access.ReconcileStatusStop, err
+	}
+	metadata.AddAnnotation(accessor, access.ANNOTATION_CERTIFICATE_STATE, "requested")
 	if errors.IsAlreadyExists(err) {
 		// get certificate secret and copy
 		secret, err := r.GetCertificateSecret(ctx, certReq)
@@ -189,8 +193,9 @@ func (r *CertificateReconciler) Reconcile(ctx context.Context, accessor access.A
 				if err != nil {
 					return access.ReconcileStatusStop, err
 				}
+				//NB we stop reconcile until the certificate is ready. We don't want things like DNS set up until the certificate is ready
 				metadata.AddAnnotation(accessor, access.ANNOTATION_CERTIFICATE_STATE, string(status))
-				return access.ReconcileStatusContinue, nil
+				return access.ReconcileStatusStop, nil
 			}
 			return access.ReconcileStatusStop, err
 		}
@@ -214,9 +219,7 @@ func (r *CertificateReconciler) Reconcile(ctx context.Context, accessor access.A
 			return access.ReconcileStatusStop, err
 		}
 	}
-	if err != nil && !errors.IsAlreadyExists(err) {
-		return access.ReconcileStatusStop, err
-	}
+
 	// set tls setting on the accessor
 	accessor.AddTLS(certReq.Host, tlsSecretName)
 
