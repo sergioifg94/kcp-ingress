@@ -13,6 +13,7 @@ import (
 
 	"github.com/kuadrant/kcp-glbc/pkg/access"
 	v1 "github.com/kuadrant/kcp-glbc/pkg/apis/kuadrant/v1"
+	"github.com/kuadrant/kcp-glbc/pkg/util/metadata"
 )
 
 type hostResult struct {
@@ -30,11 +31,7 @@ func TestReconcileHost(t *testing.T) {
 		}
 		i.Spec.TLS = tls
 
-		a, e := access.NewAccessor(i)
-		if e != nil {
-			t.Fatalf("unexpected error: %v", e.Error())
-		}
-		return a
+		return &access.IngressAccessor{Ingress: i}
 	}
 
 	var buildResult = func(r Reconciler, a access.Accessor) hostResult {
@@ -54,7 +51,7 @@ func TestReconcileHost(t *testing.T) {
 		if hr.Err != nil {
 			return fmt.Errorf("unexpected error from Reconcile : %s", hr.Err)
 		}
-		if !hr.Accessor.HasAnnotation(access.ANNOTATION_HCG_HOST) {
+		if !metadata.HasAnnotation(hr.Accessor, access.ANNOTATION_HCG_HOST) {
 			return fmt.Errorf("expected annotation %s to be set", access.ANNOTATION_HCG_HOST)
 		}
 		return nil
@@ -90,7 +87,7 @@ func TestReconcileHost(t *testing.T) {
 					Host: "api.example.com",
 				}}, []networkingv1.IngressTLS{})
 
-				a.AddAnnotation(access.ANNOTATION_HCG_HOST, "123.test.com")
+				metadata.AddAnnotation(a, access.ANNOTATION_HCG_HOST, "123.test.com")
 
 				return a
 			},
@@ -99,10 +96,10 @@ func TestReconcileHost(t *testing.T) {
 				if err != nil {
 					return err
 				}
-				if !hr.Accessor.HasAnnotation(access.ANNOTATION_HCG_CUSTOM_HOST_REPLACED) {
+				if !metadata.HasAnnotation(hr.Accessor, access.ANNOTATION_HCG_CUSTOM_HOST_REPLACED) {
 					return fmt.Errorf("expected the custom host annotation to be present")
 				}
-				generatedHost, ok := hr.Accessor.GetAnnotation(access.ANNOTATION_HCG_HOST)
+				generatedHost, ok := hr.Accessor.GetAnnotations()[access.ANNOTATION_HCG_HOST]
 				if !ok {
 					return access.ErrGeneratedHostMissing
 				}
@@ -133,7 +130,7 @@ func TestReconcileHost(t *testing.T) {
 func TestProcessCustomHostValidation(t *testing.T) {
 	testCases := []struct {
 		name                 string
-		ingress              *networkingv1.Ingress
+		accessor             access.Accessor
 		domainVerifications  *v1.DomainVerificationList
 		expectedPendingRules access.Pending
 		expectedRules        []networkingv1.IngressRule
@@ -141,22 +138,24 @@ func TestProcessCustomHostValidation(t *testing.T) {
 	}{
 		{
 			name: "Empty host",
-			ingress: &networkingv1.Ingress{
-				ObjectMeta: metav1.ObjectMeta{
-					Name: "ingress",
-					Annotations: map[string]string{
-						access.ANNOTATION_HCG_HOST: "generated.host.net",
+			accessor: &access.IngressAccessor{
+				Ingress: &networkingv1.Ingress{
+					ObjectMeta: metav1.ObjectMeta{
+						Name: "ingress",
+						Annotations: map[string]string{
+							access.ANNOTATION_HCG_HOST: "generated.host.net",
+						},
 					},
-				},
-				Spec: networkingv1.IngressSpec{
-					Rules: []networkingv1.IngressRule{
-						{
-							Host: "",
-							IngressRuleValue: networkingv1.IngressRuleValue{
-								HTTP: &networkingv1.HTTPIngressRuleValue{
-									Paths: []networkingv1.HTTPIngressPath{
-										{
-											Path: "/",
+					Spec: networkingv1.IngressSpec{
+						Rules: []networkingv1.IngressRule{
+							{
+								Host: "",
+								IngressRuleValue: networkingv1.IngressRuleValue{
+									HTTP: &networkingv1.HTTPIngressRuleValue{
+										Paths: []networkingv1.HTTPIngressPath{
+											{
+												Path: "/",
+											},
 										},
 									},
 								},
@@ -196,22 +195,24 @@ func TestProcessCustomHostValidation(t *testing.T) {
 		},
 		{
 			name: "Custom host verified",
-			ingress: &networkingv1.Ingress{
-				ObjectMeta: metav1.ObjectMeta{
-					Name: "ingress",
-					Annotations: map[string]string{
-						access.ANNOTATION_HCG_HOST: "generated.host.net",
+			accessor: &access.IngressAccessor{
+				Ingress: &networkingv1.Ingress{
+					ObjectMeta: metav1.ObjectMeta{
+						Name: "ingress",
+						Annotations: map[string]string{
+							access.ANNOTATION_HCG_HOST: "generated.host.net",
+						},
 					},
-				},
-				Spec: networkingv1.IngressSpec{
-					Rules: []networkingv1.IngressRule{
-						{
-							Host: "test.pb-custom.hcpapps.net",
-							IngressRuleValue: networkingv1.IngressRuleValue{
-								HTTP: &networkingv1.HTTPIngressRuleValue{
-									Paths: []networkingv1.HTTPIngressPath{
-										{
-											Path: "/path",
+					Spec: networkingv1.IngressSpec{
+						Rules: []networkingv1.IngressRule{
+							{
+								Host: "test.pb-custom.hcpapps.net",
+								IngressRuleValue: networkingv1.IngressRuleValue{
+									HTTP: &networkingv1.HTTPIngressRuleValue{
+										Paths: []networkingv1.HTTPIngressPath{
+											{
+												Path: "/path",
+											},
 										},
 									},
 								},
@@ -265,22 +266,24 @@ func TestProcessCustomHostValidation(t *testing.T) {
 		},
 		{
 			name: "subdomain of verifiied custom host",
-			ingress: &networkingv1.Ingress{
-				ObjectMeta: metav1.ObjectMeta{
-					Name: "ingress",
-					Annotations: map[string]string{
-						access.ANNOTATION_HCG_HOST: "generated.host.net",
+			accessor: &access.IngressAccessor{
+				Ingress: &networkingv1.Ingress{
+					ObjectMeta: metav1.ObjectMeta{
+						Name: "ingress",
+						Annotations: map[string]string{
+							access.ANNOTATION_HCG_HOST: "generated.host.net",
+						},
 					},
-				},
-				Spec: networkingv1.IngressSpec{
-					Rules: []networkingv1.IngressRule{
-						{
-							Host: "sub.test.pb-custom.hcpapps.net",
-							IngressRuleValue: networkingv1.IngressRuleValue{
-								HTTP: &networkingv1.HTTPIngressRuleValue{
-									Paths: []networkingv1.HTTPIngressPath{
-										{
-											Path: "/path",
+					Spec: networkingv1.IngressSpec{
+						Rules: []networkingv1.IngressRule{
+							{
+								Host: "sub.test.pb-custom.hcpapps.net",
+								IngressRuleValue: networkingv1.IngressRuleValue{
+									HTTP: &networkingv1.HTTPIngressRuleValue{
+										Paths: []networkingv1.HTTPIngressPath{
+											{
+												Path: "/path",
+											},
 										},
 									},
 								},
@@ -334,22 +337,24 @@ func TestProcessCustomHostValidation(t *testing.T) {
 		},
 		{
 			name: "Custom host unverified",
-			ingress: &networkingv1.Ingress{
-				ObjectMeta: metav1.ObjectMeta{
-					Name: "ingress",
-					Annotations: map[string]string{
-						access.ANNOTATION_HCG_HOST: "generated.host.net",
+			accessor: &access.IngressAccessor{
+				Ingress: &networkingv1.Ingress{
+					ObjectMeta: metav1.ObjectMeta{
+						Name: "ingress",
+						Annotations: map[string]string{
+							access.ANNOTATION_HCG_HOST: "generated.host.net",
+						},
 					},
-				},
-				Spec: networkingv1.IngressSpec{
-					Rules: []networkingv1.IngressRule{
-						{
-							Host: "test.pb-custom.hcpapps.net",
-							IngressRuleValue: networkingv1.IngressRuleValue{
-								HTTP: &networkingv1.HTTPIngressRuleValue{
-									Paths: []networkingv1.HTTPIngressPath{
-										{
-											Path: "/path",
+					Spec: networkingv1.IngressSpec{
+						Rules: []networkingv1.IngressRule{
+							{
+								Host: "test.pb-custom.hcpapps.net",
+								IngressRuleValue: networkingv1.IngressRuleValue{
+									HTTP: &networkingv1.HTTPIngressRuleValue{
+										Paths: []networkingv1.HTTPIngressPath{
+											{
+												Path: "/path",
+											},
 										},
 									},
 								},
@@ -406,30 +411,32 @@ func TestProcessCustomHostValidation(t *testing.T) {
 		},
 		{
 			name: "TLS section is preserved",
-			ingress: &networkingv1.Ingress{
-				ObjectMeta: metav1.ObjectMeta{
-					Name: "ingress",
-					Annotations: map[string]string{
-						access.ANNOTATION_HCG_HOST: "generated.host.net",
-					},
-				},
-				Spec: networkingv1.IngressSpec{
-					TLS: []networkingv1.IngressTLS{
-						{
-							Hosts: []string{
-								"test.pb-custom.hcpapps.net",
-							},
-							SecretName: "tls-secret",
+			accessor: &access.IngressAccessor{
+				Ingress: &networkingv1.Ingress{
+					ObjectMeta: metav1.ObjectMeta{
+						Name: "ingress",
+						Annotations: map[string]string{
+							access.ANNOTATION_HCG_HOST: "generated.host.net",
 						},
 					},
-					Rules: []networkingv1.IngressRule{
-						{
-							Host: "test.pb-custom.hcpapps.net",
-							IngressRuleValue: networkingv1.IngressRuleValue{
-								HTTP: &networkingv1.HTTPIngressRuleValue{
-									Paths: []networkingv1.HTTPIngressPath{
-										{
-											Path: "/path",
+					Spec: networkingv1.IngressSpec{
+						TLS: []networkingv1.IngressTLS{
+							{
+								Hosts: []string{
+									"test.pb-custom.hcpapps.net",
+								},
+								SecretName: "tls-secret",
+							},
+						},
+						Rules: []networkingv1.IngressRule{
+							{
+								Host: "test.pb-custom.hcpapps.net",
+								IngressRuleValue: networkingv1.IngressRuleValue{
+									HTTP: &networkingv1.HTTPIngressRuleValue{
+										Paths: []networkingv1.HTTPIngressPath{
+											{
+												Path: "/path",
+											},
 										},
 									},
 								},
@@ -496,10 +503,8 @@ func TestProcessCustomHostValidation(t *testing.T) {
 
 	for _, testCase := range testCases {
 		t.Run(testCase.name, func(t *testing.T) {
-			ingress := testCase.ingress.DeepCopy()
-
-			a, _ := access.NewAccessor(ingress)
-			if err := a.ProcessCustomHosts(
+			ingressAccessor := testCase.accessor.(*access.IngressAccessor)
+			if err := testCase.accessor.ProcessCustomHosts(
 				testCase.domainVerifications,
 			); err != nil {
 				t.Fatal(err)
@@ -508,7 +513,7 @@ func TestProcessCustomHostValidation(t *testing.T) {
 			// Assert the expected generated rules matches the
 			// annotation
 			if testCase.expectedPendingRules.Rules != nil {
-				annotation, ok := ingress.Annotations[access.ANNOTATION_PENDING_CUSTOM_HOSTS]
+				annotation, ok := testCase.accessor.GetAnnotations()[access.ANNOTATION_PENDING_CUSTOM_HOSTS]
 				if !ok {
 					t.Fatalf("expected GeneratedRulesAnnotation to be set")
 				}
@@ -525,7 +530,7 @@ func TestProcessCustomHostValidation(t *testing.T) {
 			// Assert the reconciled rules match the expected rules
 			for _, expectedRule := range testCase.expectedRules {
 				foundExpectedRule := false
-				for _, rule := range ingress.Spec.Rules {
+				for _, rule := range ingressAccessor.Spec.Rules {
 					if equality.Semantic.DeepEqual(expectedRule, rule) {
 						foundExpectedRule = true
 						break
@@ -538,7 +543,7 @@ func TestProcessCustomHostValidation(t *testing.T) {
 
 			for _, expectedTLS := range testCase.expectedTLS {
 				foundExpectedTLS := false
-				for _, tls := range ingress.Spec.TLS {
+				for _, tls := range ingressAccessor.Spec.TLS {
 					if equality.Semantic.DeepEqual(expectedTLS, tls) {
 						foundExpectedTLS = true
 						break

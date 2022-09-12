@@ -124,8 +124,8 @@ func TestTLS(t *testing.T) {
 
 	// Retrieve the Ingress
 	ingress := GetIngress(test, namespace, name)
-	accessor, err := access.NewAccessor(ingress)
-	hostname, _ := accessor.GetAnnotation(access.ANNOTATION_HCG_HOST)
+	accessor := &access.IngressAccessor{Ingress: ingress}
+	hostname := accessor.GetAnnotations()[access.ANNOTATION_HCG_HOST]
 	secretName := reconcilers.TLSSecretName(accessor)
 
 	// Check the Ingress TLS spec

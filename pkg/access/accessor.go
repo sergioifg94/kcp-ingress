@@ -5,11 +5,9 @@ import (
 	"strings"
 
 	"github.com/kcp-dev/logicalcluster/v2"
-	routev1 "github.com/openshift/api/route/v1"
 	networkingv1 "k8s.io/api/networking/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
-	"k8s.io/apimachinery/pkg/types"
 
 	v1 "github.com/kuadrant/kcp-glbc/pkg/apis/kuadrant/v1"
 	"github.com/kuadrant/kcp-glbc/pkg/reconciler/dns"
@@ -31,17 +29,8 @@ const (
 )
 
 type Accessor interface {
-	GetDeletionTimestamp() *metav1.Time
-	GetRuntimeObject() runtime.Object
-	GetMetadataObject() metav1.Object
-	GetFinalizers() []string
-	GetNamespaceName() types.NamespacedName
-	AddAnnotation(key, value string)
-	GetAnnotation(key string) (string, bool)
-	HasAnnotation(key string) bool
-	RemoveAnnotation(key string)
-	RemoveLabel(key string)
-	AddLabel(key, value string)
+	runtime.Object
+	metav1.Object
 	GetKind() string
 	GetHosts() []string
 	AddTLS(host, secret string)
@@ -49,17 +38,6 @@ type Accessor interface {
 	GetTargets(ctx context.Context, dnsLookup dnsLookupFunc) (map[logicalcluster.Name]map[string]dns.Target, error)
 	ReplaceCustomHosts(managedHost string) []string
 	ProcessCustomHosts(dvs *v1.DomainVerificationList) error
-}
-
-func NewAccessor(object interface{}) (Accessor, error) {
-	switch o := object.(type) {
-	case *routev1.Route:
-		return NewRouteAccessor(o), nil
-	case *networkingv1.Ingress:
-		return NewIngressAccessor(o), nil
-	default:
-		return nil, ErrInvalidAccessObject
-	}
 }
 
 type Pending struct {

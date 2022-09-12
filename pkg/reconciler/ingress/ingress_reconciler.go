@@ -19,17 +19,12 @@ import (
 )
 
 const (
-	cascadeCleanupFinalizer  = "kaudrant.dev/cascade-cleanup"
-	GeneratedRulesAnnotation = "kuadrant.dev/custom-hosts.generated"
+	cascadeCleanupFinalizer = "kaudrant.dev/cascade-cleanup"
 )
 
-func (c *Controller) reconcile(ctx context.Context, ingress *networkingv1.Ingress) error {
-	accessor, err := access.NewAccessor(ingress)
-	if err != nil {
-		return err
-	}
-	c.Logger.Info("starting reconcile of ingress", "accessor", accessor)
-	if ingress.DeletionTimestamp == nil {
+func (c *Controller) reconcile(ctx context.Context, ingress access.Accessor) error {
+	c.Logger.Info("starting reconcile of ingress", "ingress", ingress)
+	if ingress.GetDeletionTimestamp() == nil {
 		metadata.AddFinalizer(ingress, cascadeCleanupFinalizer)
 	}
 	//TODO evaluate where this actually belongs
@@ -71,7 +66,7 @@ func (c *Controller) reconcile(ctx context.Context, ingress *networkingv1.Ingres
 	var errs []error
 
 	for _, r := range reconcilers {
-		status, err := r.Reconcile(ctx, accessor)
+		status, err := r.Reconcile(ctx, ingress)
 		if err != nil {
 			errs = append(errs, err)
 		}
@@ -81,11 +76,11 @@ func (c *Controller) reconcile(ctx context.Context, ingress *networkingv1.Ingres
 	}
 
 	if len(errs) == 0 {
-		if ingress.DeletionTimestamp != nil && !ingress.DeletionTimestamp.IsZero() {
+		if ingress.GetDeletionTimestamp() != nil && !ingress.GetDeletionTimestamp().IsZero() {
 			metadata.RemoveFinalizer(ingress, cascadeCleanupFinalizer)
 			c.hostsWatcher.StopWatching(objectKey(ingress), "")
 			//in 0.5.0 these are never cleaned up properly
-			for _, f := range ingress.Finalizers {
+			for _, f := range ingress.GetFinalizers() {
 				if strings.Contains(f, workloadMigration.SyncerFinalizer) {
 					metadata.RemoveFinalizer(ingress, f)
 				}
@@ -93,7 +88,7 @@ func (c *Controller) reconcile(ctx context.Context, ingress *networkingv1.Ingres
 		}
 	}
 
-	c.Logger.V(3).Info("ingress reconcile complete", "errors", strconv.Itoa(len(errs)), "accessor", accessor)
+	c.Logger.V(3).Info("ingress reconcile complete", "errors", strconv.Itoa(len(errs)), "ingress", ingress)
 	return utilserrors.NewAggregate(errs)
 }
 

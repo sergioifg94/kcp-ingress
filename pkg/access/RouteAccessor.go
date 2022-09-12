@@ -2,7 +2,6 @@ package access
 
 import (
 	"context"
-	"fmt"
 
 	"github.com/kcp-dev/logicalcluster/v2"
 	routev1 "github.com/openshift/api/route/v1"
@@ -13,7 +12,6 @@ import (
 
 //RouteAccessor - placeholder, not yet implemented
 type RouteAccessor struct {
-	baseAccessor
 	object *routev1.Route
 }
 
@@ -48,5 +46,5 @@ func (a *RouteAccessor) ProcessCustomHosts(dvs *v1.DomainVerificationList) error
 }
 
 func (a *RouteAccessor) String() string {
-	return fmt.Sprintf("logical cluster: %v, kind: %v, namespace/name: %v", a.GetLogicalCluster(), a.GetKind(), a.GetNamespaceName())
+	return ""
 }

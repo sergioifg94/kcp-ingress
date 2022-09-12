@@ -292,7 +292,8 @@ func (c *Controller) process(ctx context.Context, key string) error {
 
 	current := object.(*networkingv1.Ingress)
 	target := current.DeepCopy()
-	err = c.reconcile(ctx, target)
+	accessor := access.NewIngressAccessor(target)
+	err = c.reconcile(ctx, accessor)
 	if err != nil {
 		return err
 	}
@@ -364,7 +365,7 @@ func (c *Controller) ingressesFromDomainVerification(obj interface{}) ([]*networ
 }
 
 func (c *Controller) getDomainVerifications(ctx context.Context, accessor access.Accessor) (*kuadrantv1.DomainVerificationList, error) {
-	return c.kuadrantClient.Cluster(logicalcluster.From(accessor.GetMetadataObject())).KuadrantV1().DomainVerifications().List(ctx, metav1.ListOptions{})
+	return c.kuadrantClient.Cluster(logicalcluster.From(accessor)).KuadrantV1().DomainVerifications().List(ctx, metav1.ListOptions{})
 }
 
 func (c *Controller) deleteTLSSecret(ctx context.Context, workspace logicalcluster.Name, namespace, name string) error {
@@ -405,11 +406,11 @@ func (c *Controller) updateDNS(ctx context.Context, dns *kuadrantv1.DNSRecord) (
 }
 
 func (c *Controller) deleteDNS(ctx context.Context, accessor access.Accessor) error {
-	return c.kuadrantClient.Cluster(logicalcluster.From(accessor.GetMetadataObject())).KuadrantV1().DNSRecords(accessor.GetNamespaceName().Namespace).Delete(ctx, accessor.GetNamespaceName().Name, metav1.DeleteOptions{})
+	return c.kuadrantClient.Cluster(logicalcluster.From(accessor)).KuadrantV1().DNSRecords(accessor.GetNamespace()).Delete(ctx, accessor.GetName(), metav1.DeleteOptions{})
 }
 
 func (c *Controller) getDNS(ctx context.Context, accessor access.Accessor) (*kuadrantv1.DNSRecord, error) {
-	return c.kuadrantClient.Cluster(logicalcluster.From(accessor.GetMetadataObject())).KuadrantV1().DNSRecords(accessor.GetNamespaceName().Namespace).Get(ctx, accessor.GetNamespaceName().Name, metav1.GetOptions{})
+	return c.kuadrantClient.Cluster(logicalcluster.From(accessor)).KuadrantV1().DNSRecords(accessor.GetNamespace()).Get(ctx, accessor.GetName(), metav1.GetOptions{})
 }
 
 func (c *Controller) createDNS(ctx context.Context, dnsRecord *kuadrantv1.DNSRecord) (*kuadrantv1.DNSRecord, error) {
