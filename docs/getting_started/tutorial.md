@@ -202,7 +202,7 @@ We will run the following commands in a new tab:
    ```
 As we can see, there is a label named something like: `*state.workload.kcp.dev/5MivhNIs7DjM7dK95I2K7TpWe7aUGMU4WHqjWn: Sync*`:
 
-GLBC is telling `kcp` where to sync all of the work resources in the namespace. Meaning, since the namespace is set to `5MivhNIs7DjM7dK95I2K7TpWe7aUGMU4WHqjWn` (kcp-cluster-1) , the ingress will also have `5MivhNIs7DjM7dK95I2K7TpWe7aUGMU4WHqjWn` (kcp-cluster-1) set to it. 
+GLBC is telling `kcp` where to sync all of the work resources in the namespace. Meaning, since the `state` label in the namespace is set to `5MivhNIs7DjM7dK95I2K7TpWe7aUGMU4WHqjWn` (kcp-cluster-1) , the `state` label in the ingress will also have `5MivhNIs7DjM7dK95I2K7TpWe7aUGMU4WHqjWn` (kcp-cluster-1) set to it. 
 
 <br>
 
