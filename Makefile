@@ -1,7 +1,8 @@
 
 SHELL := /usr/bin/env bash
 
-NUM_CLUSTERS := 2
+# NUM_CLUSTERS is a total number of kind clusters to be provisioned
+NUM_CLUSTERS ?= 1
 DO_BREW := true
 KCP_BRANCH := release-0.8
 

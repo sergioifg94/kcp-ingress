@@ -31,10 +31,10 @@ Use this tutorial to perform the following actions:
 
 ## Installation
 
-Clone the repo and run the following command:
+Clone the repo. You would need to set `NUM_CLUSTERS=2`. Run the following command:
 
 ```bash
-make local-setup
+NUM_CLUSTERS=2 make local-setup
 ```
 > NOTE: If errors are encountered during the local-setup, refer to the [Troubleshooting Installation](https://github.com/Kuadrant/kcp-glbc/blob/main/docs/troubleshooting.md) document.
 

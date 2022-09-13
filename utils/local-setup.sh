@@ -65,7 +65,6 @@ TEMP_DIR="./tmp"
 KCP_LOG_FILE="${TEMP_DIR}"/kcp.log
 
 KIND_CLUSTER_PREFIX="kcp-cluster-"
-KCP_GLBC_CLUSTER_NAME="${KIND_CLUSTER_PREFIX}glbc-control"
 GLBC_WORKSPACE=root:kuadrant
 
 KUBECONFIG_KCP_ADMIN=.kcp/admin.kubeconfig
@@ -79,7 +78,7 @@ KCP_SYNCER_IMAGE="ghcr.io/kcp-dev/kcp/syncer:${KCP_VERSION}"
 : ${SYNC_TARGETS_DIR:=${GLBC_DEPLOYMENTS_DIR}/sync-targets}
 : ${GLBC_DEPLOY_COMPONENTS:="cert-manager"}
 
-for ((i=1;i<=$NUM_CLUSTERS;i++))
+for ((i=2;i<=$NUM_CLUSTERS;i++))
 do
   CLUSTERS="${CLUSTERS}${KIND_CLUSTER_PREFIX}${i} "
 done
@@ -180,15 +179,17 @@ KUBECONFIG=${KUBECONFIG_KCP_ADMIN} ${KUBECTL_KCP_BIN} workspace create "kuadrant
 KUBECONFIG=${KUBECONFIG_KCP_ADMIN} ${SCRIPT_DIR}/deploy.sh -k "${KUSTOMIZATION_DIR}" -c "none"
 
 #3. Create GLBC sync target and wait for it to be ready
-createKINDCluster $KCP_GLBC_CLUSTER_NAME 8081 8444 "glbc"
-kubectl apply -f ${GLBC_DEPLOYMENTS_DIR}/sync-targets/glbc-syncer.yaml
+createKINDCluster "${KIND_CLUSTER_PREFIX}1" 8081 8444
+kubectl apply -f ${GLBC_DEPLOYMENTS_DIR}/sync-targets/kcp-cluster-1-syncer.yaml
 
 KUBECONFIG=${KUBECONFIG_KCP_ADMIN} ${KUBECTL_KCP_BIN} workspace use "${GLBC_WORKSPACE}"
-KUBECONFIG=${KUBECONFIG_KCP_ADMIN} kubectl wait --timeout=300s --for=condition=Ready=true synctargets "glbc"
+
+KUBECONFIG=${KUBECONFIG_KCP_ADMIN} kubectl get synctargets
+KUBECONFIG=${KUBECONFIG_KCP_ADMIN} kubectl wait --timeout=300s --for=condition=Ready=true synctargets "${KIND_CLUSTER_PREFIX}1"
 
 #4. Create User sync target clusters and wait for them to be ready
 if [ -n "$CLUSTERS" ]; then
-  echo "Creating $NUM_CLUSTERS kcp SyncTarget cluster(s)"
+  echo "Creating $NUM_CLUSTERS additional kcp SyncTarget cluster(s)"
   port80=8082
   port443=8445
   for cluster in $CLUSTERS; do

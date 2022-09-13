@@ -30,7 +30,7 @@ The exact command will be output as part of the deploy script, but will look som
 ```
 # targeting your physical cluster run:
 
-kubectl apply -f ./config/deploy/local/glbc-syncer.yaml
+kubectl apply -f ./config/deploy/sync-targets/kcp-cluster-1-syncer.yaml
 ```
 
 Verify the workload cluster becomes ready:
@@ -40,7 +40,7 @@ Verify the workload cluster becomes ready:
 ./bin/kubectl-kcp ws root:<target workspace>
  $ kubectl get synctargets -o wide
 NAME            LOCATION        READY   SYNCED API RESOURCES   KEY                                      AGE
-glbc            glbc            True                           832Kocbfr9pZCD62hs7bt3No2aylrt9lYwTJYa   46m
+kcp-cluster-1   kcp-cluster-1   True                           832Kocbfr9pZCD62hs7bt3No2aylrt9lYwTJYa   46m
 ```
 N.B. It can take a couple of minutes for it go into a "ready" state.
 
