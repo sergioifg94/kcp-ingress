@@ -10,8 +10,7 @@ import (
 	"time"
 
 	"github.com/miekg/dns"
-
-	v1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/client-go/kubernetes"
 )
 
@@ -31,6 +30,7 @@ type HostAddress struct {
 	Host string
 	IP   gonet.IP
 	TTL  time.Duration
+	TXT  string
 }
 
 // ConfigMapHostResolver is a HostResolver that looks up the IP address of
@@ -44,7 +44,7 @@ type ConfigMapHostResolver struct {
 var _ HostResolver = &ConfigMapHostResolver{}
 
 func (r *ConfigMapHostResolver) LookupIPAddr(ctx context.Context, host string) ([]HostAddress, error) {
-	configMap, err := r.Client.CoreV1().ConfigMaps(r.Namespace).Get(ctx, r.Name, v1.GetOptions{})
+	configMap, err := r.Client.CoreV1().ConfigMaps(r.Namespace).Get(ctx, r.Name, metav1.GetOptions{})
 	if err != nil {
 		return nil, err
 	}
@@ -75,7 +75,7 @@ func (r *ConfigMapHostResolver) LookupIPAddr(ctx context.Context, host string) (
 }
 
 func (r *ConfigMapHostResolver) TxtRecordExists(ctx context.Context, domain string, value string) (bool, error) {
-	configMap, err := r.Client.CoreV1().ConfigMaps(r.Namespace).Get(ctx, r.Name, v1.GetOptions{})
+	configMap, err := r.Client.CoreV1().ConfigMaps(r.Namespace).Get(ctx, r.Name, metav1.GetOptions{})
 	if err != nil {
 		return false, err
 	}

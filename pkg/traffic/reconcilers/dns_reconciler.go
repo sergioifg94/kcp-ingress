@@ -18,19 +18,19 @@ import (
 
 	"github.com/kcp-dev/logicalcluster/v2"
 
-	"github.com/kuadrant/kcp-glbc/pkg/access"
 	v1 "github.com/kuadrant/kcp-glbc/pkg/apis/kuadrant/v1"
 	"github.com/kuadrant/kcp-glbc/pkg/dns/aws"
 	"github.com/kuadrant/kcp-glbc/pkg/net"
 	"github.com/kuadrant/kcp-glbc/pkg/reconciler/dns"
+	"github.com/kuadrant/kcp-glbc/pkg/traffic"
 	"github.com/kuadrant/kcp-glbc/pkg/util/metadata"
 	"github.com/kuadrant/kcp-glbc/pkg/util/slice"
 	"github.com/kuadrant/kcp-glbc/pkg/util/workloadMigration"
 )
 
 type DnsReconciler struct {
-	DeleteDNS        func(ctx context.Context, accessor access.Accessor) error
-	GetDNS           func(ctx context.Context, accessor access.Accessor) (*v1.DNSRecord, error)
+	DeleteDNS        func(ctx context.Context, accessor traffic.Interface) error
+	GetDNS           func(ctx context.Context, accessor traffic.Interface) (*v1.DNSRecord, error)
 	CreateDNS        func(ctx context.Context, dns *v1.DNSRecord) (*v1.DNSRecord, error)
 	UpdateDNS        func(ctx context.Context, dns *v1.DNSRecord) (*v1.DNSRecord, error)
 	WatchHost        func(ctx context.Context, key interface{}, host string) bool
@@ -40,25 +40,27 @@ type DnsReconciler struct {
 	Log              logr.Logger
 }
 
-func (r *DnsReconciler) Reconcile(ctx context.Context, accessor access.Accessor) (access.ReconcileStatus, error) {
-	r.Log.Info("DNS reconciling", "accessor", accessor)
+func (r *DnsReconciler) GetName() string {
+	return "DNS Reconciler"
+}
+
+func (r *DnsReconciler) Reconcile(ctx context.Context, accessor traffic.Interface) (traffic.ReconcileStatus, error) {
 	if accessor.GetDeletionTimestamp() != nil && !accessor.GetDeletionTimestamp().IsZero() {
 		if err := r.DeleteDNS(ctx, accessor); err != nil && !k8errors.IsNotFound(err) {
-			return access.ReconcileStatusStop, err
+			return traffic.ReconcileStatusStop, err
 		}
-		return access.ReconcileStatusContinue, nil
+		return traffic.ReconcileStatusContinue, nil
 	}
 
 	key := objectKey(accessor)
-	managedHost := accessor.GetAnnotations()[access.ANNOTATION_HCG_HOST]
-	r.Log.Info("got managed host", "host", managedHost)
+	managedHost := accessor.GetAnnotations()[traffic.ANNOTATION_HCG_HOST]
 	var activeLBHosts []string
 	activeDNSTargetIPs := map[string][]string{}
 	deletingTargetIPs := map[string][]string{}
 
 	targets, err := accessor.GetTargets(ctx, r.DNSLookup)
 	if err != nil {
-		return access.ReconcileStatusContinue, err
+		return traffic.ReconcileStatusContinue, err
 	}
 	for cluster, targets := range targets {
 		deleteAnnotation := workloadMigration.WorkloadDeletingAnnotation + cluster.String()
@@ -97,11 +99,11 @@ func (r *DnsReconciler) Reconcile(ctx context.Context, accessor access.Accessor)
 	// If it doesn't exist, create it
 	if err != nil {
 		if !k8errors.IsNotFound(err) {
-			return access.ReconcileStatusStop, err
+			return traffic.ReconcileStatusStop, err
 		}
 		record, err := newDNSRecordForObject(accessor)
 		if err != nil {
-			return access.ReconcileStatusContinue, err
+			return traffic.ReconcileStatusContinue, err
 		}
 		r.setEndpointFromTargets(managedHost, activeDNSTargetIPs, record)
 		// Create the resource in the cluster
@@ -109,12 +111,12 @@ func (r *DnsReconciler) Reconcile(ctx context.Context, accessor access.Accessor)
 			r.Log.V(3).Info("creating DNSRecord ", "record", record.Name, "endpoints for DNSRecord", record.Spec.Endpoints)
 			existing, err = r.CreateDNS(ctx, record)
 			if err != nil {
-				return access.ReconcileStatusContinue, err
+				return traffic.ReconcileStatusContinue, err
 			}
 			// metric to observe the accessor admission time
 			IngressObjectTimeToAdmission.Observe(existing.CreationTimestamp.Time.Sub(accessor.GetCreationTimestamp().Time).Seconds())
 		}
-		return access.ReconcileStatusContinue, nil
+		return traffic.ReconcileStatusContinue, nil
 	}
 	// If it does exist, update it
 	copyDNS := existing.DeepCopy()
@@ -122,11 +124,11 @@ func (r *DnsReconciler) Reconcile(ctx context.Context, accessor access.Accessor)
 	if !equality.Semantic.DeepEqual(copyDNS, existing) {
 		r.Log.V(3).Info("updating DNSRecord ", "record", copyDNS.Name, "endpoints for DNSRecord", "endpoints", copyDNS.Spec.Endpoints)
 		if _, err = r.UpdateDNS(ctx, copyDNS); err != nil {
-			return access.ReconcileStatusStop, err
+			return traffic.ReconcileStatusStop, err
 		}
 	}
 
-	return access.ReconcileStatusContinue, nil
+	return traffic.ReconcileStatusContinue, nil
 }
 
 func newDNSRecordForObject(obj runtime.Object) (*v1.DNSRecord, error) {
@@ -159,15 +161,15 @@ func newDNSRecordForObject(obj runtime.Object) (*v1.DNSRecord, error) {
 		Name:      objMeta.GetName(),
 		Namespace: objMeta.GetNamespace(),
 	}
-	if _, ok := record.Annotations[access.ANNOTATION_INGRESS_KEY]; !ok {
+	if _, ok := record.Annotations[traffic.ANNOTATION_TRAFFIC_KEY]; !ok {
 		if record.Annotations == nil {
 			record.Annotations = map[string]string{}
 		}
-		record.Annotations[access.ANNOTATION_INGRESS_KEY] = string(objectKey(obj))
+		record.Annotations[traffic.ANNOTATION_TRAFFIC_KEY] = string(objectKey(obj))
 	}
 
 	metadata.CopyAnnotationsPredicate(objMeta, record, metadata.KeyPredicate(func(key string) bool {
-		return strings.HasPrefix(key, access.ANNOTATION_HEALTH_CHECK_PREFIX)
+		return strings.HasPrefix(key, traffic.ANNOTATION_HEALTH_CHECK_PREFIX)
 	}))
 	return record, nil
 
@@ -212,8 +214,8 @@ func (r *DnsReconciler) setEndpointFromTargets(dnsName string, dnsTargets map[st
 	dnsRecord.Spec.Endpoints = newEndpoints
 }
 
-// awsEndpointWeight returns the weight Value for a single AWS record in a set of records where the access is split
-// evenly between a number of clusters/ingresses, each splitting access evenly to a number of IPs (numIPs)
+// awsEndpointWeight returns the weight Value for a single AWS record in a set of records where the traffic is split
+// evenly between a number of clusters/ingresses, each splitting traffic evenly to a number of IPs (numIPs)
 //
 // Divides the number of IPs by a known weight allowance for a cluster/ingress, note that this means:
 // * Will always return 1 after a certain number of ips is reached, 60 in the current case (maxWeight / 2)

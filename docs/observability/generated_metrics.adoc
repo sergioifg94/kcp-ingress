@@ -127,3 +127,8 @@ and the 2nd column is the table title (e.g. "Go Runtime Metrics")
 | `process_virtual_memory_bytes` | Virtual memory size in bytes.| GAUGE| 
 | `process_virtual_memory_max_bytes` | Maximum amount of virtual memory available in bytes.| GAUGE| 
 |===
+.Other Metrics
+|===
+|Name |Help |Type |Labels
+| `glbc_route_managed_object_total` | Total number of managed route object| GAUGE| 
+|===

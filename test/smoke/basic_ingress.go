@@ -28,8 +28,8 @@ import (
 
 	"github.com/kcp-dev/logicalcluster/v2"
 
-	"github.com/kuadrant/kcp-glbc/pkg/access"
 	kuadrantv1 "github.com/kuadrant/kcp-glbc/pkg/apis/kuadrant/v1"
+	"github.com/kuadrant/kcp-glbc/pkg/traffic"
 	"github.com/kuadrant/kcp-glbc/pkg/util/env"
 	. "github.com/kuadrant/kcp-glbc/test/support"
 )
@@ -38,7 +38,7 @@ func createTestIngress(t Test, namespace *corev1.Namespace, serviceName string) 
 	name := GenerateName("test-ing-")
 
 	ingress, err := t.Client().Core().Cluster(logicalcluster.From(namespace)).NetworkingV1().Ingresses(namespace.Name).
-		Apply(t.Ctx(), IngressConfiguration(namespace.Name, name, serviceName,"test.glbc.com"), ApplyOptions)
+		Apply(t.Ctx(), IngressConfiguration(namespace.Name, name, serviceName, "test.glbc.com"), ApplyOptions)
 	t.Expect(err).NotTo(HaveOccurred())
 
 	t.T().Cleanup(func() {
@@ -84,7 +84,6 @@ func TestIngressBasic(t Test, ingressCount int, zoneID, glbcDomain string) {
 		Apply(t.Ctx(), ServiceConfiguration(namespace.Name, name, map[string]string{}), ApplyOptions)
 	t.Expect(err).NotTo(HaveOccurred())
 
-
 	// Assertion that is run in the cleanup pahse to ensure all ingresses are removed
 	t.T().Cleanup(func() {
 		assertIngressCleanup(t, namespace)
@@ -114,7 +113,7 @@ func TestIngressBasic(t Test, ingressCount int, zoneID, glbcDomain string) {
 		tlsSecretName := fmt.Sprintf("hcg-tls-ingress-%s", ingress.Name)
 		t.Eventually(Ingress(t, namespace, ingress.Name)).WithTimeout(TestTimeoutMedium).Should(And(
 			WithTransform(Annotations, And(
-				HaveKey(access.ANNOTATION_HCG_HOST),
+				HaveKey(traffic.ANNOTATION_HCG_HOST),
 			)),
 			WithTransform(LoadBalancerIngresses, HaveLen(1)),
 			Satisfy(HostsEqualsToGeneratedHost),
@@ -124,10 +123,10 @@ func TestIngressBasic(t Test, ingressCount int, zoneID, glbcDomain string) {
 		if customHostsEnabled {
 			t.Eventually(Ingress(t, namespace, ingress.Name)).WithTimeout(TestTimeoutMedium).Should(And(
 				WithTransform(Annotations, And(
-					HaveKey(access.ANNOTATION_PENDING_CUSTOM_HOSTS),
+					HaveKey(traffic.ANNOTATION_PENDING_CUSTOM_HOSTS),
 				)),
 				WithTransform(Labels, And(
-					HaveKey(access.LABEL_HAS_PENDING_HOSTS),
+					HaveKey(traffic.LABEL_HAS_PENDING_HOSTS),
 				)),
 			))
 		}

@@ -14,13 +14,16 @@ import (
 	"go.uber.org/zap"
 	"go.uber.org/zap/zapcore"
 	"golang.org/x/sync/errgroup"
-
-	// Make sure our workqueue MetricsProvider is the first to register
-	"github.com/kuadrant/kcp-glbc/pkg/access/reconcilers"
-	_ "github.com/kuadrant/kcp-glbc/pkg/reconciler"
+	"k8s.io/client-go/dynamic"
+	"k8s.io/client-go/dynamic/dynamicinformer"
 
 	certmanclient "github.com/jetstack/cert-manager/pkg/client/clientset/versioned"
 	certmaninformer "github.com/jetstack/cert-manager/pkg/client/informers/externalversions"
+
+	// Make sure our workqueue MetricsProvider is the first to register
+	_ "github.com/kuadrant/kcp-glbc/pkg/reconciler"
+	"github.com/kuadrant/kcp-glbc/pkg/reconciler/route"
+	"github.com/kuadrant/kcp-glbc/pkg/traffic/reconcilers"
 
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	genericapiserver "k8s.io/apiserver/pkg/server"
@@ -86,6 +89,7 @@ var options struct {
 type APIExportClusterInformers struct {
 	SharedInformerFactory         informers.SharedInformerFactory
 	KuadrantSharedInformerFactory kuadrantinformer.SharedInformerFactory
+	KCPDynamicInformerFactory     dynamicinformer.DynamicSharedInformerFactory
 }
 
 func init() {
@@ -187,6 +191,7 @@ func main() {
 		exitOnError(err, "Failed to create cert provider")
 
 		ingress.InitMetrics(certProvider)
+		route.InitMetrics()
 		reconcilers.InitMetrics(certProvider)
 
 		_, err := certProvider.IssuerExists(ctx)
@@ -216,6 +221,10 @@ func main() {
 		exitOnError(err, "Failed to create KCP core client")
 		kcpKubeInformerFactory := informers.NewSharedInformerFactory(kcpKubeClient.Cluster(logicalcluster.New(options.LogicalClusterTarget)), resyncPeriod)
 
+		kcpDynamicClient, err := dynamic.NewClusterForConfig(glbcVWClientConfig)
+		exitOnError(err, "Failed to create KCP dynamic client")
+		kcpDynamicInformerFactory := dynamicinformer.NewDynamicSharedInformerFactory(kcpDynamicClient.Cluster(logicalcluster.New(options.LogicalClusterTarget)), resyncPeriod)
+
 		kcpKuadrantClient, err := kuadrantv1.NewClusterForConfig(glbcVWClientConfig)
 		exitOnError(err, "Failed to create KCP kuadrant client")
 		kcpKuadrantInformerFactory := kuadrantinformer.NewSharedInformerFactory(kcpKuadrantClient.Cluster(logicalcluster.New(options.LogicalClusterTarget)), resyncPeriod)
@@ -223,10 +232,34 @@ func main() {
 		clusterInformers := &APIExportClusterInformers{}
 		clusterInformers.SharedInformerFactory = kcpKubeInformerFactory
 		clusterInformers.KuadrantSharedInformerFactory = kcpKuadrantInformerFactory
+		clusterInformers.KCPDynamicInformerFactory = kcpDynamicInformerFactory
 
 		isControllerLeader := len(controllers) == 0
 
 		dnsClient, domainVerifier := getDNSUtilities(os.Getenv("GLBC_HOST_RESOLVER"))
+
+		routeController := route.NewController(&route.ControllerConfig{
+			ControllerConfig: &reconciler.ControllerConfig{
+				NameSuffix: name,
+			},
+			KCPKubeClient:                   kcpKubeClient,
+			KubeClient:                      kubeClient,
+			DnsRecordClient:                 kcpKuadrantClient,
+			KubeDynamicClient:               kcpDynamicClient,
+			KCPInformer:                     kcpKuadrantInformerFactory,
+			KCPSharedInformerFactory:        kcpKubeInformerFactory,
+			KCPDynamicSharedInformerFactory: kcpDynamicInformerFactory,
+			CertificateInformer:             certificateInformerFactory,
+			GlbcInformerFactory:             glbcKubeInformerFactory,
+			Domain:                          options.Domain,
+			CertProvider:                    certProvider,
+			HostResolver:                    dnsClient,
+			CustomHostsEnabled:              options.EnableCustomHosts,
+			AdvancedSchedulingEnabled:       options.AdvancedScheduling,
+			GLBCWorkspace:                   logicalcluster.New(options.GLBCWorkspace),
+		})
+
+		controllers = append(controllers, routeController)
 
 		ingressController := ingress.NewController(&ingress.ControllerConfig{
 			ControllerConfig: &reconciler.ControllerConfig{
@@ -321,6 +354,9 @@ func main() {
 
 		clusterInformers.KuadrantSharedInformerFactory.Start(ctx.Done())
 		clusterInformers.KuadrantSharedInformerFactory.WaitForCacheSync(ctx.Done())
+
+		clusterInformers.KCPDynamicInformerFactory.Start(ctx.Done())
+		clusterInformers.KCPDynamicInformerFactory.WaitForCacheSync(ctx.Done())
 	}
 
 	if options.TLSProviderEnabled {

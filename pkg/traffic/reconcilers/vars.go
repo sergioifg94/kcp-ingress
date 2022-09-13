@@ -6,9 +6,9 @@ import (
 
 	"github.com/prometheus/client_golang/prometheus"
 
-	"github.com/kuadrant/kcp-glbc/pkg/access"
 	"github.com/kuadrant/kcp-glbc/pkg/metrics"
 	"github.com/kuadrant/kcp-glbc/pkg/tls"
+	"github.com/kuadrant/kcp-glbc/pkg/traffic"
 )
 
 const (
@@ -19,7 +19,8 @@ const (
 )
 
 type Reconciler interface {
-	Reconcile(ctx context.Context, accessor access.Accessor) (access.ReconcileStatus, error)
+	Reconcile(ctx context.Context, accessor traffic.Interface) (traffic.ReconcileStatus, error)
+	GetName() string
 }
 
 var (

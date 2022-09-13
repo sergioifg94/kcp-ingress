@@ -19,3 +19,6 @@ spec:
   - group: networking.k8s.io
     identityHash: DUMMY_HASH
     resource: ingresses
+  - group: "route.openshift.io"
+    resource: "routes"
+    identityHash: DUMMY_HASH

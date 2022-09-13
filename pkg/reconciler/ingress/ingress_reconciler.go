@@ -12,20 +12,15 @@ import (
 
 	"k8s.io/client-go/tools/cache"
 
-	"github.com/kuadrant/kcp-glbc/pkg/access"
-	accessReconcilers "github.com/kuadrant/kcp-glbc/pkg/access/reconcilers"
+	"github.com/kuadrant/kcp-glbc/pkg/traffic"
+	accessReconcilers "github.com/kuadrant/kcp-glbc/pkg/traffic/reconcilers"
 	"github.com/kuadrant/kcp-glbc/pkg/util/metadata"
 	"github.com/kuadrant/kcp-glbc/pkg/util/workloadMigration"
 )
 
-const (
-	cascadeCleanupFinalizer = "kaudrant.dev/cascade-cleanup"
-)
-
-func (c *Controller) reconcile(ctx context.Context, ingress access.Accessor) error {
-	c.Logger.Info("starting reconcile of ingress", "ingress", ingress)
+func (c *Controller) reconcile(ctx context.Context, ingress traffic.Interface) error {
 	if ingress.GetDeletionTimestamp() == nil {
-		metadata.AddFinalizer(ingress, cascadeCleanupFinalizer)
+		metadata.AddFinalizer(ingress, traffic.FINALIZER_CASCADE_CLEANUP)
 	}
 	//TODO evaluate where this actually belongs
 	if c.advancedSchedulingEnabled {
@@ -40,6 +35,8 @@ func (c *Controller) reconcile(ctx context.Context, ingress access.Accessor) err
 			CustomHostsEnabled:     c.customHostsEnabled,
 			KuadrantClient:         c.kuadrantClient,
 			GetDomainVerifications: c.getDomainVerifications,
+			CreateOrUpdateTraffic:  c.createOrUpdateIngress,
+			DeleteTraffic:          c.deleteRoute,
 		},
 		&accessReconcilers.CertificateReconciler{
 			CreateCertificate:    c.certProvider.Create,
@@ -48,6 +45,7 @@ func (c *Controller) reconcile(ctx context.Context, ingress access.Accessor) err
 			UpdateCertificate:    c.certProvider.Update,
 			GetCertificateStatus: c.certProvider.GetCertificateStatus,
 			CopySecret:           c.copySecret,
+			GetSecret:            c.getSecret,
 			DeleteSecret:         c.deleteTLSSecret,
 			Log:                  c.Logger,
 		},
@@ -70,7 +68,7 @@ func (c *Controller) reconcile(ctx context.Context, ingress access.Accessor) err
 			c.Logger.Error(err, "reconciler error: ", ingress)
 			errs = append(errs, err)
 		}
-		if status == access.ReconcileStatusStop {
+		if status == traffic.ReconcileStatusStop {
 			break
 		}
 	}
@@ -78,7 +76,7 @@ func (c *Controller) reconcile(ctx context.Context, ingress access.Accessor) err
 	if len(errs) == 0 {
 		if ingress.GetDeletionTimestamp() != nil && !ingress.GetDeletionTimestamp().IsZero() {
 			c.Logger.Info("reconcile ingress deleted ", "ingress", ingress)
-			metadata.RemoveFinalizer(ingress, cascadeCleanupFinalizer)
+			metadata.RemoveFinalizer(ingress, traffic.FINALIZER_CASCADE_CLEANUP)
 			c.hostsWatcher.StopWatching(objectKey(ingress), "")
 			//in 0.5.0 these are never cleaned up properly
 			for _, f := range ingress.GetFinalizers() {

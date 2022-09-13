@@ -1,11 +1,11 @@
-package access
+package traffic
 
 import (
 	"fmt"
 )
 
 var (
-	ErrInvalidAccessObject  = fmt.Errorf("not a valid access object type (expected: ingress or route)")
+	ErrInvalidAccessObject  = fmt.Errorf("not a valid traffic object type (expected: ingress or route)")
 	ErrGeneratedHostMissing = fmt.Errorf("generated host annotation '%v' was expected but was not present", ANNOTATION_HCG_HOST)
 )
 

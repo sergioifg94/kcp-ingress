@@ -51,6 +51,11 @@ CRC_KUBECONFIG="${CRC_CLUSTER_NAME}.kubeconfig"
 PULL_SECRET=~/pull-secret
 KUBECONFIG_KCP_ADMIN=.kcp/admin.kubeconfig
 
+SED=sed
+if [[ "${OSTYPE}" =~ ^darwin.* ]]; then
+  SED=gsed
+fi
+
 KUBECTL_KCP_BIN="./bin/kubectl-kcp"
 
 : ${KCP_VERSION:="release-0.9"}
@@ -73,8 +78,10 @@ kubectl --context crc-admin get ns | grep kcp | awk '{print $1}' | xargs kubectl
 
 echo "Registering crc cluster into KCP"
 KUBECONFIG=${KUBECONFIG_KCP_ADMIN} ./bin/kubectl-kcp ws root:kuadrant
-KUBECONFIG=${KUBECONFIG_KCP_ADMIN} ${KUBECTL_KCP_BIN} workload sync ${CRC_CLUSTER_NAME} --syncer-image=${KCP_SYNCER_IMAGE} --resources=ingresses.networking.k8s.io,services --output-file ${SYNC_TARGETS_DIR}/${CRC_CLUSTER_NAME}-syncer.yaml
+KUBECONFIG=${KUBECONFIG_KCP_ADMIN} ${KUBECTL_KCP_BIN} workload sync ${CRC_CLUSTER_NAME} --syncer-image=${KCP_SYNCER_IMAGE} --resources=ingresses.networking.k8s.io,services,routes.route.openshift.io --output-file ${SYNC_TARGETS_DIR}/${CRC_CLUSTER_NAME}-syncer.yaml
 KUBECONFIG=${KUBECONFIG_KCP_ADMIN} kubectl annotate --overwrite synctarget ${CRC_CLUSTER_NAME} featuregates.experimental.workload.kcp.dev/advancedscheduling='true'
+
+${SED} -i '/^  - routes$/a \ \ - routes/custom-host' ${SYNC_TARGETS_DIR}/${CRC_CLUSTER_NAME}-syncer.yaml
 
 kubectl --context crc-admin apply -f ${SYNC_TARGETS_DIR}/${CRC_CLUSTER_NAME}-syncer.yaml
 

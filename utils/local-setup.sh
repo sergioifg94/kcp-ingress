@@ -129,6 +129,13 @@ createKINDCluster() {
   VERSION=controller-v1.2.1
   curl https://raw.githubusercontent.com/kubernetes/ingress-nginx/"${VERSION}"/deploy/static/provider/kind/deploy.yaml | sed "s/--publish-status-address=localhost/--report-node-internal-ip-address/g" | kubectl apply -f -
   kubectl annotate ingressclass nginx "ingressclass.kubernetes.io/is-default-class=true"
+
+# TODO: WIP Routes in kind
+#  kubectl apply -f https://raw.githubusercontent.com/openshift/router/master/deploy/route_crd.yaml
+#  kubectl apply -f https://raw.githubusercontent.com/openshift/router/master/deploy/router_rbac.yaml
+#  kubectl create namespace openshift-ingress -o yaml --dry-run=client | kubectl apply -f -
+#  kubectl apply -f https://raw.githubusercontent.com/openshift/router/master/deploy/router.yaml
+
   echo "Waiting for deployments to be ready ..."
   kubectl -n ingress-nginx wait --timeout=300s --for=condition=Available deployments --all
 }
@@ -216,7 +223,7 @@ KUBECONFIG=${KUBECONFIG_KCP_ADMIN} ${SCRIPT_DIR}/deploy.sh -k "${KUSTOMIZATION_D
 
 #6. Miscellaneous local development specific steps
 
-# Create the kcp-glbc namespace, kcp-glbc-controller-manager service account and generate a kubeconfig for access
+# Create the kcp-glbc namespace, kcp-glbc-controller-manager service account and generate a kubeconfig for traffic
 KUBECONFIG=${KUBECONFIG_KCP_ADMIN} ${SCRIPT_DIR}/create_glbc_kubeconfig.sh -o ${KUBECONFIG_KCP_GLBC}
 
 # Apply the default glbc-ca issuer

@@ -1,4 +1,4 @@
-package access
+package traffic
 
 import (
 	"context"
@@ -7,33 +7,31 @@ import (
 	"strings"
 
 	"github.com/kcp-dev/logicalcluster/v2"
+	corev1 "k8s.io/api/core/v1"
 	networkingv1 "k8s.io/api/networking/v1"
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/utils/strings/slices"
 
 	v1 "github.com/kuadrant/kcp-glbc/pkg/apis/kuadrant/v1"
-	"github.com/kuadrant/kcp-glbc/pkg/net"
 	"github.com/kuadrant/kcp-glbc/pkg/reconciler/dns"
 	"github.com/kuadrant/kcp-glbc/pkg/util/metadata"
 	"github.com/kuadrant/kcp-glbc/pkg/util/slice"
 	"github.com/kuadrant/kcp-glbc/pkg/util/workloadMigration"
 )
 
-type dnsLookupFunc func(ctx context.Context, host string) ([]net.HostAddress, error)
-
-func NewIngressAccessor(i *networkingv1.Ingress) *IngressAccessor {
-	return &IngressAccessor{Ingress: i}
+func NewIngress(i *networkingv1.Ingress) *Ingress {
+	return &Ingress{Ingress: i}
 }
 
-type IngressAccessor struct {
+type Ingress struct {
 	*networkingv1.Ingress
 }
 
-func (a *IngressAccessor) GetKind() string {
+func (a *Ingress) GetKind() string {
 	return "Ingress"
 }
 
-func (a *IngressAccessor) GetHosts() []string {
+func (a *Ingress) GetHosts() []string {
 	var hosts []string
 	for _, rule := range a.Spec.Rules {
 		if !slices.Contains(hosts, rule.Host) {
@@ -44,23 +42,23 @@ func (a *IngressAccessor) GetHosts() []string {
 	return hosts
 }
 
-func (a *IngressAccessor) AddTLS(host, secret string) {
+func (a *Ingress) AddTLS(host string, secret *corev1.Secret) {
 	for i, tls := range a.Spec.TLS {
 		if slice.ContainsString(tls.Hosts, host) {
 			a.Spec.TLS[i] = networkingv1.IngressTLS{
 				Hosts:      []string{host},
-				SecretName: secret,
+				SecretName: secret.Name,
 			}
 			return
 		}
 	}
 	a.Spec.TLS = append(a.Spec.TLS, networkingv1.IngressTLS{
 		Hosts:      []string{host},
-		SecretName: secret,
+		SecretName: secret.GetName(),
 	})
 }
 
-func (a *IngressAccessor) RemoveTLS(hosts []string) {
+func (a *Ingress) RemoveTLS(hosts []string) {
 	for _, removeHost := range hosts {
 		for i, tls := range a.Spec.TLS {
 			hosts := tls.Hosts
@@ -79,7 +77,7 @@ func (a *IngressAccessor) RemoveTLS(hosts []string) {
 	}
 }
 
-func (a *IngressAccessor) ReplaceCustomHosts(managedHost string) []string {
+func (a *Ingress) ReplaceCustomHosts(managedHost string) []string {
 	var customHosts []string
 	for i, rule := range a.Spec.Rules {
 		if rule.Host != managedHost {
@@ -93,7 +91,7 @@ func (a *IngressAccessor) ReplaceCustomHosts(managedHost string) []string {
 	return customHosts
 }
 
-func (a *IngressAccessor) GetTargets(ctx context.Context, dnsLookup dnsLookupFunc) (map[logicalcluster.Name]map[string]dns.Target, error) {
+func (a *Ingress) GetTargets(ctx context.Context, dnsLookup dnsLookupFunc) (map[logicalcluster.Name]map[string]dns.Target, error) {
 	statuses, err := a.getStatuses()
 	if err != nil {
 		return nil, err
@@ -111,7 +109,7 @@ func (a *IngressAccessor) GetTargets(ctx context.Context, dnsLookup dnsLookupFun
 	return targets, nil
 }
 
-func (a *IngressAccessor) targetsFromStatus(ctx context.Context, status networkingv1.IngressStatus, dnsLookup dnsLookupFunc) (map[string]dns.Target, error) {
+func (a *Ingress) targetsFromStatus(ctx context.Context, status networkingv1.IngressStatus, dnsLookup dnsLookupFunc) (map[string]dns.Target, error) {
 	targets := map[string]dns.Target{}
 	for _, lb := range status.LoadBalancer.Ingress {
 		if lb.IP != "" {
@@ -133,7 +131,7 @@ func (a *IngressAccessor) targetsFromStatus(ctx context.Context, status networki
 	return targets, nil
 }
 
-func (a *IngressAccessor) getStatuses() (map[logicalcluster.Name]networkingv1.IngressStatus, error) {
+func (a *Ingress) getStatuses() (map[logicalcluster.Name]networkingv1.IngressStatus, error) {
 	statuses := map[logicalcluster.Name]networkingv1.IngressStatus{}
 	for k, v := range a.Annotations {
 		status := networkingv1.IngressStatus{}
@@ -157,7 +155,7 @@ func (a *IngressAccessor) getStatuses() (map[logicalcluster.Name]networkingv1.In
 	return statuses, nil
 }
 
-func (a *IngressAccessor) ProcessCustomHosts(dvs *v1.DomainVerificationList) error {
+func (a *Ingress) ProcessCustomHosts(_ context.Context, dvs *v1.DomainVerificationList, _ CreateOrUpdateTraffic, _ DeleteTraffic) error {
 	generatedHost, ok := a.GetAnnotations()[ANNOTATION_HCG_HOST]
 	if !ok || generatedHost == "" {
 		return ErrGeneratedHostMissing
@@ -231,7 +229,17 @@ func (a *IngressAccessor) ProcessCustomHosts(dvs *v1.DomainVerificationList) err
 	return nil
 }
 
-func (a *IngressAccessor) String() string {
-	cluster := logicalcluster.From(a)
-	return fmt.Sprintf("logical cluster: %v, kind: %v, namespace/name: %v", cluster, a.GetKind(), types.NamespacedName{Namespace: a.Namespace, Name: a.Name})
+func (a *Ingress) GetLogicalCluster() logicalcluster.Name {
+	return logicalcluster.From(a)
+}
+
+func (a *Ingress) GetNamespaceName() types.NamespacedName {
+	return types.NamespacedName{
+		Namespace: a.Namespace,
+		Name:      a.Name,
+	}
+}
+
+func (a *Ingress) String() string {
+	return fmt.Sprintf("logical cluster: %v, kind: %v, namespace/name: %v", a.GetLogicalCluster(), a.GetKind(), a.GetNamespaceName())
 }

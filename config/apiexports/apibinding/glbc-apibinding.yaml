@@ -18,6 +18,10 @@ spec:
     identityHash: DUMMY_HASH
     resource: ingresses
     state: "Accepted"
+  - group: "route.openshift.io"
+    resource: "routes"
+    identityHash: DUMMY_HASH
+    state: "Accepted"
   reference:
     workspace:
       exportName: glbc
