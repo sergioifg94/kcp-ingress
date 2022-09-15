@@ -155,6 +155,12 @@ if ! [[ $clusterCount =~ "0" ]] ; then
   ${KIND_BIN} get clusters | grep ${KIND_CLUSTER_PREFIX} | xargs ${KIND_BIN} delete clusters
 fi
 
+#Check that KUBECONFIG is not set to .kcp/admin.kubeconfig
+if [[ $KUBECONFIG == "${KUBECONFIG_KCP_ADMIN}" ]] ; then
+  echo "Can NOT add physical clusters (kind) if KUBECONFIG is set to .kcp/admin.kubeconfig"
+  exit 1 #this will trigger cleanup function
+fi
+
 #1. Start KCP
 echo "Starting KCP, sending logs to ${KCP_LOG_FILE}"
 ${KCP_BIN} --v=9 start --run-controllers > ${KCP_LOG_FILE} 2>&1 &
