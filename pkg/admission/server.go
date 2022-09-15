@@ -2,6 +2,7 @@ package admission
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"net/http"
 
@@ -33,5 +34,20 @@ func StartServer(ctx context.Context, config *WebhookConfig) error {
 
 	mux.Handle("/domainverifications", webhook)
 
-	return http.ListenAndServe(fmt.Sprintf(":%d", config.ServerPort), mux)
+	httpErr := make(chan error)
+	go func() {
+		httpErr <- http.ListenAndServe(fmt.Sprintf(":%d", config.ServerPort), mux)
+	}()
+
+	select {
+	case err := <-httpErr:
+		return err
+	case <-ctx.Done():
+		ctxErr := ctx.Err()
+		if errors.Is(ctxErr, context.Canceled) {
+			return nil
+		}
+
+		return ctxErr
+	}
 }

@@ -28,7 +28,6 @@ spec:
         - command:
             - /kcp-glbc
           image: controller:latest
-          imagePullPolicy: IfNotPresent
           name: manager
           securityContext:
             allowPrivilegeEscalation: false
