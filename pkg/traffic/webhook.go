@@ -59,8 +59,8 @@ func (r *WebhookReconciler) Reconcile(ctx context.Context, accessor Interface) (
 	// If it does exist, copy the expected webhook configuration into the
 	// existing one and update it
 	for i, webhook := range vwc.Webhooks {
-		existingWebhook := existing.Webhooks[i]
-		webhook.DeepCopyInto(&existingWebhook)
+		existingWebhook := &existing.Webhooks[i]
+		webhook.DeepCopyInto(existingWebhook)
 	}
 
 	if err := r.injectClientConfig(ctx, accessor, existing); err != nil {

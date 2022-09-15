@@ -24,9 +24,8 @@ controller](../../config/webhooks/ingress.yaml)
 ## Deploying webhook resources
 
 In order to make the webhook server reachable, a Service and an Ingress must be
-deployed. These resources are included in the `config` folder, but commented
-out by default from the Kustomization. In order to deploy GLBC with these resources,
-uncomment the following lines:
+deployed. These resources are included in the `config` folder. In order to deploy GLBC with these resources,
+ensure the following sections are included:
 
 * [config/manager/kustomization.yaml](../../config/manager/kustomization.yaml)
     ```yaml

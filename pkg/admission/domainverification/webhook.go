@@ -3,16 +3,21 @@ package domainverification
 import (
 	"fmt"
 
+	controllerutil "github.com/kuadrant/kcp-glbc/pkg/util/controller"
 	admissionv1 "k8s.io/api/admissionregistration/v1"
 	v1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
 func GetValidatingWebhookConfiguration() *admissionv1.ValidatingWebhookConfiguration {
-	var failurePolicy admissionv1.FailurePolicyType = admissionv1.Fail
 	var matchPolicy admissionv1.MatchPolicyType = admissionv1.Exact
 	var scope admissionv1.ScopeType = admissionv1.AllScopes
 	var sideEffects admissionv1.SideEffectClass = admissionv1.SideEffectClassNone
 	var timeoutSeconds int32 = 5
+
+	var failurePolicy admissionv1.FailurePolicyType = admissionv1.Fail
+	if controllerutil.IsRunningLocally() {
+		failurePolicy = admissionv1.Ignore
+	}
 
 	return &admissionv1.ValidatingWebhookConfiguration{
 		ObjectMeta: v1.ObjectMeta{
