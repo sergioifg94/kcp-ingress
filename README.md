@@ -62,7 +62,6 @@ With a running local setup i.e. you have successfully executed `make local-setup
 $ kubectl get synctargets -o wide
 NAME              LOCATION          READY   SYNCED API RESOURCES
 kcp-cluster-1     kcp-cluster-1     True    ["deployments.apps","ingresses.networking.k8s.io","secrets","services"]
-kcp-cluster-2     kcp-cluster-2     True    ["deployments.apps","ingresses.networking.k8s.io","secrets","services"]
 kcp-cluster-crc   kcp-cluster-crc   True    ["deployments.apps","ingresses.networking.k8s.io","secrets","services"]
 ```
 
