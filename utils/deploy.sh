@@ -239,9 +239,9 @@ kubectl apply view-last-applied apibinding glbc -o yaml > ${APIEXPORT_DIR}/glbc/
 ############################################################
 
 ## Deploy components
-if [[ $DEPLOY_COMPONENTS =~ "cert-manager" ]]; then
-  deploy_cert_manager
-fi
+# if [[ $DEPLOY_COMPONENTS =~ "cert-manager" ]]; then
+#   deploy_cert_manager
+# fi
 
 if [[ $DEPLOY_COMPONENTS =~ "glbc" ]]; then
   deploy_glbc
