@@ -27,7 +27,7 @@ import (
 	prometheus "github.com/prometheus/client_model/go"
 	"github.com/prometheus/common/expfmt"
 
-	. "github.com/kuadrant/kcp-glbc/e2e/support"
+	. "github.com/kuadrant/kcp-glbc/test/support"
 )
 
 func Metric(metric string) func(metrics map[string]*prometheus.MetricFamily) *prometheus.MetricFamily {

@@ -21,7 +21,7 @@ import (
 	corev1 "k8s.io/api/core/v1"
 	networkingv1 "k8s.io/api/networking/v1"
 
-	. "github.com/kuadrant/kcp-glbc/e2e/support"
+	. "github.com/kuadrant/kcp-glbc/test/support"
 	kuadrantv1 "github.com/kuadrant/kcp-glbc/pkg/apis/kuadrant/v1"
 )
 

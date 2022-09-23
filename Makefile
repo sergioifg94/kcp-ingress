@@ -73,10 +73,10 @@ e2e: build
 	## Run the metrics test first, so it starts from a clean state
 	KUBECONFIG="$(KUBECONFIG)" CLUSTERS_KUBECONFIG_DIR="$(CLUSTERS_KUBECONFIG_DIR)" \
 	AWS_DNS_PUBLIC_ZONE_ID="${AWS_DNS_PUBLIC_ZONE_ID}" \
-	go test -count=1 -timeout 60m -v ./e2e/metrics -tags=e2e
+	go test -count=1 -timeout 60m -v ./test/e2e/metrics -tags=e2e
 	## Run the other tests
 	KUBECONFIG="$(KUBECONFIG)" CLUSTERS_KUBECONFIG_DIR="$(CLUSTERS_KUBECONFIG_DIR)" \
-	go test -count=1 -timeout 60m -v ./e2e -tags=e2e
+	go test -count=1 -timeout 60m -v ./test/e2e -tags=e2e
 
 TEST_DNSRECORD_COUNT ?= 2
 TEST_INGRESS_COUNT ?= 2
@@ -90,7 +90,7 @@ performance: build
 	TEST_DNSRECORD_COUNT="$(TEST_DNSRECORD_COUNT)" \
 	TEST_INGRESS_COUNT="$(TEST_INGRESS_COUNT)" \
 	TEST_WORKSPACE_COUNT="$(TEST_WORKSPACE_COUNT)" \
-	go test -count=1 -timeout 60m -v ./e2e/performance -tags=$(TEST_TAGS)
+	go test -count=1 -timeout 60m -v ./test/performance -tags=$(TEST_TAGS)
 	@date +"Performance Test End: %s%3N"
 
 ##@ CI

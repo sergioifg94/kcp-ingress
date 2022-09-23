@@ -29,7 +29,7 @@ import (
 
 	"github.com/kcp-dev/logicalcluster/v2"
 
-	. "github.com/kuadrant/kcp-glbc/e2e/support"
+	. "github.com/kuadrant/kcp-glbc/test/support"
 	"github.com/kuadrant/kcp-glbc/pkg/access"
 	"github.com/kuadrant/kcp-glbc/pkg/access/reconcilers"
 	"github.com/kuadrant/kcp-glbc/pkg/util/env"

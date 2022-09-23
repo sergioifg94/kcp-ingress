@@ -39,8 +39,8 @@ import (
 
 	"github.com/kcp-dev/logicalcluster/v2"
 
-	. "github.com/kuadrant/kcp-glbc/e2e/support"
 	kuadrantv1 "github.com/kuadrant/kcp-glbc/pkg/apis/kuadrant/v1"
+	. "github.com/kuadrant/kcp-glbc/test/support"
 )
 
 const issuer = "glbc-ca"

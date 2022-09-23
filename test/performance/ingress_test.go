@@ -18,7 +18,7 @@ import (
 
 	"github.com/kcp-dev/logicalcluster/v2"
 
-	. "github.com/kuadrant/kcp-glbc/e2e/support"
+	. "github.com/kuadrant/kcp-glbc/test/support"
 	"github.com/kuadrant/kcp-glbc/pkg/access"
 	kuadrantv1 "github.com/kuadrant/kcp-glbc/pkg/apis/kuadrant/v1"
 	"github.com/kuadrant/kcp-glbc/pkg/util/env"
