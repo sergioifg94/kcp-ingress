@@ -1,4 +1,4 @@
-//go:build e2e
+//go:build e2e || performance
 
 /*
 Licensed under the Apache License, Version 2.0 (the "License");
@@ -23,11 +23,16 @@ import (
 
 	"github.com/onsi/gomega"
 
+	"github.com/kcp-dev/logicalcluster/v2"
+
+	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
+	networkingv1 "k8s.io/api/networking/v1"
 
 	apisv1alpha1 "github.com/kcp-dev/kcp/pkg/apis/apis/v1alpha1"
 	tenancyv1alpha1 "github.com/kcp-dev/kcp/pkg/apis/tenancy/v1alpha1"
 	workloadv1alpha1 "github.com/kcp-dev/kcp/pkg/apis/workload/v1alpha1"
+	kuadrantv1 "github.com/kuadrant/kcp-glbc/pkg/apis/kuadrant/v1"
 )
 
 type Test interface {
@@ -37,10 +42,11 @@ type Test interface {
 
 	gomega.Gomega
 
-	NewTestWorkspace() *tenancyv1alpha1.ClusterWorkspace
+	CreateGLBCAPIBindings(*tenancyv1alpha1.ClusterWorkspace, logicalcluster.Name, string)
 	NewAPIBinding(name string, options ...Option) *apisv1alpha1.APIBinding
-	NewTestNamespace(...Option) *corev1.Namespace
 	NewSyncTarget(name string, options ...Option) *workloadv1alpha1.SyncTarget
+	NewTestNamespace(...Option) *corev1.Namespace
+	NewTestWorkspace() *tenancyv1alpha1.ClusterWorkspace
 }
 
 type Option interface {
@@ -95,6 +101,38 @@ func (t *T) Client() Client {
 		t.client = c
 	})
 	return t.client
+}
+
+func (t *T) CreateGLBCAPIBindings(targetWorkspace *tenancyv1alpha1.ClusterWorkspace, glbcWorkspace logicalcluster.Name, glbcExportName string) {
+	// Bind compute workspace APIs
+	binding := t.NewAPIBinding("kubernetes", WithComputeServiceExport(glbcWorkspace), InWorkspace(targetWorkspace))
+
+	// Wait until the APIBinding is actually in bound phase
+	t.Eventually(APIBinding(t, logicalcluster.From(binding).String(), binding.Name)).
+		Should(gomega.WithTransform(APIBindingPhase, gomega.Equal(apisv1alpha1.APIBindingPhaseBound)))
+
+	// Wait until the APIs are imported into the test targetWorkspace
+	t.Eventually(HasImportedAPIs(t, targetWorkspace,
+		corev1.SchemeGroupVersion.WithKind("Service"),
+		appsv1.SchemeGroupVersion.WithKind("Deployment"),
+		networkingv1.SchemeGroupVersion.WithKind("Ingress"),
+	)).Should(gomega.BeTrue())
+
+	binding = GetAPIBinding(t, logicalcluster.From(binding).String(), binding.Name)
+	kubeIdentityHash := binding.Status.BoundResources[0].Schema.IdentityHash
+
+	// Import GLBC APIs
+	binding = t.NewAPIBinding("glbc", WithExportReference(glbcWorkspace, glbcExportName), WithGLBCAcceptablePermissionClaims(kubeIdentityHash), InWorkspace(targetWorkspace))
+
+	// Wait until the APIBinding is actually in bound phase
+	t.Eventually(APIBinding(t, logicalcluster.From(binding).String(), binding.Name)).
+		Should(gomega.WithTransform(APIBindingPhase, gomega.Equal(apisv1alpha1.APIBindingPhaseBound)))
+
+	// And check the APIs are imported into the test workspace
+	t.Expect(HasImportedAPIs(t, targetWorkspace, kuadrantv1.SchemeGroupVersion.WithKind("DNSRecord"))(t)).
+		Should(gomega.BeTrue())
+	t.Expect(HasImportedAPIs(t, targetWorkspace, kuadrantv1.SchemeGroupVersion.WithKind("DomainVerification"))(t)).
+		Should(gomega.BeTrue())
 }
 
 func (t *T) NewTestWorkspace() *tenancyv1alpha1.ClusterWorkspace {

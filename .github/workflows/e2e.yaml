@@ -241,6 +241,7 @@ jobs:
         env:
           TEST_DNSRECORD_COUNT: 1
           TEST_INGRESS_COUNT: 1
+          TEST_WORKSPACE_COUNT: 1
         run: |
           # Note: This doesn't really apply much load, but we run it here to ensure the tests are run on PRs
           export KUBECONFIG="$(pwd)"/.kcp/admin.kubeconfig
@@ -251,6 +252,7 @@ jobs:
 
           echo "TEST_INGRESS_COUNT = ${{ env.TEST_INGRESS_COUNT }}"
           echo "TEST_DNSRECORD_COUNT = ${{ env.TEST_DNSRECORD_COUNT }}"
+          echo "TEST_WORKSPACE_COUNT = ${{ env.TEST_WORKSPACE_COUNT }}"
 
           kubectl config get-contexts
 

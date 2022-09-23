@@ -14,26 +14,14 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 
-package support
-
-import (
-	"time"
-
-	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-)
+package performance
 
 const (
-	TestTimeoutShort  = 1 * time.Minute
-	TestTimeoutMedium = 5 * time.Minute
-	TestTimeoutLong   = 10 * time.Minute
-
 	TestDNSRecordCount = "TEST_DNSRECORD_COUNT"
 	TestIngressCount   = "TEST_INGRESS_COUNT"
+	TestWorkspaceCount = "TEST_WORKSPACE_COUNT"
 
 	DefaultTestDNSRecordCount = 1
 	DefaultTestIngressCount   = 1
-)
-
-var (
-	ApplyOptions = metav1.ApplyOptions{FieldManager: "kcp-glbc-e2e", Force: true}
+	DefaultTestWorkspaceCount = 1
 )

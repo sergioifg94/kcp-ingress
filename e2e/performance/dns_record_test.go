@@ -1,4 +1,4 @@
-//go:build performance
+//go:build performance && dnsrecord
 
 package performance
 
@@ -8,13 +8,14 @@ import (
 	"sync"
 	"testing"
 
+	"github.com/kcp-dev/logicalcluster/v2"
 	. "github.com/onsi/gomega"
 	. "github.com/onsi/gomega/gstruct"
 	"github.com/rs/xid"
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 
-	. "github.com/kuadrant/kcp-glbc/e2e/performance/support"
+	. "github.com/kuadrant/kcp-glbc/e2e/support"
 	kuadrantv1 "github.com/kuadrant/kcp-glbc/pkg/apis/kuadrant/v1"
 	"github.com/kuadrant/kcp-glbc/pkg/util/env"
 )
@@ -43,18 +44,70 @@ func createTestDNSRecord(t Test, namespace *corev1.Namespace, domain string) *ku
 		},
 	}
 
-	dnsRecord, err := t.Client().Kuadrant().KuadrantV1().DNSRecords(namespace.Name).Create(t.Ctx(), dnsRecord, metav1.CreateOptions{})
+	t.Client().Kuadrant().Cluster(logicalcluster.From(namespace))
+	dnsRecord, err := t.Client().Kuadrant().Cluster(logicalcluster.From(namespace)).KuadrantV1().DNSRecords(namespace.Name).Create(t.Ctx(), dnsRecord, metav1.CreateOptions{})
 	t.Expect(err).NotTo(HaveOccurred())
 
 	return dnsRecord
 }
 
-func deleteTestDNSRecord(t Test, dnsRecord *kuadrantv1.DNSRecord) {
+func deleteTestDNSRecord(t Test, namespace *corev1.Namespace, dnsRecord *kuadrantv1.DNSRecord) {
 	propagationPolicy := metav1.DeletePropagationBackground
-	err := t.Client().Kuadrant().KuadrantV1().DNSRecords(dnsRecord.Namespace).Delete(t.Ctx(), dnsRecord.Name, metav1.DeleteOptions{
+	err := t.Client().Kuadrant().Cluster(logicalcluster.From(namespace)).KuadrantV1().DNSRecords(dnsRecord.Namespace).Delete(t.Ctx(), dnsRecord.Name, metav1.DeleteOptions{
 		PropagationPolicy: &propagationPolicy,
 	})
 	t.Expect(err).NotTo(HaveOccurred())
+}
+
+func testDNSRecord(t Test, dnsRecordCount int, zoneID, glbcDomain string) {
+	// Create the test workspace
+	workspace := t.NewTestWorkspace()
+
+	// Create GLBC APIBinding in workspace
+	t.CreateGLBCAPIBindings(workspace, GLBCWorkspace, GLBCExportName)
+
+	// Create a namespace
+	namespace := t.NewTestNamespace(InWorkspace(workspace))
+	t.Expect(namespace).NotTo(BeNil())
+
+
+	t.T().Log(fmt.Sprintf("Creating %d DNSRecords in %s", dnsRecordCount, workspace.Name))
+
+	// Create DNSRecords
+	wg := sync.WaitGroup{}
+	for i := 1; i <= dnsRecordCount; i++ {
+		wg.Add(1)
+		go func (){
+			defer wg.Done()
+			dnsRecord := createTestDNSRecord(t, namespace, glbcDomain)
+			t.Expect(dnsRecord).NotTo(BeNil())
+		}()
+	}
+	wg.Wait()
+
+	// Retrieve DNSRecords
+	dnsRecords := GetDNSRecords(t, namespace, "")
+	t.Expect(dnsRecords).Should(HaveLen(dnsRecordCount))
+
+	// Assert provider success
+	for _, record := range dnsRecords {
+		t.Eventually(DNSRecord(t, namespace, record.Name)).Should(And(
+			WithTransform(DNSRecordEndpoints, HaveLen(1)),
+			WithTransform(DNSRecordCondition(zoneID, kuadrantv1.DNSRecordFailedConditionType), MatchFieldsP(IgnoreExtras,
+				Fields{
+					"Status":  Equal("False"),
+					"Reason":  Equal("ProviderSuccess"),
+					"Message": Equal("The DNS provider succeeded in ensuring the record"),
+				})),
+		))
+	}
+
+	// Delete DNSRecords
+	for _, record := range dnsRecords {
+		deleteTestDNSRecord(t, namespace, &record)
+	}
+
+	t.Eventually(DNSRecords(t, namespace, "")).Should(HaveLen(0))
 }
 
 func TestDNSRecord(t *testing.T) {
@@ -69,48 +122,22 @@ func TestDNSRecord(t *testing.T) {
 	glbcDomain := os.Getenv("GLBC_DOMAIN")
 	test.Expect(glbcDomain).NotTo(Equal(""))
 
-	// Create a namespace
-	namespace := test.NewTestNamespace()
-	test.Expect(namespace).NotTo(BeNil())
+	workspaceCount := env.GetEnvInt(TestWorkspaceCount, DefaultTestWorkspaceCount)
+	test.Expect(workspaceCount > 0).To(BeTrue())
 
 	dnsRecordCount := env.GetEnvInt(TestDNSRecordCount, DefaultTestDNSRecordCount)
 	test.Expect(dnsRecordCount > 0).To(BeTrue())
-	test.T().Log(fmt.Sprintf("Creating %d DNSRecords", dnsRecordCount))
 
-	// Create DNSRecords
+	test.T().Log(fmt.Sprintf("Creating %d Workspaces, each with %d DNSRecords", workspaceCount, dnsRecordCount))
+
+	// Create Workspaces and run dnsrecord test in each
 	wg := sync.WaitGroup{}
-	for i := 1; i <= dnsRecordCount; i++ {
+	for i := 1; i <= workspaceCount; i++ {
 		wg.Add(1)
-		go func (){
+		go func() {
 			defer wg.Done()
-			dnsRecord := createTestDNSRecord(test, namespace, glbcDomain)
-			test.Expect(dnsRecord).NotTo(BeNil())
+			testDNSRecord(test, dnsRecordCount, zoneID, glbcDomain)
 		}()
 	}
 	wg.Wait()
-
-	// Retrieve DNSRecords
-	dnsRecords := GetDNSRecords(test, namespace, "")
-	test.Expect(dnsRecords).Should(HaveLen(dnsRecordCount))
-
-	// Assert provider success
-	for _, record := range dnsRecords {
-		test.Eventually(DNSRecord(test, namespace, record.Name)).Should(And(
-			WithTransform(DNSRecordEndpoints, HaveLen(1)),
-			WithTransform(DNSRecordCondition(zoneID, kuadrantv1.DNSRecordFailedConditionType), MatchFieldsP(IgnoreExtras,
-				Fields{
-					"Status":  Equal("False"),
-					"Reason":  Equal("ProviderSuccess"),
-					"Message": Equal("The DNS provider succeeded in ensuring the record"),
-				})),
-		))
-	}
-
-	// Delete DNSRecords
-	for _, record := range dnsRecords {
-		deleteTestDNSRecord(test, &record)
-	}
-
-	test.Eventually(DNSRecords(test, namespace, "")).Should(HaveLen(0))
-
 }

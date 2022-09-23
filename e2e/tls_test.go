@@ -25,17 +25,13 @@ import (
 	"github.com/onsi/gomega/types"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 
-	appsv1 "k8s.io/api/apps/v1"
-	corev1 "k8s.io/api/core/v1"
 	networkingv1 "k8s.io/api/networking/v1"
 
-	apisv1alpha1 "github.com/kcp-dev/kcp/pkg/apis/apis/v1alpha1"
 	"github.com/kcp-dev/logicalcluster/v2"
 
 	. "github.com/kuadrant/kcp-glbc/e2e/support"
 	"github.com/kuadrant/kcp-glbc/pkg/access"
 	"github.com/kuadrant/kcp-glbc/pkg/access/reconcilers"
-	kuadrantv1 "github.com/kuadrant/kcp-glbc/pkg/apis/kuadrant/v1"
 	"github.com/kuadrant/kcp-glbc/pkg/util/env"
 )
 
@@ -46,33 +42,8 @@ func TestTLS(t *testing.T) {
 	// Create the test workspace
 	workspace := test.NewTestWorkspace()
 
-	// Import compute workspace APIs
-	binding := test.NewAPIBinding("kubernetes", WithComputeServiceExport(GLBCWorkspace), InWorkspace(workspace))
-
-	// Wait until the APIBinding is actually in bound phase
-	test.Eventually(APIBinding(test, logicalcluster.From(binding).String(), binding.Name)).
-		Should(WithTransform(APIBindingPhase, Equal(apisv1alpha1.APIBindingPhaseBound)))
-
-	// Wait until the APIs are imported into the test workspace
-	test.Eventually(HasImportedAPIs(test, workspace,
-		corev1.SchemeGroupVersion.WithKind("Service"),
-		appsv1.SchemeGroupVersion.WithKind("Deployment"),
-		networkingv1.SchemeGroupVersion.WithKind("Ingress"),
-	)).Should(BeTrue())
-
-	binding = GetAPIBinding(test, logicalcluster.From(binding).String(), binding.Name)
-	kubeIdentityHash := binding.Status.BoundResources[0].Schema.IdentityHash
-
-	// Import GLBC APIs
-	binding = test.NewAPIBinding("glbc", WithExportReference(GLBCWorkspace, GLBCExportName), WithGLBCAcceptablePermissionClaims(kubeIdentityHash), InWorkspace(workspace))
-
-	// Wait until the APIBinding is actually in bound phase
-	test.Eventually(APIBinding(test, logicalcluster.From(binding).String(), binding.Name)).
-		Should(WithTransform(APIBindingPhase, Equal(apisv1alpha1.APIBindingPhaseBound)))
-
-	// And check the APIs are imported into the test workspace
-	test.Expect(HasImportedAPIs(test, workspace, kuadrantv1.SchemeGroupVersion.WithKind("DNSRecord"))(test)).
-		Should(BeTrue())
+	// Create GLBC APIBinding in workspace
+	test.CreateGLBCAPIBindings(workspace, GLBCWorkspace, GLBCExportName)
 
 	// Create a namespace
 	namespace := test.NewTestNamespace(InWorkspace(workspace))

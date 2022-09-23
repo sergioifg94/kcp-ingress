@@ -80,14 +80,17 @@ e2e: build
 
 TEST_DNSRECORD_COUNT ?= 2
 TEST_INGRESS_COUNT ?= 2
+TEST_WORKSPACE_COUNT ?= 2
 .PHONY: performance
+performance: TEST_TAGS ?=performance,ingress,dnsrecord
 performance: build
 	@date +"Performance Test Start: %s%3N"
 	KUBECONFIG="$(KUBECONFIG)" \
 	AWS_DNS_PUBLIC_ZONE_ID="$(AWS_DNS_PUBLIC_ZONE_ID)" \
 	TEST_DNSRECORD_COUNT="$(TEST_DNSRECORD_COUNT)" \
 	TEST_INGRESS_COUNT="$(TEST_INGRESS_COUNT)" \
-	go test -count=1 -timeout 60m -v ./e2e/performance -tags=performance
+	TEST_WORKSPACE_COUNT="$(TEST_WORKSPACE_COUNT)" \
+	go test -count=1 -timeout 60m -v ./e2e/performance -tags=$(TEST_TAGS)
 	@date +"Performance Test End: %s%3N"
 
 ##@ CI
