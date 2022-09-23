@@ -106,6 +106,7 @@ jobs:
           mkdir -p "${TEMP_DIR}"
 
           make kustomize
+          make helm
 
           echo "Deploying Ingress controller to KinD workload clusters"
           VERSION=controller-v1.2.1
