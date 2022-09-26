@@ -9,7 +9,7 @@ webhook server and reconcile webhook configuration resources
 The GLBC has the ability to run as a webhook server alongside the different
 reconcilers. This option is not included by default, so in order to run the
 webhook server, the `--webhook-port` flag  or the `GLBC_WEBHOOKS_PORT` 
-must be set
+must be set (it is enabled by default)
 
 ## Webhook reconciliation
 
@@ -20,6 +20,11 @@ to valididate `DomainVerification` resources.
 This resource is reconciled as part of the Ingress reconciliation loop, when the
 Ingress being reconciled is [the Ingress that exposes the webhook server of the
 controller](../../config/webhooks/ingress.yaml)
+
+In order to enable the reconciliation of the webhook resource, the 
+`DomainVerificationWebhookEnabled` option must be set to `true` (defaults to `false`),
+either with the `--domain-verification-webhook-enabled` flag or the
+`DOMAIN_VERIFICATION_WEBHOOK_ENABLED` environment variable.
 
 ## Deploying webhook resources
 
