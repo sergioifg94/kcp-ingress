@@ -60,6 +60,7 @@ func (c *Controller) reconcile(ctx context.Context, ingress traffic.Interface) e
 			Log:              c.Logger,
 		},
 		&traffic.WebhookReconciler{
+			Enabled:       c.webhookEnabled,
 			KubeClient:    c.kubeClient,
 			GLBCWorkspace: c.glbcWorkspace,
 		},

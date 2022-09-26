@@ -87,6 +87,10 @@ var options struct {
 
 	// The port number of the webhooks server
 	WebhooksPort int
+
+	// Whether to reconcile ValidatingWebhookConfiguration for DomainVerification
+	// resources
+	DomainVerificationWebhookEnabled bool
 }
 
 type APIExportClusterInformers struct {
@@ -118,6 +122,7 @@ func init() {
 	flagSet.IntVar(&options.MonitoringPort, "monitoring-port", 8080, "The port of the metrics endpoint (can be set to \"0\" to disable the metrics serving)")
 	// Webhook options
 	flagSet.IntVar(&options.WebhooksPort, "webhooks-port", env.GetEnvInt("GLBC_WEBHOOKS_PORT", 0), "The port of the webhooks server")
+	flagSet.BoolVar(&options.DomainVerificationWebhookEnabled, "domain-verification-webhook-enabled", env.GetEnvBool("DOMAIN_VERIFICATION_WEBHOOK_ENABLED", false), "Whether to reconcile ValidatingWebhookConfiguration for DomainVerification resources")
 
 	opts := log.Options{
 		EncoderConfigOptions: []log.EncoderConfigOption{
@@ -282,6 +287,7 @@ func main() {
 			HostResolver:              dnsClient,
 			AdvancedSchedulingEnabled: options.AdvancedScheduling,
 			CustomHostsEnabled:        options.EnableCustomHosts,
+			WebhookEnabled:            options.DomainVerificationWebhookEnabled,
 			GLBCWorkspace:             logicalcluster.New(options.GLBCWorkspace),
 		})
 		controllers = append(controllers, ingressController)

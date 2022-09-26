@@ -13,6 +13,7 @@ import (
 )
 
 type WebhookReconciler struct {
+	Enabled       bool
 	GLBCWorkspace logicalcluster.Name
 	KubeClient    kubernetes.Interface
 }
@@ -24,6 +25,10 @@ func (r *WebhookReconciler) GetName() string {
 }
 
 func (r *WebhookReconciler) Reconcile(ctx context.Context, accessor Interface) (ReconcileStatus, error) {
+	if !r.Enabled {
+		return ReconcileStatusContinue, nil
+	}
+
 	// Only create webhooks when we're reconciling the Ingress that exposes
 	// the controller
 	if !r.isOwnIngress(accessor) {

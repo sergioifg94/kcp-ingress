@@ -7,9 +7,9 @@ import (
 	"net/http"
 
 	"github.com/kuadrant/kcp-glbc/pkg/_internal/log"
+	"github.com/kuadrant/kcp-glbc/pkg/admission/domainverification"
 
 	"sigs.k8s.io/controller-runtime/pkg/webhook"
-	"sigs.k8s.io/controller-runtime/pkg/webhook/admission"
 )
 
 type WebhookConfig struct {
@@ -22,11 +22,12 @@ func StartServer(ctx context.Context, config *WebhookConfig) error {
 
 	mux := http.NewServeMux()
 
+	handler, err := domainverification.NewHandler(logger)
+	if err != nil {
+		return err
+	}
 	webhook := &webhook.Admission{
-		Handler: admission.HandlerFunc(func(ctx context.Context, r admission.Request) admission.Response {
-			logger.Info("Got a webhook request")
-			return admission.Allowed("TODO: Logic")
-		}),
+		Handler: handler,
 	}
 	if err := webhook.InjectLogger(logger); err != nil {
 		return err
