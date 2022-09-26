@@ -237,6 +237,16 @@ jobs:
 
           # Then run e2e tests
           make e2e
+      - name: Run smoke tests
+        run: |
+          export KUBECONFIG="$(pwd)"/.kcp/admin.kubeconfig
+          echo "Exporting KUBECONFIG=${KUBECONFIG}"
+
+          echo "Export GLBC CI Cluster Config Enviornment"
+          export $(cat ./config/deploy/local/kcp-glbc/controller-config.env.ci | xargs)
+
+          # Then run smoke tests
+          make smoke
       - name: Run performance tests
         env:
           TEST_DNSRECORD_COUNT: 1

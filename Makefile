@@ -68,8 +68,10 @@ lint: ## Run golangci-lint against code.
 test: generate ## Run tests.
 	go test -v ./... -coverprofile=cover.out
 
+##@ Test
+
 .PHONY: e2e
-e2e: build
+e2e: build ## Run e2e tests.
 	## Run the metrics test first, so it starts from a clean state
 	KUBECONFIG="$(KUBECONFIG)" CLUSTERS_KUBECONFIG_DIR="$(CLUSTERS_KUBECONFIG_DIR)" \
 	AWS_DNS_PUBLIC_ZONE_ID="${AWS_DNS_PUBLIC_ZONE_ID}" \
@@ -83,7 +85,7 @@ TEST_INGRESS_COUNT ?= 2
 TEST_WORKSPACE_COUNT ?= 2
 .PHONY: performance
 performance: TEST_TAGS ?=performance,ingress,dnsrecord
-performance: build
+performance: build ## Run performance tests.
 	@date +"Performance Test Start: %s%3N"
 	KUBECONFIG="$(KUBECONFIG)" \
 	AWS_DNS_PUBLIC_ZONE_ID="$(AWS_DNS_PUBLIC_ZONE_ID)" \
@@ -92,6 +94,12 @@ performance: build
 	TEST_WORKSPACE_COUNT="$(TEST_WORKSPACE_COUNT)" \
 	go test -count=1 -timeout 60m -v ./test/performance -tags=$(TEST_TAGS)
 	@date +"Performance Test End: %s%3N"
+
+.PHONY: smoke
+smoke: build ## Run smoke tests.
+	KUBECONFIG="$(KUBECONFIG)" \
+	AWS_DNS_PUBLIC_ZONE_ID="$(AWS_DNS_PUBLIC_ZONE_ID)" \
+	go test -count=1 -timeout 60m -v ./test/smoke -tags=smoke
 
 ##@ CI
 
