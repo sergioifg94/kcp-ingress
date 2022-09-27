@@ -71,7 +71,7 @@ jobs:
     steps:
       - uses: actions/checkout@v3
         with:
-          repository: github.com/redhat-cps/glbc-deployments.git
+          repository: redhat-cps/glbc-deployments
           ref: 'main'
           ssh-key: ${{ secrets.ACTIONS_GITHUB_TOKEN }}
       - name: Install kustomize
