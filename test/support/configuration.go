@@ -24,7 +24,7 @@ import (
 	networkingv1apply "k8s.io/client-go/applyconfigurations/networking/v1"
 )
 
-func IngressConfiguration(namespace, name, host string) *networkingv1apply.IngressApplyConfiguration {
+func IngressConfiguration(namespace, name, serviceName, host string) *networkingv1apply.IngressApplyConfiguration {
 	return networkingv1apply.Ingress(name, namespace).WithSpec(
 		networkingv1apply.IngressSpec().WithRules(networkingv1apply.IngressRule().
 			WithHost(host).
@@ -34,7 +34,7 @@ func IngressConfiguration(namespace, name, host string) *networkingv1apply.Ingre
 					WithPathType(networkingv1.PathTypePrefix).
 					WithBackend(networkingv1apply.IngressBackend().
 						WithService(networkingv1apply.IngressServiceBackend().
-							WithName(name).
+							WithName(serviceName).
 							WithPort(networkingv1apply.ServiceBackendPort().
 								WithName("http"))))))))
 }

@@ -119,7 +119,7 @@ func TestMetrics(t *testing.T) {
 	// when using a CA issuer), and the below assertion happens too late to detect the pending TLS certificate request.
 	timer := time.AfterFunc(2*time.Second, func() {
 		_, err = test.Client().Core().Cluster(logicalcluster.From(namespace)).NetworkingV1().Ingresses(namespace.Name).
-			Apply(test.Ctx(), IngressConfiguration(namespace.Name, name, "test.gblb.com"), ApplyOptions)
+			Apply(test.Ctx(), IngressConfiguration(namespace.Name, name, name, "test.gblb.com"), ApplyOptions)
 		test.Expect(err).NotTo(HaveOccurred())
 	})
 	t.Cleanup(func() {

@@ -29,10 +29,10 @@ import (
 
 	"github.com/kcp-dev/logicalcluster/v2"
 
-	. "github.com/kuadrant/kcp-glbc/test/support"
 	"github.com/kuadrant/kcp-glbc/pkg/access"
 	"github.com/kuadrant/kcp-glbc/pkg/access/reconcilers"
 	"github.com/kuadrant/kcp-glbc/pkg/util/env"
+	. "github.com/kuadrant/kcp-glbc/test/support"
 )
 
 func TestTLS(t *testing.T) {
@@ -72,7 +72,7 @@ func TestTLS(t *testing.T) {
 
 	// Create the Ingress
 	_, err = test.Client().Core().Cluster(logicalcluster.From(namespace)).NetworkingV1().Ingresses(namespace.Name).
-		Apply(test.Ctx(), IngressConfiguration(namespace.Name, name, "test.gblb.com"), ApplyOptions)
+		Apply(test.Ctx(), IngressConfiguration(namespace.Name, name, name, "test.gblb.com"), ApplyOptions)
 	test.Expect(err).NotTo(HaveOccurred())
 	defer func() {
 		test.Expect(test.Client().Core().Cluster(logicalcluster.From(namespace)).NetworkingV1().Ingresses(namespace.Name).

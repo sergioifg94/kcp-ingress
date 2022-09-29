@@ -21,15 +21,16 @@ import (
 
 	"github.com/onsi/gomega"
 
-	"github.com/kcp-dev/logicalcluster/v2"
-
 	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
 	networkingv1 "k8s.io/api/networking/v1"
 
 	apisv1alpha1 "github.com/kcp-dev/kcp/pkg/apis/apis/v1alpha1"
 	tenancyv1alpha1 "github.com/kcp-dev/kcp/pkg/apis/tenancy/v1alpha1"
+	tenancyv1beta1 "github.com/kcp-dev/kcp/pkg/apis/tenancy/v1beta1"
 	workloadv1alpha1 "github.com/kcp-dev/kcp/pkg/apis/workload/v1alpha1"
+	"github.com/kcp-dev/logicalcluster/v2"
+
 	kuadrantv1 "github.com/kuadrant/kcp-glbc/pkg/apis/kuadrant/v1"
 )
 
@@ -40,11 +41,11 @@ type Test interface {
 
 	gomega.Gomega
 
-	CreateGLBCAPIBindings(*tenancyv1alpha1.ClusterWorkspace, logicalcluster.Name, string)
+	CreateGLBCAPIBindings(*tenancyv1beta1.Workspace, logicalcluster.Name, string)
 	NewAPIBinding(name string, options ...Option) *apisv1alpha1.APIBinding
 	NewSyncTarget(name string, options ...Option) *workloadv1alpha1.SyncTarget
 	NewTestNamespace(...Option) *corev1.Namespace
-	NewTestWorkspace() *tenancyv1alpha1.ClusterWorkspace
+	NewTestWorkspace() *tenancyv1beta1.Workspace
 }
 
 type Option interface {
@@ -101,7 +102,9 @@ func (t *T) Client() Client {
 	return t.client
 }
 
-func (t *T) CreateGLBCAPIBindings(targetWorkspace *tenancyv1alpha1.ClusterWorkspace, glbcWorkspace logicalcluster.Name, glbcExportName string) {
+func (t *T) CreateGLBCAPIBindings(targetWorkspace *tenancyv1beta1.Workspace, glbcWorkspace logicalcluster.Name, glbcExportName string) {
+
+	t.T().Logf("Binding to kubernetes APIExport from %s to %s", glbcWorkspace.String(), targetWorkspace.Name)
 	// Bind compute workspace APIs
 	binding := t.NewAPIBinding("kubernetes", WithComputeServiceExport(glbcWorkspace), InWorkspace(targetWorkspace))
 
@@ -119,6 +122,7 @@ func (t *T) CreateGLBCAPIBindings(targetWorkspace *tenancyv1alpha1.ClusterWorksp
 	binding = GetAPIBinding(t, logicalcluster.From(binding).String(), binding.Name)
 	kubeIdentityHash := binding.Status.BoundResources[0].Schema.IdentityHash
 
+	t.T().Logf("Binding to %s APIExport from %s to %s", glbcExportName, glbcWorkspace.String(), targetWorkspace.Name)
 	// Import GLBC APIs
 	binding = t.NewAPIBinding("glbc", WithExportReference(glbcWorkspace, glbcExportName), WithGLBCAcceptablePermissionClaims(kubeIdentityHash), InWorkspace(targetWorkspace))
 
@@ -133,16 +137,14 @@ func (t *T) CreateGLBCAPIBindings(targetWorkspace *tenancyv1alpha1.ClusterWorksp
 		Should(gomega.BeTrue())
 }
 
-func (t *T) NewTestWorkspace() *tenancyv1alpha1.ClusterWorkspace {
+func (t *T) NewTestWorkspace() *tenancyv1beta1.Workspace {
 	workspace := createTestWorkspace(t)
 	t.T().Cleanup(func() {
 		deleteTestWorkspace(t, workspace)
 	})
 	t.T().Logf("Creating workspace %v:%v", TestOrganization, workspace.Name)
-	t.Eventually(Workspace(t, workspace.Name)).Should(gomega.WithTransform(
-		ConditionStatus(tenancyv1alpha1.WorkspaceScheduled),
-		gomega.Equal(corev1.ConditionTrue),
-	))
+	t.Eventually(Workspace(t, workspace.Name)).
+		Should(gomega.WithTransform(WorkspacePhase, gomega.Equal(tenancyv1alpha1.ClusterWorkspacePhaseReady)))
 	return workspace
 }
 

@@ -21,8 +21,8 @@ import (
 	corev1 "k8s.io/api/core/v1"
 	networkingv1 "k8s.io/api/networking/v1"
 
-	. "github.com/kuadrant/kcp-glbc/test/support"
 	kuadrantv1 "github.com/kuadrant/kcp-glbc/pkg/apis/kuadrant/v1"
+	. "github.com/kuadrant/kcp-glbc/test/support"
 )
 
 func TestIngress(t *testing.T) {
@@ -63,7 +63,7 @@ func TestIngress(t *testing.T) {
 	// Create the Ingress
 	customHost := "test.gblb-custom.com"
 	_, err = test.Client().Core().Cluster(logicalcluster.From(namespace)).NetworkingV1().Ingresses(namespace.Name).
-		Apply(test.Ctx(), IngressConfiguration(namespace.Name, name, customHost), ApplyOptions)
+		Apply(test.Ctx(), IngressConfiguration(namespace.Name, name, name, customHost), ApplyOptions)
 	test.Expect(err).NotTo(HaveOccurred())
 
 	defer func() {

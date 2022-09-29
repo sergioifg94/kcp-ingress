@@ -15,11 +15,15 @@ limitations under the License.
 package support
 
 import (
+	"os"
 	"time"
 
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 
+	"github.com/kcp-dev/logicalcluster/v2"
+
 	tenancyv1alpha1 "github.com/kcp-dev/kcp/pkg/apis/tenancy/v1alpha1"
+	"github.com/kuadrant/kcp-glbc/pkg/util/env"
 )
 
 const (
@@ -28,13 +32,23 @@ const (
 	TestTimeoutLong   = 10 * time.Minute
 
 	workloadClusterKubeConfigDir = "CLUSTERS_KUBECONFIG_DIR"
+	testWorkspaceName            = "TEST_WORKSPACE"
+	glbcWorkspaceName            = "GLBC_WORKSPACE"
+	glbcExportName               = "GLBC_EXPORT"
 )
 
 var (
-	TestOrganization = tenancyv1alpha1.RootCluster.Join("kuadrant")
-
-	GLBCWorkspace = TestOrganization
-	GLBCExportName = "glbc-root-kuadrant"
+	TestOrganization = getEnvLogicalClusterName(testWorkspaceName, tenancyv1alpha1.RootCluster.Join("kuadrant"))
+	GLBCWorkspace    = getEnvLogicalClusterName(glbcWorkspaceName, TestOrganization)
+	GLBCExportName   = env.GetEnvString(glbcExportName, "glbc-root-kuadrant")
 
 	ApplyOptions = metav1.ApplyOptions{FieldManager: "kcp-glbc-e2e", Force: true}
 )
+
+func getEnvLogicalClusterName(key string, fallback logicalcluster.Name) logicalcluster.Name {
+	value, found := os.LookupEnv(key)
+	if !found {
+		return fallback
+	}
+	return logicalcluster.New(value)
+}

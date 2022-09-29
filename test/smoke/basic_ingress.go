@@ -20,24 +20,28 @@ import (
 	"fmt"
 	"sync"
 
-	. "github.com/kuadrant/kcp-glbc/test/support"
+	"github.com/rs/xid"
+
 	. "github.com/onsi/gomega"
 	. "github.com/onsi/gomega/gstruct"
 
-	"github.com/kcp-dev/logicalcluster/v2"
-	"github.com/kuadrant/kcp-glbc/pkg/access"
-	kuadrantv1 "github.com/kuadrant/kcp-glbc/pkg/apis/kuadrant/v1"
-	"github.com/rs/xid"
 	corev1 "k8s.io/api/core/v1"
 	networkingv1 "k8s.io/api/networking/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+
+	"github.com/kcp-dev/logicalcluster/v2"
+
+	"github.com/kuadrant/kcp-glbc/pkg/access"
+	kuadrantv1 "github.com/kuadrant/kcp-glbc/pkg/apis/kuadrant/v1"
+	"github.com/kuadrant/kcp-glbc/pkg/util/env"
+	. "github.com/kuadrant/kcp-glbc/test/support"
 )
 
-func createTestIngress(t Test, namespace *corev1.Namespace) *networkingv1.Ingress {
+func createTestIngress(t Test, namespace *corev1.Namespace, serviceName string) *networkingv1.Ingress {
 	name := "test-" + xid.New().String()
 
 	ingress, err := t.Client().Core().Cluster(logicalcluster.From(namespace)).NetworkingV1().Ingresses(namespace.Name).
-		Apply(t.Ctx(), IngressConfiguration(namespace.Name, name, "test.glbc.com"), ApplyOptions)
+		Apply(t.Ctx(), IngressConfiguration(namespace.Name, name, serviceName,"test.glbc.com"), ApplyOptions)
 	t.Expect(err).NotTo(HaveOccurred())
 
 	return ingress
@@ -80,7 +84,7 @@ func TestIngressBasic(t Test, ingressCount int, zoneID, glbcDomain string) {
 		wg.Add(1)
 		go func() {
 			defer wg.Done()
-			ingress := createTestIngress(t, namespace)
+			ingress := createTestIngress(t, namespace, name)
 			t.Expect(ingress).NotTo(BeNil())
 		}()
 	}
@@ -90,18 +94,26 @@ func TestIngressBasic(t Test, ingressCount int, zoneID, glbcDomain string) {
 	ingresses := GetIngresses(t, namespace, "")
 	t.Expect(ingresses).Should(HaveLen(ingressCount))
 
+	customHostsEnabled := env.GetEnvBool("GLBC_ENABLE_CUSTOM_HOSTS", false)
 	// Assert Ingresses reconcile success
 	for _, ingress := range ingresses {
 		t.Eventually(Ingress(t, namespace, ingress.Name)).WithTimeout(TestTimeoutMedium).Should(And(
 			WithTransform(Annotations, And(
 				HaveKey(access.ANNOTATION_HCG_HOST),
-				HaveKey(access.ANNOTATION_PENDING_CUSTOM_HOSTS),
-			)),
-			WithTransform(Labels, And(
-				HaveKey(access.LABEL_HAS_PENDING_HOSTS),
 			)),
 			WithTransform(LoadBalancerIngresses, HaveLen(1)),
 		))
+
+		if customHostsEnabled {
+			t.Eventually(Ingress(t, namespace, ingress.Name)).WithTimeout(TestTimeoutMedium).Should(And(
+				WithTransform(Annotations, And(
+					HaveKey(access.ANNOTATION_PENDING_CUSTOM_HOSTS),
+				)),
+				WithTransform(Labels, And(
+					HaveKey(access.LABEL_HAS_PENDING_HOSTS),
+				)),
+			))
+		}
 	}
 
 	// Retrieve DNSRecords

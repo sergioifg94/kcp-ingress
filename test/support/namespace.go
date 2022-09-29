@@ -15,8 +15,8 @@ limitations under the License.
 package support
 
 import (
-	"github.com/google/uuid"
 	"github.com/onsi/gomega"
+	"github.com/rs/xid"
 
 	"github.com/kcp-dev/logicalcluster/v2"
 
@@ -25,7 +25,7 @@ import (
 )
 
 func createTestNamespace(t Test, options ...Option) *corev1.Namespace {
-	name := "test-" + uuid.New().String()
+	name := "test-" + xid.New().String()
 
 	namespace := &corev1.Namespace{
 		TypeMeta: metav1.TypeMeta{
