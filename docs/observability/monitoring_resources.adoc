@@ -19,7 +19,7 @@ There is another make target called `verify-gen-monitoring-resources`, which run
 
 == Adding a new Alert rule
 
-First, generate the alert rule scaffoling for the new alert rule:
+First, generate the alert rule scaffolding for the new alert rule:
 
 [source,bash]
 ----
@@ -79,4 +79,16 @@ Make sure that at the very bottom of the file, the title of the dashboard and th
 
 We will then want to run in the terminal `make gen-monitoring-resources` to copy over these changes.
 Once this has been pushed and merged to the repository, the changes will be reflected in the shared dashboard in about an hour.
+
+== Adding a new Alert rule (to Openshift only)
+The easiest way to do this is to first copy the contents of an alert rule from this directory to use as a template: `config/observability/monitoring_resources/common/rules`.
+Then, we will create a new .dhall file for the new alert rule in this openshift directory: `config/observability/monitoring_resources/openshift` which is where you will
+paste the template. Now, you can make the desired changes to the alert rule.
+
+Afterwards, you will need to add this new alert rule to the rules in https://github.com/kcp-dev/kcp-glbc/blob/main/config/observability/monitoring_resources/openshift/rules-hcg.dhall[rules-hcg.dhall].
+Once added, we can then run in the terminal `make gen-monitoring-resources` to generate the rules & PrometheusRule CR yaml.
+
+All alerts must have unit tests and a runbook. We can create a yaml file for the unit tests under `config/observability/openshift/monitoring_resources/rules_unit_tests`, and
+a runbook under `docs/observability/runbooks`. We can use the same approach of copying the contents of other files as a template, and pasting it on our new files.
+
 
