@@ -97,11 +97,14 @@ func TestIngressBasic(t Test, ingressCount int, zoneID, glbcDomain string) {
 	customHostsEnabled := env.GetEnvBool("GLBC_ENABLE_CUSTOM_HOSTS", false)
 	// Assert Ingresses reconcile success
 	for _, ingress := range ingresses {
+		tlsSecretName := fmt.Sprintf("hcg-tls-ingress-%s", ingress.Name)
 		t.Eventually(Ingress(t, namespace, ingress.Name)).WithTimeout(TestTimeoutMedium).Should(And(
 			WithTransform(Annotations, And(
 				HaveKey(access.ANNOTATION_HCG_HOST),
 			)),
 			WithTransform(LoadBalancerIngresses, HaveLen(1)),
+			Satisfy(HostsEqualsToGeneratedHost),
+			Satisfy(HasTLSSecretForGeneratedHost(tlsSecretName)),
 		))
 
 		if customHostsEnabled {
@@ -124,7 +127,7 @@ func TestIngressBasic(t Test, ingressCount int, zoneID, glbcDomain string) {
 	// Assert DNSRecords reconcile success
 	for _, record := range dnsRecords {
 		t.Eventually(DNSRecord(t, namespace, record.Name)).Should(And(
-			WithTransform(DNSRecordEndpoints, HaveLen(1)),
+			WithTransform(DNSRecordEndpointsCount, BeNumerically(">=", 1)),
 			WithTransform(DNSRecordCondition(zoneID, kuadrantv1.DNSRecordFailedConditionType), MatchFieldsP(IgnoreExtras,
 				Fields{
 					"Status":  Equal("False"),

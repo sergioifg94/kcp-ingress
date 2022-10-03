@@ -64,6 +64,10 @@ func DNSRecordEndpoints(record *kuadrantv1.DNSRecord) []*kuadrantv1.Endpoint {
 	return record.Spec.Endpoints
 }
 
+func DNSRecordEndpointsCount(record *kuadrantv1.DNSRecord) int {
+	return len(DNSRecordEndpoints(record))
+}
+
 func DNSRecordCondition(zoneID, condition string) func(record *kuadrantv1.DNSRecord) *kuadrantv1.DNSZoneCondition {
 	return func(record *kuadrantv1.DNSRecord) *kuadrantv1.DNSZoneCondition {
 		for _, z := range record.Status.Zones {
