@@ -44,6 +44,10 @@ func createTestIngress(t Test, namespace *corev1.Namespace, serviceName string) 
 		Apply(t.Ctx(), IngressConfiguration(namespace.Name, name, serviceName,"test.glbc.com"), ApplyOptions)
 	t.Expect(err).NotTo(HaveOccurred())
 
+	t.T().Cleanup(func() {
+		deleteTestIngress(t, namespace, ingress)
+	})
+
 	return ingress
 }
 
@@ -51,6 +55,13 @@ func deleteTestIngress(t Test, namespace *corev1.Namespace, ingress *networkingv
 	err := t.Client().Core().Cluster(logicalcluster.From(namespace)).NetworkingV1().Ingresses(namespace.Name).
 		Delete(t.Ctx(), ingress.Name, metav1.DeleteOptions{})
 	t.Expect(err).NotTo(HaveOccurred())
+}
+
+func assertIngressCleanup(t Test, namespace *corev1.Namespace) {
+	// Assert Ingresses, DNSRecord and TLS Secret deletion success
+	t.Eventually(Ingresses(t, namespace, "")).Should(HaveLen(0))
+	t.Eventually(DNSRecords(t, namespace, "")).Should(HaveLen(0))
+	t.Eventually(Secrets(t, namespace, "kuadrant.dev/hcg.managed=true")).Should(HaveLen(0))
 }
 
 func TestIngressBasic(t Test, ingressCount int, zoneID, glbcDomain string) {
@@ -75,6 +86,12 @@ func TestIngressBasic(t Test, ingressCount int, zoneID, glbcDomain string) {
 	_, err = t.Client().Core().Cluster(logicalcluster.From(namespace)).CoreV1().Services(namespace.Name).
 		Apply(t.Ctx(), ServiceConfiguration(namespace.Name, name, map[string]string{}), ApplyOptions)
 	t.Expect(err).NotTo(HaveOccurred())
+
+
+	// Assertion that is run in the cleanup pahse to ensure all ingresses are removed
+	t.T().Cleanup(func() {
+		assertIngressCleanup(t, namespace)
+	})
 
 	t.T().Log(fmt.Sprintf("Creating %d Ingresses in %s", ingressCount, workspace.Name))
 
@@ -140,23 +157,5 @@ func TestIngressBasic(t Test, ingressCount int, zoneID, glbcDomain string) {
 	// Retrieve TLS Secrets
 	t.Eventually(Secrets(t, namespace, "kuadrant.dev/hcg.managed=true")).WithTimeout(
 		TestTimeoutLong).Should(HaveLen(ingressCount))
-
-	// Delete Ingresses
-	for _, ingress := range ingresses {
-		deleteTestIngress(t, namespace, &ingress)
-	}
-
-	// Assert Ingresses, DNSRecord and TLS Secret deletion success
-	t.Eventually(Ingresses(t, namespace, "")).Should(HaveLen(0))
-	t.Eventually(DNSRecords(t, namespace, "")).Should(HaveLen(0))
-	t.Eventually(Secrets(t, namespace, "kuadrant.dev/hcg.managed=true")).Should(HaveLen(0))
-
-	// Finally, delete the test deployment and service resources
-	t.Expect(t.Client().Core().Cluster(logicalcluster.From(namespace)).CoreV1().Services(namespace.Name).
-		Delete(t.Ctx(), name, metav1.DeleteOptions{})).
-		To(Succeed())
-	t.Expect(t.Client().Core().Cluster(logicalcluster.From(namespace)).AppsV1().Deployments(namespace.Name).
-		Delete(t.Ctx(), name, metav1.DeleteOptions{})).
-		To(Succeed())
 
 }
