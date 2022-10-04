@@ -68,27 +68,38 @@ lint: ## Run golangci-lint against code.
 test: generate ## Run tests.
 	go test -v ./... -coverprofile=cover.out
 
+##@ Test
+
 .PHONY: e2e
-e2e: build
+e2e: build ## Run e2e tests.
 	## Run the metrics test first, so it starts from a clean state
 	KUBECONFIG="$(KUBECONFIG)" CLUSTERS_KUBECONFIG_DIR="$(CLUSTERS_KUBECONFIG_DIR)" \
 	AWS_DNS_PUBLIC_ZONE_ID="${AWS_DNS_PUBLIC_ZONE_ID}" \
-	go test -count=1 -timeout 60m -v ./e2e/metrics -tags=e2e
+	go test -count=1 -timeout 60m -v ./test/e2e/metrics -tags=e2e
 	## Run the other tests
 	KUBECONFIG="$(KUBECONFIG)" CLUSTERS_KUBECONFIG_DIR="$(CLUSTERS_KUBECONFIG_DIR)" \
-	go test -count=1 -timeout 60m -v ./e2e -tags=e2e
+	go test -count=1 -timeout 60m -v ./test/e2e -tags=e2e
 
 TEST_DNSRECORD_COUNT ?= 2
 TEST_INGRESS_COUNT ?= 2
+TEST_WORKSPACE_COUNT ?= 2
 .PHONY: performance
-performance: build
+performance: TEST_TAGS ?=performance,ingress,dnsrecord
+performance: build ## Run performance tests.
 	@date +"Performance Test Start: %s%3N"
 	KUBECONFIG="$(KUBECONFIG)" \
 	AWS_DNS_PUBLIC_ZONE_ID="$(AWS_DNS_PUBLIC_ZONE_ID)" \
 	TEST_DNSRECORD_COUNT="$(TEST_DNSRECORD_COUNT)" \
 	TEST_INGRESS_COUNT="$(TEST_INGRESS_COUNT)" \
-	go test -count=1 -timeout 60m -v ./e2e/performance -tags=performance
+	TEST_WORKSPACE_COUNT="$(TEST_WORKSPACE_COUNT)" \
+	go test -count=1 -timeout 60m -v ./test/performance -tags=$(TEST_TAGS)
 	@date +"Performance Test End: %s%3N"
+
+.PHONY: smoke
+smoke: build ## Run smoke tests.
+	KUBECONFIG="$(KUBECONFIG)" \
+	AWS_DNS_PUBLIC_ZONE_ID="$(AWS_DNS_PUBLIC_ZONE_ID)" \
+	go test -count=1 -timeout 60m -v ./test/smoke -tags=smoke
 
 ##@ CI
 

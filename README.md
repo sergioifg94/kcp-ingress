@@ -114,7 +114,15 @@ Run the performance tests:
 ```bash
 (export $(cat ./config/deploy/local/kcp-glbc/controller-config.env.ci | xargs) && \
 export KUBECONFIG="$(pwd)"/.kcp/admin.kubeconfig &&
-make performance TEST_DNSRECORD_COUNT=1 TEST_INGRESS_COUNT=1)
+make performance TEST_WORKSPACE_COUNT=1 TEST_DNSRECORD_COUNT=1 TEST_INGRESS_COUNT=1)
+```
+
+Run the smoke tests:
+
+```bash
+(export $(cat ./config/deploy/local/kcp-glbc/controller-config.env.ci | xargs) && \
+export KUBECONFIG="$(pwd)"/.kcp/admin.kubeconfig &&
+make smoke)
 ```
 
 Alternatively, You can run the KCP GLBC and/or the tests from your IDE / debugger.
