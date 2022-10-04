@@ -131,13 +131,16 @@ func GetZone(t Test, host string) (Zone, error) {
 		return results, nil
 	}
 	if value, ok := values[host]; ok {
-		json.Unmarshal([]byte(value), &results)
+		err = json.Unmarshal([]byte(value), &results)
+		if err != nil {
+			return nil, err
+		}
 		return results, nil
 	}
 	return results, net.NoSuchHost
 }
 
-//setDNSRecord - do not call this directly - use SetTXTRecord or SetARecord
+// setDNSRecord - do not call this directly - use SetTXTRecord or SetARecord
 func setDNSRecord(t Test, key, value string) error {
 	cfg, err := t.Client().Core().Cluster(GLBCWorkspace).CoreV1().ConfigMaps(ConfigmapNamespace).Get(t.Ctx(), ConfigmapName, metav1.GetOptions{})
 	if err != nil {
@@ -151,7 +154,7 @@ func setDNSRecord(t Test, key, value string) error {
 	return setDNSRecords(t, values)
 }
 
-//setDNSRecords - do not call this directly - use SetTXTRecord or SetARecord
+// setDNSRecords - do not call this directly - use SetTXTRecord or SetARecord
 func setDNSRecords(t Test, values map[string]string) error {
 	_, err := t.Client().Core().Cluster(GLBCWorkspace).CoreV1().ConfigMaps(ConfigmapNamespace).Apply(
 		t.Ctx(),
