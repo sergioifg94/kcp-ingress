@@ -14,7 +14,7 @@ env:
 
 jobs:
   build:
-    if: github.repository_owner == 'kuadrant'
+    if: github.repository_owner == 'kcp-dev'
     name: Build and Publish KCP GLBC Image
     runs-on: ubuntu-20.04
     outputs:
@@ -64,7 +64,7 @@ jobs:
         run: echo "Image pushed to ${{ steps.push-to-quay.outputs.registry-paths }}"
 
   update-hcg-unstable:
-    if: "github.repository_owner == 'kuadrant' && github.ref_name == 'main'"
+    if: "github.repository_owner == 'kcp-dev' && github.ref_name == 'main'"
     name: Update HCG unstable
     runs-on: ubuntu-20.04
     needs: build
