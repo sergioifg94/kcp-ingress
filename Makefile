@@ -4,6 +4,7 @@ SHELL := /usr/bin/env bash
 # NUM_CLUSTERS is a total number of kind clusters to be provisioned
 NUM_CLUSTERS ?= 1
 DO_BREW := true
+USE_CRC := false
 KCP_BRANCH := release-0.8
 
 IMAGE_TAG_BASE ?= quay.io/kuadrant/kcp-glbc
@@ -182,6 +183,7 @@ endif
 
 .PHONY: local-setup
 local-setup: export KCP_VERSION=${KCP_BRANCH}
+local-setup: export USE_CRC_CLUSTER=${USE_CRC}
 local-setup: clean kind kcp kustomize helm build ## Setup kcp locally using kind.
 	./utils/local-setup.sh -c ${NUM_CLUSTERS} ${LOCAL_SETUP_FLAGS}
 
