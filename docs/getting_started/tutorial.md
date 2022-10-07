@@ -281,3 +281,31 @@ This shows that the workload has successfully migrated from `kcp-cluster-1` to `
 After finishing with this tutorial, we can go back to our tab where we deployed the sample service, and press the enter key to reset and undo everything that was done from running the sample.
 
    ![Screenshot from 2022-09-09 19-29-44](https://user-images.githubusercontent.com/73656840/189419668-cb3d8d67-34ef-4148-8df1-f54fdb4bf196.png)
+
+## Other setup options with CRC
+
+### Using CRC sync target (optional)
+
+The default local setup uses a single sync target backed by a [kind](https://kind.sigs.k8s.io/) physical cluster, you can alternatively use a [crc](https://crc.dev/crc/) cluster by runnning:
+
+```bash
+make local-setup USE_CRC=true
+```
+
+### Add CRC sync target to existing local setup (optional)
+
+With a running local setup i.e. you have successfully executed `make local-setup`, you can run the following to create and add an additional sync target backed by a [crc](https://crc.dev/crc/) cluster:
+
+```bash
+./utils/local-setup-add-crc-cluster.sh
+```
+
+```bash
+$ kubectl get synctargets -o wide
+NAME              LOCATION          READY   SYNCED API RESOURCES
+kcp-cluster-1     kcp-cluster-1     True    ["deployments.apps","ingresses.networking.k8s.io","secrets","services"]
+kcp-cluster-crc   kcp-cluster-crc   True    ["deployments.apps","ingresses.networking.k8s.io","secrets","services"]
+```
+
+You must have crc installed(https://crc.dev/crc/), and have your openshift pull secret(https://cloud.redhat.com/openshift/create/local) stored locally in `~/pull-secret`. 
+Please check the script comments for any version requirements.

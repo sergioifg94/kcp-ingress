@@ -14,69 +14,7 @@ In the future we will also add the same functionality for Gateway API and OpenSh
 
 ## Getting Started
 
-To get started with the GLBC, we recommend you follow our [Getting Started tutorial]().
-
-Clone the repo and run:
-
-```bash
-make local-setup
-```
-> NOTE: If errors are encountered during the local-setup, refer to the [Troubleshooting Installation](/docs/troubleshooting.md) document.
-
-This script will:
-
-- build all the binaries
-- deploy three kubernetes 1.22 clusters locally using `kind`.
-- deploy and configure the ingress controllers in each cluster.
-- download kcp at the latest version integrated with GLBC
-- start the KCP server.
-- add Kind clusters as sync targets
-- deploy glbc dependencies (cert-manager) into kcp-glbc workspace.
-    
-
-Once the script is done, copy the `Run locally:` commands from the output.
-Open a new terminal, and from the root of the project, run the copied commands.
-
-Now you can create a new ingress resource from the root of the project:
-
-```bash 
-export KUBECONFIG=.kcp/admin.kubeconfig
-./bin/kubectl-kcp workspace use root:kuadrant
-kubectl apply -f samples/echo-service/echo.yaml
-```
-N.B. It's important that you use the `.kcp/admin.kubeconfig` kube config and switch to the `root:kuadrant` workspace.
-
-To verify the resources were created successfully, check the output of the following:
-
-```bash
-kubectl get deployment,service,ingress
-```
-
-### Using CRC sync target (optional)
-
-The default local setup uses a single sync target backed by a [kind](https://kind.sigs.k8s.io/) physical cluster, you can alternatively use a [crc](https://crc.dev/crc/) cluster by runnning:
-
-```bash
-make local-setup USE_CRC=true
-```
-
-### Add CRC sync target to existing local setup (optional)
-
-With a running local setup i.e. you have successfully executed `make local-setup`, you can run the following to create and add an additional sync target backed by a [crc](https://crc.dev/crc/) cluster:
-
-```bash
-./utils/local-setup-add-crc-cluster.sh
-```
-
-```bash
-$ kubectl get synctargets -o wide
-NAME              LOCATION          READY   SYNCED API RESOURCES
-kcp-cluster-1     kcp-cluster-1     True    ["deployments.apps","ingresses.networking.k8s.io","secrets","services"]
-kcp-cluster-crc   kcp-cluster-crc   True    ["deployments.apps","ingresses.networking.k8s.io","secrets","services"]
-```
-
-You must have crc installed(https://crc.dev/crc/), and have your openshift pull secret(https://cloud.redhat.com/openshift/create/local) stored locally in `~/pull-secret`. 
-Please check the script comments for any version requirements.
+To get started with the GLBC, we recommend you follow our [Getting Started tutorial](/docs/getting_started/tutorial.md).
 
 ## Development
 
