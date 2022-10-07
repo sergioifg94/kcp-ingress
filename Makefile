@@ -97,10 +97,28 @@ performance: build ## Run performance tests.
 	@date +"Performance Test End: %s%3N"
 
 .PHONY: smoke
+smoke: TEST_TAGS ?=smoke,ingress
 smoke: build ## Run smoke tests.
 	KUBECONFIG="$(KUBECONFIG)" \
 	AWS_DNS_PUBLIC_ZONE_ID="$(AWS_DNS_PUBLIC_ZONE_ID)" \
-	go test -count=1 -timeout 60m -v ./test/smoke -tags=smoke
+	go test -count=1 -timeout 60m -v ./test/smoke -tags=$(TEST_TAGS)
+
+TEST_OIDC_KUBECONFIG ?= test.oidc.kubeconfig
+.PHONY: generate-test-oidc-kubeconfig
+generate-test-oidc-kubeconfig: TEST_KUBE_HOST ?=""
+generate-test-oidc-kubeconfig: TEST_KUBE_OIDC_ISSUER_URL ?=""
+generate-test-oidc-kubeconfig: TEST_KUBE_OIDC_CLIENT_ID ?=""
+generate-test-oidc-kubeconfig: TEST_KUBE_OIDC_CLIENT_SECRET ?=""
+generate-test-oidc-kubeconfig: $(TEST_OIDC_KUBECONFIG) ## Generate test OIDC kubeconfig.
+$(TEST_OIDC_KUBECONFIG):
+	kubectl config --kubeconfig=$(TEST_OIDC_KUBECONFIG) set-cluster kcp --server=$(TEST_KUBE_HOST)
+	kubectl config --kubeconfig=$(TEST_OIDC_KUBECONFIG) set-credentials oidc \
+		--auth-provider=oidc \
+		--auth-provider-arg=idp-issuer-url=$(TEST_KUBE_OIDC_ISSUER_URL) \
+		--auth-provider-arg=client-id=$(TEST_KUBE_OIDC_CLIENT_ID)\
+		--auth-provider-arg=refresh-token=$(TEST_KUBE_OIDC_CLIENT_SECRET)
+	kubectl config --kubeconfig=$(TEST_OIDC_KUBECONFIG) set-context system:admin --cluster=kcp --user=oidc
+	kubectl config --kubeconfig=$(TEST_OIDC_KUBECONFIG) use-context system:admin
 
 ##@ CI
 

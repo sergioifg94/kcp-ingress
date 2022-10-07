@@ -1,4 +1,4 @@
-name: Performance
+name: Performance Tests
 
 on:
   workflow_dispatch:
@@ -15,11 +15,16 @@ on:
         description: 'Number of Workspaces to create'
         required: false
         default: '2'
+      environment:
+        description: 'Environment to run tests against'
+        type: environment
+        required: true
 
 jobs:
-  load:
-    name: Load
-    environment: unstable
+  ingress_test:
+    name: Ingress Load Test
+    environment: ${{ inputs.environment || 'unstable' }}
+    concurrency: ${{ inputs.environment || 'unstable' }}
     runs-on: ubuntu-20.04
     env:
       TEST_DNSRECORD_COUNT: ${{ github.event.inputs.test_dnsrecord_count}}
@@ -27,6 +32,11 @@ jobs:
       TEST_WORKSPACE_COUNT: ${{ github.event.inputs.test_workspace_count}}
       AWS_DNS_PUBLIC_ZONE_ID: ${{ secrets.AWS_DNS_PUBLIC_ZONE_ID }}
       GLBC_DOMAIN: ${{ secrets.GLBC_DOMAIN }}
+      GLBC_ENABLE_CUSTOM_HOSTS: ${{ secrets.GLBC_ENABLE_CUSTOM_HOSTS }}
+      GLBC_EXPORT: ${{ secrets.GLBC_EXPORT }}
+      GLBC_WORKSPACE: ${{ secrets.GLBC_WORKSPACE }}
+      TEST_WORKSPACE: ${{ secrets.TEST_WORKSPACE }}
+      TEST_TAGS: performance,ingress
     steps:
       - uses: actions/checkout@v2
       - uses: actions/setup-go@v2
@@ -34,26 +44,15 @@ jobs:
           go-version: v1.18
       - name: Setup Kubeconfig
         run: |
-          kubectl config --kubeconfig=test.kubeconfig set-cluster glbc --server=${{ secrets.TEST_KUBE_HOST }}
-          kubectl config --kubeconfig=test.kubeconfig set-credentials glbc --token=${{ secrets.TEST_KUBE_TOKEN }}
-          kubectl config --kubeconfig=test.kubeconfig set-context system:admin --cluster=glbc --namespace=${{ secrets.CICD_KUBE_NS }} --user=glbc
-          kubectl config --kubeconfig=test.kubeconfig use-context system:admin
+          make generate-test-oidc-kubeconfig \
+              TEST_OIDC_KUBECONFIG=test.kubeconfig \
+              TEST_KUBE_HOST=${{ secrets.TEST_KUBE_HOST }} \
+              TEST_KUBE_OIDC_ISSUER_URL=${{ secrets.TEST_KUBE_OIDC_ISSUER_URL }} \
+              TEST_KUBE_OIDC_CLIENT_ID=${{ secrets.TEST_KUBE_OIDC_CLIENT_ID }} \
+              TEST_KUBE_OIDC_CLIENT_SECRET=${{ secrets.TEST_KUBE_OIDC_CLIENT_SECRET }}
           kubectl config --kubeconfig=test.kubeconfig get-contexts
           export KUBECONFIG="$(pwd)"/test.kubeconfig
           echo "KUBECONFIG=${KUBECONFIG}" >> $GITHUB_ENV
-      - name: Run pre test
-        env:
-          TEST_DNSRECORD_COUNT: 1
-          TEST_INGRESS_COUNT: 1
-          TEST_WORKSPACE_COUNT: 1
-        run: |
-          export KUBECONFIG=${{ env.KUBECONFIG }}
-          echo "TEST_INGRESS_COUNT = ${{ env.TEST_INGRESS_COUNT }}"
-          echo "TEST_DNSRECORD_COUNT = ${{ env.TEST_DNSRECORD_COUNT }}"
-          echo "TEST_WORKSPACE_COUNT = ${{ env.TEST_WORKSPACE_COUNT }}"
-          echo "AWS_DNS_PUBLIC_ZONE_ID = ${{ env.AWS_DNS_PUBLIC_ZONE_ID }}"
-          echo "GLBC_DOMAIN = ${{ env.GLBC_DOMAIN }}"
-          make performance
       - name: Run performance tests
         run: |
           export KUBECONFIG=${{ env.KUBECONFIG }}
@@ -62,4 +61,46 @@ jobs:
           echo "TEST_WORKSPACE_COUNT = ${{ env.TEST_WORKSPACE_COUNT }}"
           echo "AWS_DNS_PUBLIC_ZONE_ID = ${{ env.AWS_DNS_PUBLIC_ZONE_ID }}"
           echo "GLBC_DOMAIN = ${{ env.GLBC_DOMAIN }}"
-          make performance
+          make performance TEST_TAGS=${{ env.TEST_TAGS }}
+
+  dns_record_test:
+    name: DNSRecord Load Test
+    environment: ${{ inputs.environment || 'unstable' }}
+    concurrency: ${{ inputs.environment || 'unstable' }}
+    runs-on: ubuntu-20.04
+    env:
+      TEST_DNSRECORD_COUNT: ${{ github.event.inputs.test_dnsrecord_count}}
+      TEST_INGRESS_COUNT: ${{ github.event.inputs.test_ingress_count }}
+      TEST_WORKSPACE_COUNT: ${{ github.event.inputs.test_workspace_count}}
+      AWS_DNS_PUBLIC_ZONE_ID: ${{ secrets.AWS_DNS_PUBLIC_ZONE_ID }}
+      GLBC_DOMAIN: ${{ secrets.GLBC_DOMAIN }}
+      GLBC_ENABLE_CUSTOM_HOSTS: ${{ secrets.GLBC_ENABLE_CUSTOM_HOSTS }}
+      GLBC_EXPORT: ${{ secrets.GLBC_EXPORT }}
+      GLBC_WORKSPACE: ${{ secrets.GLBC_WORKSPACE }}
+      TEST_WORKSPACE: ${{ secrets.TEST_WORKSPACE }}
+      TEST_TAGS: performance,dnsrecord
+    steps:
+      - uses: actions/checkout@v2
+      - uses: actions/setup-go@v2
+        with:
+          go-version: v1.18
+      - name: Setup Kubeconfig
+        run: |
+          make generate-test-oidc-kubeconfig \
+              TEST_OIDC_KUBECONFIG=test.kubeconfig \
+              TEST_KUBE_HOST=${{ secrets.TEST_KUBE_HOST }} \
+              TEST_KUBE_OIDC_ISSUER_URL=${{ secrets.TEST_KUBE_OIDC_ISSUER_URL }} \
+              TEST_KUBE_OIDC_CLIENT_ID=${{ secrets.TEST_KUBE_OIDC_CLIENT_ID }} \
+              TEST_KUBE_OIDC_CLIENT_SECRET=${{ secrets.TEST_KUBE_OIDC_CLIENT_SECRET }}
+          kubectl config --kubeconfig=test.kubeconfig get-contexts
+          export KUBECONFIG="$(pwd)"/test.kubeconfig
+          echo "KUBECONFIG=${KUBECONFIG}" >> $GITHUB_ENV
+      - name: Run performance tests
+        run: |
+          export KUBECONFIG=${{ env.KUBECONFIG }}
+          echo "TEST_INGRESS_COUNT = ${{ env.TEST_INGRESS_COUNT }}"
+          echo "TEST_DNSRECORD_COUNT = ${{ env.TEST_DNSRECORD_COUNT }}"
+          echo "TEST_WORKSPACE_COUNT = ${{ env.TEST_WORKSPACE_COUNT }}"
+          echo "AWS_DNS_PUBLIC_ZONE_ID = ${{ env.AWS_DNS_PUBLIC_ZONE_ID }}"
+          echo "GLBC_DOMAIN = ${{ env.GLBC_DOMAIN }}"
+          make performance TEST_TAGS=${{ env.TEST_TAGS }}
