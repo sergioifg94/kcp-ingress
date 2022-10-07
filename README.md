@@ -14,12 +14,14 @@ In the future we will also add the same functionality for Gateway API and OpenSh
 
 ## Getting Started
 
+To get started with the GLBC, we recommend you follow our [Getting Started tutorial]().
+
 Clone the repo and run:
 
 ```bash
 make local-setup
 ```
-> NOTE: If errors are encountered during the local-setup, refer to the [Troubleshooting Installation](https://github.com/kcp-dev/kcp-glbc/blob/main/docs/troubleshooting.md) document.
+> NOTE: If errors are encountered during the local-setup, refer to the [Troubleshooting Installation](/docs/troubleshooting.md) document.
 
 This script will:
 

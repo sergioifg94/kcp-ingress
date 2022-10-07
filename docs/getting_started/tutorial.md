@@ -2,7 +2,7 @@
 
 The Global Load Balancer Controller (GLBC) leverages [`kcp`](https://github.com/Kuadrant/kcp) to provide DNS-based global load balancing and transparent multi-cluster ingress. The main API for the GLBC is the Kubernetes Ingress object. GLBC watches Ingress objects and transforms them adding in the GLBC managed host and TLS certificate.
 
-For more information on the architecture of GLBC and how the various component work, refer to the [overview documentation](https://github.com/Kuadrant/kcp-glbc/blob/main/docs/getting_started/overview.md).
+For more information on the architecture of GLBC and how the various component work, refer to the [overview documentation](/docs/getting_started/overview.md).
 
 Use this tutorial to perform the following actions:
 
@@ -24,7 +24,7 @@ Use this tutorial to perform the following actions:
 
 ## Prerequisites
 - Install [kubectl](https://kubernetes.io/docs/tasks/tools/#kubectl).
-- Install Go 1.18 or higher. This is the version used in kcp-glbc as indicated in the [`go.mod`](https://github.com/Kuadrant/kcp-glbc/blob/main/go.mod) file.
+- Install Go 1.18 or higher. This is the version used in kcp-glbc as indicated in the [`go.mod`](go.mod) file.
 - Install the [yq](https://github.com/mikefarah/yq) command-line YAML processor.
 - Have an AWS account, a DNS Zone, and a subdomain of the domain being used. You will need this in order to instruct GLBC to make use of your AWS credentials and configuration.
 - Add the `kcp-glbc/bin` directory to your `$PATH`
@@ -36,7 +36,7 @@ Clone the repo. You would need to set `NUM_CLUSTERS=2`. Run the following comman
 ```bash
 NUM_CLUSTERS=2 make local-setup
 ```
-> NOTE: If errors are encountered during the local-setup, refer to the [Troubleshooting Installation](https://github.com/Kuadrant/kcp-glbc/blob/main/docs/troubleshooting.md) document.
+> NOTE: If errors are encountered during the local-setup, refer to the [Troubleshooting Installation](/docs/troubleshooting.md) document.
 
 This script performs the following actions: 
 * Builds all the binaries
@@ -51,9 +51,9 @@ This script performs the following actions:
 
 After `local-setup` has successfully completed, it will indicate that kcp is now running. However, at this point, GLBC is not yet running. You will be presented in the terminal with two options to deploy GLBC:
 
-1. [Local-deployment](https://github.com/Kuadrant/kcp-glbc/blob/main/docs/local_deployment.md): this option is good for testing purposes by using a local kcp instance and kind clusters.
+1. [Local-deployment](/docs/local_deployment.md): this option is good for testing purposes by using a local kcp instance and kind clusters.
 
-1. [Deploy latest in kcp](https://github.com/Kuadrant/kcp-glbc/blob/main/docs/deployment.md) with monitoring enabled: this will deploy GLBC to your target kcp instance. This will enable you to view observability in Prometheus and Grafana.
+1. [Deploy latest in kcp](/docs/deployment.md) with monitoring enabled: this will deploy GLBC to your target kcp instance. This will enable you to view observability in Prometheus and Grafana.
 
 For the demo, before deploying GLBC, we will want to provide it with your AWS credentials and configuration.
 
