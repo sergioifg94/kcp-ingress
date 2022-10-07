@@ -1,6 +1,6 @@
 # KCP Global Load Balancer
 
-![build status badge](https://github.com/kuadrant/kcp-glbc/actions/workflows/ci.yaml/badge.svg)
+![build status badge](https://github.com/kcp-dev/kcp-glbc/actions/workflows/ci.yaml/badge.svg)
 
 The KCP Global Load Balancer Controller (GLBC) solves multi cluster ingress use cases when leveraging KCP to provide transparent multi cluster deployments. 
 
@@ -19,7 +19,7 @@ Clone the repo and run:
 ```bash
 make local-setup
 ```
-> NOTE: If errors are encountered during the local-setup, refer to the [Troubleshooting Installation](https://github.com/Kuadrant/kcp-glbc/blob/main/docs/troubleshooting.md) document.
+> NOTE: If errors are encountered during the local-setup, refer to the [Troubleshooting Installation](https://github.com/kcp-dev/kcp-glbc/blob/main/docs/troubleshooting.md) document.
 
 This script will:
 
