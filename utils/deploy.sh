@@ -105,7 +105,7 @@ create_sync_target() {
     echo ""
   }
   kubectl annotate --overwrite synctarget ${1} featuregates.experimental.workload.kcp.dev/advancedscheduling='true'
-
+  kubectl label --overwrite synctarget ${1} kuadrant.dev/synctarget=${1}
   kubectl wait --timeout=60s --for=condition=VirtualWorkspaceURLsReady=true apiexport kubernetes
 
   if [[ $WAIT_WC_READY = "true" ]]; then
