@@ -71,7 +71,7 @@ GLBC_WORKSPACE=root:kuadrant
 KUBECONFIG_KCP_ADMIN=.kcp/admin.kubeconfig
 KUBECONFIG_KCP_GLBC=${TEMP_DIR}/kcp.kubeconfig
 
-: ${KCP_VERSION:="release-0.8"}
+: ${KCP_VERSION:="release-0.9"}
 KCP_SYNCER_IMAGE="ghcr.io/kcp-dev/kcp/syncer:${KCP_VERSION}"
 
 : ${GLBC_DEPLOYMENTS_DIR=${KCP_GLBC_DIR}/config/deploy}

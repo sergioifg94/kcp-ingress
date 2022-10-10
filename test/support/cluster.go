@@ -29,7 +29,6 @@ import (
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/apimachinery/pkg/util/errors"
-	"k8s.io/apimachinery/pkg/util/sets"
 	"k8s.io/apimachinery/pkg/util/yaml"
 	"k8s.io/cli-runtime/pkg/genericclioptions"
 	"k8s.io/client-go/discovery"
@@ -175,18 +174,15 @@ func applyKcpWorkloadSync(t Test, config *workloadClusterConfig) (func() error, 
 	// Configure workload plugin kubeconfig for test workspace
 	clusterServer := t.Client().GetConfig().Host + config.workspace.Path()
 	syncCommandOutput := new(bytes.Buffer)
-	opts := workloadplugin.NewOptions(genericclioptions.IOStreams{In: os.Stdin, Out: syncCommandOutput, ErrOut: os.Stderr})
-	opts.KubectlOverrides.ClusterInfo.Server = clusterServer
-	plugin, err := workloadplugin.NewConfig(opts)
-	if err != nil {
-		return cleanup, err
-	}
+	syncOptions := workloadplugin.NewSyncOptions(genericclioptions.IOStreams{In: os.Stdin, Out: syncCommandOutput, ErrOut: os.Stderr})
+	syncOptions.KubectlOverrides.ClusterInfo.Server = clusterServer
+	syncOptions.ResourcesToSync = []string{"ingresses.networking.k8s.io", "services"}
+	syncOptions.SyncTargetName = config.name
+	syncOptions.KCPNamespace = config.syncer.namespace
+	syncOptions.SyncerImage = config.syncer.image
+	syncOptions.Replicas = config.syncer.replicas
 
-	// Run workload plugin sync command
-	requiredResourcesToSync := sets.NewString("deployments.apps", "secrets", "configmaps", "serviceaccounts")
-	userResourcesToSync := sets.NewString(config.syncer.resourcesToSync...)
-	resourcesToSync := userResourcesToSync.Union(requiredResourcesToSync).List()
-	err = plugin.Sync(t.Ctx(), "-", config.name, config.syncer.namespace, config.syncer.namespace, config.syncer.image, resourcesToSync, config.syncer.replicas, 0, 0)
+	err := syncOptions.Run(t.Ctx())
 	if err != nil {
 		return cleanup, err
 	}

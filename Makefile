@@ -5,7 +5,7 @@ SHELL := /usr/bin/env bash
 NUM_CLUSTERS ?= 1
 DO_BREW := true
 USE_CRC := false
-KCP_BRANCH := release-0.8
+KCP_BRANCH := release-0.9
 
 IMAGE_TAG_BASE ?= quay.io/kuadrant/kcp-glbc
 IMAGE_TAG ?= latest

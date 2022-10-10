@@ -53,7 +53,7 @@ KUBECONFIG_KCP_ADMIN=.kcp/admin.kubeconfig
 
 KUBECTL_KCP_BIN="./bin/kubectl-kcp"
 
-: ${KCP_VERSION:="release-0.8"}
+: ${KCP_VERSION:="release-0.9"}
 KCP_SYNCER_IMAGE="ghcr.io/kcp-dev/kcp/syncer:${KCP_VERSION}"
 
 #Check that KUBECONFIG is not set to .kcp/admin.kubeconfig
