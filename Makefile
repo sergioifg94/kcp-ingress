@@ -5,6 +5,7 @@ SHELL := /usr/bin/env bash
 NUM_CLUSTERS ?= 1
 DO_BREW := true
 USE_CRC := false
+RUN_GLBC := false
 KCP_BRANCH := release-0.9
 
 IMAGE_TAG_BASE ?= quay.io/kuadrant/kcp-glbc
@@ -202,6 +203,7 @@ endif
 .PHONY: local-setup
 local-setup: export KCP_VERSION=${KCP_BRANCH}
 local-setup: export USE_CRC_CLUSTER=${USE_CRC}
+local-setup: export DEPLOY_GLBC=${RUN_GLBC} # Optionally run GLBC after local-setup is done.
 local-setup: clean kind kcp kustomize helm build ## Setup kcp locally using kind.
 	./utils/local-setup.sh -c ${NUM_CLUSTERS} ${LOCAL_SETUP_FLAGS}
 

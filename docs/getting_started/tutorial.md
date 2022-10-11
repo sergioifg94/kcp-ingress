@@ -15,7 +15,7 @@ Use this tutorial to perform the following actions:
 * [Prerequisites](#prerequisites)
 * [Install](#installation)
 * [Provide GLBC credentials](#provide-glbc-with-aws-credentials-and-configuration)
-* [Run GLBC](#run-glbc)
+* [Run kcp and GLBC](#run-kcp-and-glbc)
 * [Deploy the sample service](#deploy-the-sample-service)
 * [Verify sample service deployment](#verify-sample-service-deployment)
 * [Demo: **Providing ingress in a multi-cluster ingress scenario**](#main-use-case)
@@ -24,49 +24,23 @@ Use this tutorial to perform the following actions:
 
 ## Prerequisites
 - Install [kubectl](https://kubernetes.io/docs/tasks/tools/#kubectl).
-- Install Go 1.18 or higher. This is the version used in kcp-glbc as indicated in the [`go.mod`](go.mod) file.
+- Install Go 1.18 or higher. This is the version used in kcp-glbc as indicated in the [`go.mod`](/go.mod) file.
 - Install the [yq](https://github.com/mikefarah/yq) command-line YAML processor.
 - Have an AWS account, a DNS Zone, and a subdomain of the domain being used. You will need this in order to instruct GLBC to make use of your AWS credentials and configuration.
 - Add the `kcp-glbc/bin` directory to your `$PATH`
 
-## Installation
-
-Clone the repo. You would need to set `NUM_CLUSTERS=2`. Run the following command:
-
-```bash
-NUM_CLUSTERS=2 make local-setup
-```
-> NOTE: If errors are encountered during the local-setup, refer to the [Troubleshooting Installation](/docs/troubleshooting.md) document.
-
-This script performs the following actions: 
-* Builds all the binaries
-* Deploys three Kubernetes 1.22 clusters locally using [kind](https://kind.sigs.k8s.io/)
-* Deploys and configures the ingress controllers in each cluster
-* Downloads kcp at the latest version integrated with GLBC
-* Starts the kcp server
-* Adds Kind clusters as sync targets 
-* Deploy GLBC dependencies (`cert-manager`) into the `kcp-glbc` workspace.
-
------
-
-After `local-setup` has successfully completed, it will indicate that kcp is now running. However, at this point, GLBC is not yet running. You will be presented in the terminal with two options to deploy GLBC:
-
-1. [Local-deployment](/docs/local_deployment.md): this option is good for testing purposes by using a local kcp instance and kind clusters.
-
-1. [Deploy latest in kcp](/docs/deployment.md) with monitoring enabled: this will deploy GLBC to your target kcp instance. This will enable you to view observability in Prometheus and Grafana.
-
-For the demo, before deploying GLBC, we will want to provide it with your AWS credentials and configuration.
-
 <br>
+
+## Installation
 
 ### Provide GLBC with AWS credentials and configuration
 
-The easiest way to do this is to perform the following steps:
+Before deploying `kcp` and GLBC, we will want to provide GLBC with AWS credentials and configuration. The easiest way to do this is to perform the following steps:
 
 1. Open the `kcp-glbc` project in your IDE.
 1. Navigate to the `./config/deploy/local/kcp-glbc/aws-credentials.env` environment file.
 1. Enter your `AWS access key ID` and `AWS Secret Access Key` as indicated in the example below:
-  
+
      ```bash
       AWS_ACCESS_KEY_ID=EXAMPLEID2DJ3rSA3E
       AWS_SECRET_ACCESS_KEY=EXAMPLEKEYIEI034+fETFDS34QFAD0IAO
@@ -89,25 +63,30 @@ The easiest way to do this is to perform the following steps:
    ```
 
    The fields that might need to be edited include:
-     - Replace `<AWS_DNS_PUBLIC_ZONE_ID>` with your own hosted zone ID
-     - Replace `<GLBC_DOMAIN>` with your specified subdomain
+   - Replace `<AWS_DNS_PUBLIC_ZONE_ID>` with your own hosted zone ID
+   - Replace `<GLBC_DOMAIN>` with your specified subdomain
 
 <br>
 
-### Run GLBC
+### Run `kcp` and GLBC
+Clone the repo. You would need to set `NUM_CLUSTERS=2`, and for simplicity set `RUN_GLBC=true` which will immediately run GLBC after
+the local-setup script has completed. After running the following command, we will have `kcp` and GLBC running:
 
-After all the above is configured correctly, for the demo, we can run the first command under _Option 1_ to change to the directory where the repo is located. The commands are similar to the following (run them in a new tab):
+```bash
+make local-setup NUM_CLUSTERS=2 DEPLOY_GLBC=true
+```
+> NOTE: If errors are encountered during the local-setup, refer to the [Troubleshooting Installation](/docs/troubleshooting.md) document.
 
-   ```bash
-   Run Option 1 (Local):
-          cd to/the/repo
-   ```
+This script performs the following actions: 
+* Builds all the binaries
+* Deploys two Kubernetes 1.22 clusters locally using [kind](https://kind.sigs.k8s.io/)
+* Deploys and configures the ingress controllers in each cluster
+* Downloads kcp at the latest version integrated with GLBC
+* Starts the kcp server
+* Adds Kind clusters as sync targets 
+* Deploy GLBC dependencies (`cert-manager`) into the `kcp-glbc` workspace.
 
-Using the same tab in the terminal, run the following command to run GLBC and use `controller-config.env` and `aws-credentials.env`. We will be able to curl the domain in the tutorial and visualize how the workload migrates from `kcp-cluster-1` to `kcp-cluster-2`.
-
-   ```bash
-   (export $(cat ./config/deploy/local/kcp-glbc/controller-config.env | xargs) && export $(cat ./config/deploy/local/kcp-glbc/aws-credentials.env | xargs) && KUBECONFIG=./tmp/kcp.kubeconfig ./bin/kcp-glbc)
-   ```
+* Additionally, we would have deployed GLBC.
 
 <br>
 
@@ -233,7 +212,7 @@ Alternatively, we can also run the following command in another tab to start wat
 
 #### Curl the running domain
 
-Now that the DNS record has been successfully created, in a new tab in the terminal, we can curl the domain to view it. To do this, we will run the following watch command that is outputs to our terminal and will look similar to the following:
+Now that the DNS record has been successfully created, in a new tab in the terminal, we can curl the domain to view it. To do this, we will run the following watch command that is outputted to our terminal and will look similar to the following:
 
    ```bash
    watch -n1 "curl -k https://cbkgg75kjgmah1mbpvsg.cz.hcpapps.net"
@@ -249,7 +228,7 @@ This means that kcp-cluster-1 is up and running correctly.
 
 #### Migrating workload from one cluster to another cluster
 
-As we continue with the following steps, we will want to be observing the tab where we are watching our domain. This way, we will notice that during the workload migration, there is no interruptions and no down time.
+As we continue with the following steps, we will want to be observing the tab where we are watching our domain. This way, we will notice that during the workload migration, there is no interruptions and no downtime.
 
 To proceed with the workload migration, we will go to the tab where we deployed the sample service, and press the enter key to "trigger migration from `kcp-cluster-1` to `kcp-cluster-2`. This deletes `placement-1` and creates `placement-2` which points to `kcp-cluster-2`. This will also change the label in the "default" namespace mentioned before: `*state.internal.workload.kcp.dev/5MivhNIs7DjM7dK95I2K7TpWe7aUGMU4WHqjWn: Sync*` to the other cluster.
 

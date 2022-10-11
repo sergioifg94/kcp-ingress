@@ -222,6 +222,20 @@ KUBECONFIG=${KUBECONFIG_KCP_ADMIN} ${SCRIPT_DIR}/create_glbc_kubeconfig.sh -o ${
 # Apply the default glbc-ca issuer
 kubectl --kubeconfig=${KUBECONFIG_KCP_ADMIN} apply -n kcp-glbc -f ./config/default/issuer.yaml
 
+if [[ "${DEPLOY_GLBC}" == "true" ]]; then
+  KUBECONFIG=${KUBECONFIG_KCP_ADMIN} ./utils/deploy.sh -k config/deploy/local
+  KUBECONFIG=${KUBECONFIG} ./utils/deploy-observability.sh
+  echo "When glbc is running, try deploying the sample service:"
+  echo ""
+  echo "       cd ${PWD}"
+  echo "       export KUBECONFIG=${KUBECONFIG_KCP_ADMIN}"
+  echo "       ./bin/kubectl-kcp ws '~'"
+  echo "       kubectl apply -f config/apiexports/kubernetes/kubernetes-apibinding.yaml"
+  echo "       kubectl apply -f config/deploy/local/kcp-glbc/apiexports/glbc/glbc-apibinding.yaml"
+  echo "       kubectl apply -f samples/echo-service/echo.yaml"
+  echo ""
+  read -p "Press enter to exit -> It will kill the KCP process running in background"
+else
 echo ""
 echo "KCP PID          : ${KCP_PID}"
 echo ""
@@ -249,3 +263,4 @@ echo "       kubectl apply -f config/deploy/local/kcp-glbc/apiexports/glbc/glbc-
 echo "       kubectl apply -f samples/echo-service/echo.yaml"
 echo ""
 read -p "Press enter to exit -> It will kill the KCP process running in background"
+fi
