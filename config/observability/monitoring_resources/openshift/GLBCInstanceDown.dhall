@@ -17,7 +17,7 @@ in  PrometheusOperator.Rule::{
     , alert = Some "GLBCInstanceDown"
     , expr =
         K8s.IntOrString.String
-          "(absent(kube_pod_labels{label_glbc_name=\"kcp-stable-redhat-hcg\", pod=~\"kcp-glbc-controller-manager.*\"}) or absent(kube_pod_labels{label_glbc_name=\"kcp-stable-redhat-hcg-unstable\", pod=~\"kcp-glbc-controller-manager.*\"}) or absent(kube_pod_labels{label_glbc_name=\"kcp-unstable-redhat-hcg\", pod=~\"kcp-glbc-controller-manager.*\"})) > 0"
+          "(absent(kube_pod_labels{label_glbc_name=\"kcp-stable-redhat-hcg\", pod=~\"kcp-glbc-controller-manager.*\"}) or absent(kube_pod_labels{label_glbc_name=\"kcp-stable-redhat-hcg-unstable\", pod=~\"kcp-glbc-controller-manager.*\"})) > 0"
     , for = Some (Duration.show { amount = 5, unit = TimeUnit.Type.Minutes })
     , labels = Some
         (toMap { severity = AlertSeverity.show AlertSeverity.Type.Critical })
