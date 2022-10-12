@@ -8,12 +8,11 @@ import (
 
 	"github.com/google/go-cmp/cmp"
 	"github.com/google/go-cmp/cmp/cmpopts"
+	"github.com/kcp-dev/logicalcluster/v2"
 
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	utilerrors "k8s.io/apimachinery/pkg/util/errors"
 	utilclock "k8s.io/utils/clock"
-
-	"github.com/kcp-dev/logicalcluster/v2"
 
 	v1 "github.com/kuadrant/kcp-glbc/pkg/apis/kuadrant/v1"
 	"github.com/kuadrant/kcp-glbc/pkg/util/metadata"
@@ -32,7 +31,6 @@ const (
 
 func (c *Controller) reconcile(ctx context.Context, dnsRecord *v1.DNSRecord) error {
 	c.Logger.V(3).Info("starting reconcile of dnsRecord ", "name", dnsRecord.Name, "namespace", dnsRecord.Namespace, "cluster", logicalcluster.From(dnsRecord))
-
 	// If the DNS record was deleted, clean up and return.
 	if dnsRecord.DeletionTimestamp != nil && !dnsRecord.DeletionTimestamp.IsZero() {
 		if err := c.reconcileHealthCheckDeletion(ctx, dnsRecord); err != nil {

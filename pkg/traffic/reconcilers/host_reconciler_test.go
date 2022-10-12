@@ -11,19 +11,19 @@ import (
 
 	networkingv1 "k8s.io/api/networking/v1"
 
-	"github.com/kuadrant/kcp-glbc/pkg/access"
 	v1 "github.com/kuadrant/kcp-glbc/pkg/apis/kuadrant/v1"
+	"github.com/kuadrant/kcp-glbc/pkg/traffic"
 	"github.com/kuadrant/kcp-glbc/pkg/util/metadata"
 )
 
 type hostResult struct {
-	Status   access.ReconcileStatus
+	Status   traffic.ReconcileStatus
 	Err      error
-	Accessor access.Accessor
+	Accessor traffic.Interface
 }
 
 func TestReconcileHost(t *testing.T) {
-	accessor := func(rules []networkingv1.IngressRule, tls []networkingv1.IngressTLS) access.Accessor {
+	accessor := func(rules []networkingv1.IngressRule, tls []networkingv1.IngressTLS) traffic.Interface {
 		i := &networkingv1.Ingress{
 			Spec: networkingv1.IngressSpec{
 				Rules: rules,
@@ -31,10 +31,10 @@ func TestReconcileHost(t *testing.T) {
 		}
 		i.Spec.TLS = tls
 
-		return &access.IngressAccessor{Ingress: i}
+		return &traffic.Ingress{Ingress: i}
 	}
 
-	var buildResult = func(r Reconciler, a access.Accessor) hostResult {
+	var buildResult = func(r Reconciler, a traffic.Interface) hostResult {
 		status, err := r.Reconcile(context.TODO(), a)
 		return hostResult{
 			Status:   status,
@@ -44,27 +44,27 @@ func TestReconcileHost(t *testing.T) {
 	}
 	var managedDomain = "test.com"
 
-	var commonValidation = func(hr hostResult, expectedStatus access.ReconcileStatus) error {
+	var commonValidation = func(hr hostResult, expectedStatus traffic.ReconcileStatus) error {
 		if hr.Status != expectedStatus {
 			return fmt.Errorf("unexpected status ")
 		}
 		if hr.Err != nil {
 			return fmt.Errorf("unexpected error from Reconcile : %s", hr.Err)
 		}
-		if !metadata.HasAnnotation(hr.Accessor, access.ANNOTATION_HCG_HOST) {
-			return fmt.Errorf("expected annotation %s to be set", access.ANNOTATION_HCG_HOST)
+		if !metadata.HasAnnotation(hr.Accessor, traffic.ANNOTATION_HCG_HOST) {
+			return fmt.Errorf("expected annotation %s to be set", traffic.ANNOTATION_HCG_HOST)
 		}
 		return nil
 	}
 
 	cases := []struct {
 		Name     string
-		Accessor func() access.Accessor
+		Accessor func() traffic.Interface
 		Validate func(hr hostResult) error
 	}{
 		{
 			Name: "test managed host generated for empty host field",
-			Accessor: func() access.Accessor {
+			Accessor: func() traffic.Interface {
 				return accessor([]networkingv1.IngressRule{{
 					IngressRuleValue: networkingv1.IngressRuleValue{
 						HTTP: &networkingv1.HTTPIngressRuleValue{},
@@ -77,31 +77,31 @@ func TestReconcileHost(t *testing.T) {
 
 			},
 			Validate: func(hr hostResult) error {
-				return commonValidation(hr, access.ReconcileStatusStop)
+				return commonValidation(hr, traffic.ReconcileStatusStop)
 			},
 		},
 		{
 			Name: "test custom host replaced with generated managed host",
-			Accessor: func() access.Accessor {
+			Accessor: func() traffic.Interface {
 				a := accessor([]networkingv1.IngressRule{{
 					Host: "api.example.com",
 				}}, []networkingv1.IngressTLS{})
 
-				metadata.AddAnnotation(a, access.ANNOTATION_HCG_HOST, "123.test.com")
+				metadata.AddAnnotation(a, traffic.ANNOTATION_HCG_HOST, "123.test.com")
 
 				return a
 			},
 			Validate: func(hr hostResult) error {
-				err := commonValidation(hr, access.ReconcileStatusContinue)
+				err := commonValidation(hr, traffic.ReconcileStatusContinue)
 				if err != nil {
 					return err
 				}
-				if !metadata.HasAnnotation(hr.Accessor, access.ANNOTATION_HCG_CUSTOM_HOST_REPLACED) {
+				if !metadata.HasAnnotation(hr.Accessor, traffic.ANNOTATION_HCG_CUSTOM_HOST_REPLACED) {
 					return fmt.Errorf("expected the custom host annotation to be present")
 				}
-				generatedHost, ok := hr.Accessor.GetAnnotations()[access.ANNOTATION_HCG_HOST]
+				generatedHost, ok := hr.Accessor.GetAnnotations()[traffic.ANNOTATION_HCG_HOST]
 				if !ok {
-					return access.ErrGeneratedHostMissing
+					return traffic.ErrGeneratedHostMissing
 				}
 				for _, host := range hr.Accessor.GetHosts() {
 					if host != generatedHost {
@@ -130,20 +130,20 @@ func TestReconcileHost(t *testing.T) {
 func TestProcessCustomHostValidation(t *testing.T) {
 	testCases := []struct {
 		name                 string
-		accessor             access.Accessor
+		accessor             traffic.Interface
 		domainVerifications  *v1.DomainVerificationList
-		expectedPendingRules access.Pending
+		expectedPendingRules traffic.Pending
 		expectedRules        []networkingv1.IngressRule
 		expectedTLS          []networkingv1.IngressTLS
 	}{
 		{
 			name: "Empty host",
-			accessor: &access.IngressAccessor{
+			accessor: &traffic.Ingress{
 				Ingress: &networkingv1.Ingress{
 					ObjectMeta: metav1.ObjectMeta{
 						Name: "ingress",
 						Annotations: map[string]string{
-							access.ANNOTATION_HCG_HOST: "generated.host.net",
+							traffic.ANNOTATION_HCG_HOST: "generated.host.net",
 						},
 					},
 					Spec: networkingv1.IngressSpec{
@@ -165,7 +165,7 @@ func TestProcessCustomHostValidation(t *testing.T) {
 				},
 			},
 			domainVerifications:  &v1.DomainVerificationList{},
-			expectedPendingRules: access.Pending{},
+			expectedPendingRules: traffic.Pending{},
 			expectedRules: []networkingv1.IngressRule{
 				{
 					Host: "",
@@ -195,12 +195,12 @@ func TestProcessCustomHostValidation(t *testing.T) {
 		},
 		{
 			name: "Custom host verified",
-			accessor: &access.IngressAccessor{
+			accessor: &traffic.Ingress{
 				Ingress: &networkingv1.Ingress{
 					ObjectMeta: metav1.ObjectMeta{
 						Name: "ingress",
 						Annotations: map[string]string{
-							access.ANNOTATION_HCG_HOST: "generated.host.net",
+							traffic.ANNOTATION_HCG_HOST: "generated.host.net",
 						},
 					},
 					Spec: networkingv1.IngressSpec{
@@ -236,7 +236,7 @@ func TestProcessCustomHostValidation(t *testing.T) {
 					},
 				},
 			},
-			expectedPendingRules: access.Pending{},
+			expectedPendingRules: traffic.Pending{},
 			expectedRules: []networkingv1.IngressRule{
 				{
 					Host: "test.pb-custom.hcpapps.net",
@@ -266,12 +266,12 @@ func TestProcessCustomHostValidation(t *testing.T) {
 		},
 		{
 			name: "subdomain of verifiied custom host",
-			accessor: &access.IngressAccessor{
+			accessor: &traffic.Ingress{
 				Ingress: &networkingv1.Ingress{
 					ObjectMeta: metav1.ObjectMeta{
 						Name: "ingress",
 						Annotations: map[string]string{
-							access.ANNOTATION_HCG_HOST: "generated.host.net",
+							traffic.ANNOTATION_HCG_HOST: "generated.host.net",
 						},
 					},
 					Spec: networkingv1.IngressSpec{
@@ -307,7 +307,7 @@ func TestProcessCustomHostValidation(t *testing.T) {
 					},
 				},
 			},
-			expectedPendingRules: access.Pending{},
+			expectedPendingRules: traffic.Pending{},
 			expectedRules: []networkingv1.IngressRule{
 				{
 					Host: "sub.test.pb-custom.hcpapps.net",
@@ -337,12 +337,12 @@ func TestProcessCustomHostValidation(t *testing.T) {
 		},
 		{
 			name: "Custom host unverified",
-			accessor: &access.IngressAccessor{
+			accessor: &traffic.Ingress{
 				Ingress: &networkingv1.Ingress{
 					ObjectMeta: metav1.ObjectMeta{
 						Name: "ingress",
 						Annotations: map[string]string{
-							access.ANNOTATION_HCG_HOST: "generated.host.net",
+							traffic.ANNOTATION_HCG_HOST: "generated.host.net",
 						},
 					},
 					Spec: networkingv1.IngressSpec{
@@ -378,7 +378,7 @@ func TestProcessCustomHostValidation(t *testing.T) {
 					},
 				},
 			},
-			expectedPendingRules: access.Pending{
+			expectedPendingRules: traffic.Pending{
 				Rules: []networkingv1.IngressRule{
 					{
 						Host: "test.pb-custom.hcpapps.net",
@@ -411,12 +411,12 @@ func TestProcessCustomHostValidation(t *testing.T) {
 		},
 		{
 			name: "TLS section is preserved",
-			accessor: &access.IngressAccessor{
+			accessor: &traffic.Ingress{
 				Ingress: &networkingv1.Ingress{
 					ObjectMeta: metav1.ObjectMeta{
 						Name: "ingress",
 						Annotations: map[string]string{
-							access.ANNOTATION_HCG_HOST: "generated.host.net",
+							traffic.ANNOTATION_HCG_HOST: "generated.host.net",
 						},
 					},
 					Spec: networkingv1.IngressSpec{
@@ -460,7 +460,7 @@ func TestProcessCustomHostValidation(t *testing.T) {
 					},
 				},
 			},
-			expectedPendingRules: access.Pending{
+			expectedPendingRules: traffic.Pending{
 				Rules: []networkingv1.IngressRule{
 					{
 						Host: "test.pb-custom.hcpapps.net",
@@ -503,9 +503,16 @@ func TestProcessCustomHostValidation(t *testing.T) {
 
 	for _, testCase := range testCases {
 		t.Run(testCase.name, func(t *testing.T) {
-			ingressAccessor := testCase.accessor.(*access.IngressAccessor)
+			ingressAccessor := testCase.accessor.(*traffic.Ingress)
 			if err := testCase.accessor.ProcessCustomHosts(
+				context.TODO(),
 				testCase.domainVerifications,
+				func(ctx context.Context, i traffic.Interface) error {
+					return nil
+				},
+				func(ctx context.Context, i traffic.Interface) error {
+					return nil
+				},
 			); err != nil {
 				t.Fatal(err)
 			}
@@ -513,12 +520,12 @@ func TestProcessCustomHostValidation(t *testing.T) {
 			// Assert the expected generated rules matches the
 			// annotation
 			if testCase.expectedPendingRules.Rules != nil {
-				annotation, ok := testCase.accessor.GetAnnotations()[access.ANNOTATION_PENDING_CUSTOM_HOSTS]
+				annotation, ok := testCase.accessor.GetAnnotations()[traffic.ANNOTATION_PENDING_CUSTOM_HOSTS]
 				if !ok {
 					t.Fatalf("expected GeneratedRulesAnnotation to be set")
 				}
 
-				pendingRules := access.Pending{}
+				pendingRules := traffic.Pending{}
 				if err := json.Unmarshal(
 					[]byte(annotation),
 					&pendingRules,

@@ -29,8 +29,8 @@ import (
 
 	"github.com/kcp-dev/logicalcluster/v2"
 
-	"github.com/kuadrant/kcp-glbc/pkg/access"
-	"github.com/kuadrant/kcp-glbc/pkg/access/reconcilers"
+	"github.com/kuadrant/kcp-glbc/pkg/traffic"
+	"github.com/kuadrant/kcp-glbc/pkg/traffic/reconcilers"
 	"github.com/kuadrant/kcp-glbc/pkg/util/env"
 	. "github.com/kuadrant/kcp-glbc/test/support"
 )
@@ -83,11 +83,11 @@ func TestTLS(t *testing.T) {
 	// Wait until the Ingress is reconciled with the load balancer Ingresses
 	test.Eventually(Ingress(test, namespace, name)).WithTimeout(TestTimeoutMedium).Should(And(
 		WithTransform(Annotations, And(
-			HaveKey(access.ANNOTATION_HCG_HOST),
-			HaveKey(access.ANNOTATION_PENDING_CUSTOM_HOSTS),
+			HaveKey(traffic.ANNOTATION_HCG_HOST),
+			HaveKey(traffic.ANNOTATION_PENDING_CUSTOM_HOSTS),
 		)),
 		WithTransform(Labels, And(
-			HaveKey(access.LABEL_HAS_PENDING_HOSTS),
+			HaveKey(traffic.LABEL_HAS_PENDING_HOSTS),
 		)),
 		WithTransform(LoadBalancerIngresses, HaveLen(1)),
 		Satisfy(HostsEqualsToGeneratedHost),
@@ -95,8 +95,8 @@ func TestTLS(t *testing.T) {
 
 	// Retrieve the Ingress
 	ingress := GetIngress(test, namespace, name)
-	accessor := &access.IngressAccessor{Ingress: ingress}
-	hostname := accessor.GetAnnotations()[access.ANNOTATION_HCG_HOST]
+	accessor := &traffic.Ingress{Ingress: ingress}
+	hostname := accessor.GetAnnotations()[traffic.ANNOTATION_HCG_HOST]
 	secretName := reconcilers.TLSSecretName(accessor)
 
 	// Check the Ingress TLS spec

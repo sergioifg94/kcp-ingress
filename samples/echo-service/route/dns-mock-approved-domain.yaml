@@ -1,0 +1,8 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: hosts
+  namespace: kcp-glbc
+data:
+  router-default.apps-crc.testing: '[{"IP": "192.168.0.118", "TTL": 60}]'
+  pb-custom.hcpapps.net: '[{"TXT": "glbctoken=glbc-root:kuadrant"}]'

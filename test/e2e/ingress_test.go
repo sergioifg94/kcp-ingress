@@ -11,7 +11,7 @@ import (
 
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 
-	"github.com/kuadrant/kcp-glbc/pkg/access"
+	"github.com/kuadrant/kcp-glbc/pkg/traffic"
 	"github.com/kuadrant/kcp-glbc/pkg/util/workloadMigration"
 
 	. "github.com/onsi/gomega"
@@ -90,11 +90,11 @@ func TestIngress(t *testing.T) {
 	// Wait until the Ingress is reconciled with the load balancer Ingresses
 	test.Eventually(Ingress(test, namespace, name)).WithTimeout(TestTimeoutMedium).Should(And(
 		WithTransform(Annotations, And(
-			HaveKey(access.ANNOTATION_HCG_HOST),
-			HaveKey(access.ANNOTATION_PENDING_CUSTOM_HOSTS),
+			HaveKey(traffic.ANNOTATION_HCG_HOST),
+			HaveKey(traffic.ANNOTATION_PENDING_CUSTOM_HOSTS),
 		)),
 		WithTransform(Labels, And(
-			HaveKey(access.LABEL_HAS_PENDING_HOSTS),
+			HaveKey(traffic.LABEL_HAS_PENDING_HOSTS),
 		)),
 		WithTransform(LoadBalancerIngresses, HaveLen(1)),
 		Satisfy(HostsEqualsToGeneratedHost),
@@ -121,7 +121,7 @@ func TestIngress(t *testing.T) {
 		WithTransform(DNSRecordEndpoints, HaveLen(1)),
 		WithTransform(DNSRecordEndpoints, ContainElement(MatchFieldsP(IgnoreExtras,
 			Fields{
-				"DNSName":          Equal(ingress.Annotations[access.ANNOTATION_HCG_HOST]),
+				"DNSName":          Equal(ingress.Annotations[traffic.ANNOTATION_HCG_HOST]),
 				"Targets":          ConsistOf(ingressStatus.LoadBalancer.Ingress[0].IP),
 				"RecordType":       Equal("A"),
 				"RecordTTL":        Equal(kuadrantv1.TTL(60)),

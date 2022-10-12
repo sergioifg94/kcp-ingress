@@ -18,9 +18,9 @@ import (
 	"k8s.io/client-go/tools/cache"
 	"k8s.io/client-go/util/workqueue"
 
-	"github.com/kuadrant/kcp-glbc/pkg/access"
-	"github.com/kuadrant/kcp-glbc/pkg/access/reconcilers"
 	kuadrantv1 "github.com/kuadrant/kcp-glbc/pkg/apis/kuadrant/v1"
+	"github.com/kuadrant/kcp-glbc/pkg/traffic"
+	"github.com/kuadrant/kcp-glbc/pkg/traffic/reconcilers"
 
 	"github.com/kcp-dev/logicalcluster/v2"
 
@@ -122,7 +122,7 @@ func NewController(config *ControllerConfig) *Controller {
 			if _, ok := certificate.Labels[basereconciler.LABEL_HCG_MANAGED]; !ok {
 				return false
 			}
-			if _, ok := certificate.Annotations[access.ANNOTATION_INGRESS_KEY]; ok {
+			if _, ok := certificate.Annotations[traffic.ANNOTATION_TRAFFIC_KEY]; ok {
 				return true
 			}
 			return true
@@ -142,7 +142,7 @@ func NewController(config *ControllerConfig) *Controller {
 				enq := reconcilers.CertificateUpdatedHandler(oldCert, newCert)
 				if enq {
 
-					ingressKey := newCert.Annotations[access.ANNOTATION_INGRESS_KEY]
+					ingressKey := newCert.Annotations[traffic.ANNOTATION_TRAFFIC_KEY]
 					c.Logger.V(3).Info("reqeuing ingress certificate updated", "certificate", newCert.Name, "ingresskey", ingressKey)
 					c.enqueueIngressByKey(ingressKey)
 				}
@@ -152,7 +152,7 @@ func NewController(config *ControllerConfig) *Controller {
 				// handle metric requeue ingress if the cert is deleted and the ingress still exists
 				// covers a manual deletion of cert and will ensure a new cert is created
 				reconcilers.CertificateDeletedHandler(certificate)
-				ingressKey := certificate.Annotations[access.ANNOTATION_INGRESS_KEY]
+				ingressKey := certificate.Annotations[traffic.ANNOTATION_TRAFFIC_KEY]
 				c.Logger.V(3).Info("reqeuing ingress certificate deleted", "certificate", certificate.Name, "ingresskey", ingressKey)
 				c.enqueueIngressByKey(ingressKey)
 			},
@@ -171,7 +171,7 @@ func NewController(config *ControllerConfig) *Controller {
 				secret := obj.(*corev1.Secret)
 				issuer := secret.Annotations[tls.TlsIssuerAnnotation]
 				tlsCertificateSecretCount.WithLabelValues(issuer).Inc()
-				ingressKey := secret.Annotations[access.ANNOTATION_INGRESS_KEY]
+				ingressKey := secret.Annotations[traffic.ANNOTATION_TRAFFIC_KEY]
 				c.Logger.V(3).Info("reqeuing ingress certificate tls secret created", "secret", secret.Name, "ingresskey", ingressKey)
 				c.enqueueIngressByKey(ingressKey)
 			},
@@ -181,7 +181,7 @@ func NewController(config *ControllerConfig) *Controller {
 				if oldSecret.ResourceVersion != newSecret.ResourceVersion {
 					// we only care if the secret data changed
 					if !equality.Semantic.DeepEqual(oldSecret.Data, newSecret.Data) {
-						ingressKey := newSecret.Annotations[access.ANNOTATION_INGRESS_KEY]
+						ingressKey := newSecret.Annotations[traffic.ANNOTATION_TRAFFIC_KEY]
 						c.Logger.V(3).Info("reqeuing ingress certificate tls secret updated", "secret", newSecret.Name, "ingresskey", ingressKey)
 						c.enqueueIngressByKey(ingressKey)
 					}
@@ -191,7 +191,7 @@ func NewController(config *ControllerConfig) *Controller {
 				secret := obj.(*corev1.Secret)
 				issuer := secret.Annotations[tls.TlsIssuerAnnotation]
 				tlsCertificateSecretCount.WithLabelValues(issuer).Dec()
-				ingressKey := secret.Annotations[access.ANNOTATION_INGRESS_KEY]
+				ingressKey := secret.Annotations[traffic.ANNOTATION_TRAFFIC_KEY]
 				c.Logger.V(3).Info("reqeuing ingress certificate tls secret deleted", "secret", secret.Name, "ingresskey", ingressKey)
 				c.enqueueIngressByKey(ingressKey)
 			},
@@ -207,7 +207,7 @@ func NewController(config *ControllerConfig) *Controller {
 				return
 			}
 			// if we have a ingress key stored we can re queue the ingresss
-			if ingressKey, ok := dns.Annotations[access.ANNOTATION_INGRESS_KEY]; ok {
+			if ingressKey, ok := dns.Annotations[traffic.ANNOTATION_TRAFFIC_KEY]; ok {
 				c.Logger.V(3).Info("reqeuing ingress dns record deleted", "cluster", logicalcluster.From(dns), "namespace", dns.Namespace, "name", dns.Name, "ingresskey", ingressKey)
 				c.enqueueIngressByKey(ingressKey)
 			}
@@ -216,7 +216,7 @@ func NewController(config *ControllerConfig) *Controller {
 			newdns := newObj.(*kuadrantv1.DNSRecord)
 			olddns := oldObj.(*kuadrantv1.DNSRecord)
 			if olddns.ResourceVersion != newdns.ResourceVersion {
-				ingressKey := newObj.(*kuadrantv1.DNSRecord).Annotations[access.ANNOTATION_INGRESS_KEY]
+				ingressKey := newObj.(*kuadrantv1.DNSRecord).Annotations[traffic.ANNOTATION_TRAFFIC_KEY]
 				c.Logger.V(3).Info("reqeuing ingress dns record deleted", "cluster", logicalcluster.From(newdns), "namespace", newdns.Namespace, "name", newdns.Name, "ingresskey", ingressKey)
 				c.enqueueIngressByKey(ingressKey)
 			}
@@ -292,7 +292,7 @@ func (c *Controller) process(ctx context.Context, key string) error {
 
 	current := object.(*networkingv1.Ingress)
 	target := current.DeepCopy()
-	accessor := access.NewIngressAccessor(target)
+	accessor := traffic.NewIngress(target)
 	err = c.reconcile(ctx, accessor)
 	if err != nil {
 		return err
@@ -333,7 +333,7 @@ func (c *Controller) ingressesFromDomainVerification(obj interface{}) ([]*networ
 
 	// find all ingresses in this workspace with pending hosts that contain this domains
 	ingressList, err := c.ingressLister.Ingresses("").List(labels.SelectorFromSet(labels.Set{
-		access.LABEL_HAS_PENDING_HOSTS: "true",
+		traffic.LABEL_HAS_PENDING_HOSTS: "true",
 	}))
 	if err != nil {
 		return nil, err
@@ -342,12 +342,12 @@ func (c *Controller) ingressesFromDomainVerification(obj interface{}) ([]*networ
 	ingressesToEnqueue := []*networkingv1.Ingress{}
 
 	for _, ingress := range ingressList {
-		pendingRulesAnnotation, ok := ingress.Annotations[access.ANNOTATION_PENDING_CUSTOM_HOSTS]
+		pendingRulesAnnotation, ok := ingress.Annotations[traffic.ANNOTATION_PENDING_CUSTOM_HOSTS]
 		if !ok {
 			continue
 		}
 
-		var pendingRules access.Pending
+		var pendingRules traffic.Pending
 		if err := json.Unmarshal([]byte(pendingRulesAnnotation), &pendingRules); err != nil {
 			return nil, err
 		}
@@ -364,7 +364,7 @@ func (c *Controller) ingressesFromDomainVerification(obj interface{}) ([]*networ
 	return ingressesToEnqueue, nil
 }
 
-func (c *Controller) getDomainVerifications(ctx context.Context, accessor access.Accessor) (*kuadrantv1.DomainVerificationList, error) {
+func (c *Controller) getDomainVerifications(ctx context.Context, accessor traffic.Interface) (*kuadrantv1.DomainVerificationList, error) {
 	return c.kuadrantClient.Cluster(logicalcluster.From(accessor)).KuadrantV1().DomainVerifications().List(ctx, metav1.ListOptions{})
 }
 
@@ -373,6 +373,10 @@ func (c *Controller) deleteTLSSecret(ctx context.Context, workspace logicalclust
 		return err
 	}
 	return nil
+}
+
+func (c *Controller) getSecret(ctx context.Context, name, namespace string, cluster logicalcluster.Name) (*corev1.Secret, error) {
+	return c.KCPKubeClient.Cluster(cluster).CoreV1().Secrets(namespace).Get(ctx, name, metav1.GetOptions{})
 }
 
 func (c *Controller) copySecret(ctx context.Context, workspace logicalcluster.Name, namespace string, secret *corev1.Secret) error {
@@ -405,11 +409,11 @@ func (c *Controller) updateDNS(ctx context.Context, dns *kuadrantv1.DNSRecord) (
 	return updated, nil
 }
 
-func (c *Controller) deleteDNS(ctx context.Context, accessor access.Accessor) error {
+func (c *Controller) deleteDNS(ctx context.Context, accessor traffic.Interface) error {
 	return c.kuadrantClient.Cluster(logicalcluster.From(accessor)).KuadrantV1().DNSRecords(accessor.GetNamespace()).Delete(ctx, accessor.GetName(), metav1.DeleteOptions{})
 }
 
-func (c *Controller) getDNS(ctx context.Context, accessor access.Accessor) (*kuadrantv1.DNSRecord, error) {
+func (c *Controller) getDNS(ctx context.Context, accessor traffic.Interface) (*kuadrantv1.DNSRecord, error) {
 	return c.kuadrantClient.Cluster(logicalcluster.From(accessor)).KuadrantV1().DNSRecords(accessor.GetNamespace()).Get(ctx, accessor.GetName(), metav1.GetOptions{})
 }
 
@@ -427,4 +431,12 @@ func HostMatches(host, domain string) bool {
 		return false
 	}
 	return HostMatches(parentHostParts[1], domain)
+}
+
+func (c *Controller) createOrUpdateIngress(_ context.Context, _ traffic.Interface) error {
+	return nil
+}
+
+func (c *Controller) deleteRoute(_ context.Context, _ traffic.Interface) error {
+	return nil
 }
