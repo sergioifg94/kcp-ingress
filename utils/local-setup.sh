@@ -18,6 +18,8 @@
 
 LOCAL_SETUP_DIR="$(dirname "${BASH_SOURCE[0]}")"
 KCP_GLBC_DIR="${LOCAL_SETUP_DIR}/.."
+#run KCP on port 6444 to prevent collisions with CRC
+KCP_SECURE_PORT="6444"
 source "${LOCAL_SETUP_DIR}"/.setupEnv
 
 DO_BREW="false"
@@ -170,7 +172,7 @@ fi
 
 #1. Start KCP
 echo "Starting KCP, sending logs to ${KCP_LOG_FILE}"
-${KCP_BIN} --v=9 start --run-controllers > ${KCP_LOG_FILE} 2>&1 &
+${KCP_BIN} --v=9 start --secure-port=${KCP_SECURE_PORT} --run-controllers > ${KCP_LOG_FILE} 2>&1 &
 KCP_PID=$!
 
 if ! ps -p ${KCP_PID}; then
