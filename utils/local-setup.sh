@@ -19,7 +19,7 @@
 LOCAL_SETUP_DIR="$(dirname "${BASH_SOURCE[0]}")"
 KCP_GLBC_DIR="${LOCAL_SETUP_DIR}/.."
 #run KCP on port 6444 to prevent collisions with CRC
-KCP_SECURE_PORT="6444"
+: ${KCP_SECURE_PORT:="6444"}
 source "${LOCAL_SETUP_DIR}"/.setupEnv
 
 DO_BREW="false"
