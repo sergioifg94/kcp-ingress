@@ -74,7 +74,7 @@ cp ${TEMP_DIR}/${CRC_KUBECONFIG} ${TEMP_DIR}/${CRC_KUBECONFIG}.internal
 
 # Old syncers that might already exist on the crc vm can cause issues, so we make sure everything kcp related is removed.
 echo "Removing existing kcp resources"
-kubectl --context crc-admin get ns | grep kcp | awk '{print $1}' | xargs kubectl --context crc-admin delete ns
+kubectl --context crc-admin get ns | grep kcp | awk '{print $1}' | xargs -r kubectl --context crc-admin delete ns
 
 echo "Registering crc cluster into KCP"
 KUBECONFIG=${KUBECONFIG_KCP_ADMIN} ./bin/kubectl-kcp ws root:kuadrant
