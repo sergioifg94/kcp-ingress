@@ -23,7 +23,7 @@ import (
 	// Make sure our workqueue MetricsProvider is the first to register
 	_ "github.com/kuadrant/kcp-glbc/pkg/reconciler"
 	"github.com/kuadrant/kcp-glbc/pkg/reconciler/route"
-	"github.com/kuadrant/kcp-glbc/pkg/traffic/reconcilers"
+	"github.com/kuadrant/kcp-glbc/pkg/traffic"
 
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	genericapiserver "k8s.io/apiserver/pkg/server"
@@ -39,21 +39,20 @@ import (
 	kcp "github.com/kcp-dev/kcp/pkg/client/clientset/versioned"
 	"github.com/kcp-dev/logicalcluster/v2"
 
+	"github.com/kuadrant/kcp-glbc/pkg/_internal/log"
 	kuadrantv1 "github.com/kuadrant/kcp-glbc/pkg/client/kuadrant/clientset/versioned"
 	kuadrantinformer "github.com/kuadrant/kcp-glbc/pkg/client/kuadrant/informers/externalversions"
-	pkgDns "github.com/kuadrant/kcp-glbc/pkg/dns"
-	"github.com/kuadrant/kcp-glbc/pkg/log"
+	"github.com/kuadrant/kcp-glbc/pkg/dns"
+	"github.com/kuadrant/kcp-glbc/pkg/domains/domainverification"
 	"github.com/kuadrant/kcp-glbc/pkg/metrics"
-	"github.com/kuadrant/kcp-glbc/pkg/net"
+	"github.com/kuadrant/kcp-glbc/pkg/migration/deployment"
+	"github.com/kuadrant/kcp-glbc/pkg/migration/secret"
+	"github.com/kuadrant/kcp-glbc/pkg/migration/service"
+
+	"github.com/kuadrant/kcp-glbc/pkg/_internal/env"
 	"github.com/kuadrant/kcp-glbc/pkg/reconciler"
-	"github.com/kuadrant/kcp-glbc/pkg/reconciler/deployment"
-	"github.com/kuadrant/kcp-glbc/pkg/reconciler/dns"
-	"github.com/kuadrant/kcp-glbc/pkg/reconciler/domainverification"
 	"github.com/kuadrant/kcp-glbc/pkg/reconciler/ingress"
-	"github.com/kuadrant/kcp-glbc/pkg/reconciler/secret"
-	"github.com/kuadrant/kcp-glbc/pkg/reconciler/service"
 	"github.com/kuadrant/kcp-glbc/pkg/tls"
-	"github.com/kuadrant/kcp-glbc/pkg/util/env"
 )
 
 const (
@@ -192,7 +191,7 @@ func main() {
 
 		ingress.InitMetrics(certProvider)
 		route.InitMetrics()
-		reconcilers.InitMetrics(certProvider)
+		traffic.InitMetrics(certProvider)
 
 		_, err := certProvider.IssuerExists(ctx)
 		exitOnError(err, "Failed cert provider issuer check")
@@ -419,14 +418,14 @@ func printOptions() {
 	}
 }
 
-func getDNSUtilities(hostResolverType string) (net.HostResolver, domainverification.DNSVerifier) {
+func getDNSUtilities(hostResolverType string) (dns.HostResolver, domainverification.DNSVerifier) {
 	switch hostResolverType {
 	case "default":
 		log.Logger.Info("using default host resolver")
-		return net.NewDefaultHostResolver(), pkgDns.NewVerifier(gonet.DefaultResolver)
+		return dns.NewDefaultHostResolver(), dns.NewVerifier(gonet.DefaultResolver)
 	case "e2e-mock":
 		log.Logger.Info("using e2e-mock host resolver")
-		resolver := &net.ConfigMapHostResolver{
+		resolver := &dns.ConfigMapHostResolver{
 			Name:      "hosts",
 			Namespace: "kcp-glbc",
 		}
@@ -434,6 +433,6 @@ func getDNSUtilities(hostResolverType string) (net.HostResolver, domainverificat
 		return resolver, resolver
 	default:
 		log.Logger.Info("using default host resolver")
-		return net.NewDefaultHostResolver(), pkgDns.NewVerifier(gonet.DefaultResolver)
+		return dns.NewDefaultHostResolver(), dns.NewVerifier(gonet.DefaultResolver)
 	}
 }

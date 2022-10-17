@@ -20,8 +20,8 @@ import (
 
 	"github.com/onsi/gomega"
 
+	workload "github.com/kcp-dev/kcp/pkg/apis/workload/v1alpha1"
 	"github.com/kuadrant/kcp-glbc/pkg/traffic"
-	"github.com/kuadrant/kcp-glbc/pkg/util/workloadMigration"
 
 	"github.com/kcp-dev/logicalcluster/v2"
 	corev1 "k8s.io/api/core/v1"
@@ -57,7 +57,7 @@ func Ingresses(t Test, namespace *corev1.Namespace, labelSelector string) func(g
 
 func LoadBalancerIngresses(ingress *networkingv1.Ingress) []corev1.LoadBalancerIngress {
 	for a, v := range ingress.Annotations {
-		if strings.Contains(a, workloadMigration.WorkloadStatusAnnotation) {
+		if strings.Contains(a, workload.InternalClusterStatusAnnotationPrefix) {
 			ingressStatus := networkingv1.IngressStatus{}
 			err := json.Unmarshal([]byte(v), &ingressStatus)
 			if err != nil {

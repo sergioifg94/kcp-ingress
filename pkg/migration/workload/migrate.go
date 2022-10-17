@@ -1,4 +1,4 @@
-package workloadMigration
+package workload
 
 import (
 	"errors"
@@ -7,7 +7,8 @@ import (
 	"time"
 
 	"github.com/go-logr/logr"
-	"github.com/kuadrant/kcp-glbc/pkg/util/metadata"
+	workload "github.com/kcp-dev/kcp/pkg/apis/workload/v1alpha1"
+	"github.com/kuadrant/kcp-glbc/pkg/_internal/metadata"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/client-go/tools/cache"
 	"k8s.io/client-go/util/workqueue"
@@ -18,13 +19,13 @@ const (
 	SyncerFinalizer              = "workload.kcp.dev/syncer-"
 	WorkloadClusterSoftFinalizer = "finalizers.workload.kcp.dev"
 	WorkloadStatusAnnotation     = "experimental.status.workload.kcp.dev/"
-	WorkloadDeletingAnnotation   = "deletion.internal.workload.kcp.dev/"
+	WorkloadDeletingAnnotation   = workload.InternalClusterDeletionTimestampAnnotationPrefix
 	SoftFinalizer                = "kuadrant.dev/glbc-migration"
 	DeleteAtAnnotation           = "kuadrant.dev/glbc-delete-at"
 	TTL                          = 60
 )
 
-func Process(obj metav1.Object, queue workqueue.RateLimitingInterface, logger logr.Logger) {
+func Migrate(obj metav1.Object, queue workqueue.RateLimitingInterface, logger logr.Logger) {
 	ensureSoftFinalizers(obj, logger)
 	gracefulRemoveSoftFinalizers(obj, queue, logger)
 }

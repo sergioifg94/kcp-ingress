@@ -28,9 +28,9 @@ import (
 
 	"github.com/kcp-dev/logicalcluster/v2"
 
+	"github.com/kuadrant/kcp-glbc/pkg/_internal/env"
 	kuadrantv1 "github.com/kuadrant/kcp-glbc/pkg/apis/kuadrant/v1"
 	"github.com/kuadrant/kcp-glbc/pkg/traffic"
-	"github.com/kuadrant/kcp-glbc/pkg/util/env"
 	. "github.com/kuadrant/kcp-glbc/test/support"
 )
 

@@ -25,7 +25,7 @@ import (
 	"github.com/kcp-dev/logicalcluster/v2"
 
 	tenancyv1alpha1 "github.com/kcp-dev/kcp/pkg/apis/tenancy/v1alpha1"
-	"github.com/kuadrant/kcp-glbc/pkg/util/env"
+	"github.com/kuadrant/kcp-glbc/pkg/_internal/env"
 )
 
 const (

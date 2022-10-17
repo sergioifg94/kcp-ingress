@@ -18,7 +18,7 @@ import (
 	kuadrantv1 "github.com/kuadrant/kcp-glbc/pkg/client/kuadrant/clientset/versioned"
 	"github.com/kuadrant/kcp-glbc/pkg/client/kuadrant/informers/externalversions"
 	kuadrantv1list "github.com/kuadrant/kcp-glbc/pkg/client/kuadrant/listers/kuadrant/v1"
-	"github.com/kuadrant/kcp-glbc/pkg/net"
+	"github.com/kuadrant/kcp-glbc/pkg/dns"
 	basereconciler "github.com/kuadrant/kcp-glbc/pkg/reconciler"
 )
 
@@ -33,7 +33,7 @@ func NewController(config *ControllerConfig) (*Controller, error) {
 
 	dnsVerifier := config.DNSVerifier
 	switch impl := dnsVerifier.(type) {
-	case *net.ConfigMapHostResolver:
+	case *dns.ConfigMapHostResolver:
 		impl.Client = config.KubeClient
 	}
 

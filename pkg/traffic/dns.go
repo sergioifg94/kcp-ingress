@@ -1,4 +1,4 @@
-package reconcilers
+package traffic
 
 import (
 	"context"
@@ -18,25 +18,23 @@ import (
 
 	"github.com/kcp-dev/logicalcluster/v2"
 
+	workload "github.com/kcp-dev/kcp/pkg/apis/workload/v1alpha1"
+	"github.com/kuadrant/kcp-glbc/pkg/_internal/metadata"
+	"github.com/kuadrant/kcp-glbc/pkg/_internal/slice"
 	v1 "github.com/kuadrant/kcp-glbc/pkg/apis/kuadrant/v1"
+	"github.com/kuadrant/kcp-glbc/pkg/dns"
 	"github.com/kuadrant/kcp-glbc/pkg/dns/aws"
-	"github.com/kuadrant/kcp-glbc/pkg/net"
-	"github.com/kuadrant/kcp-glbc/pkg/reconciler/dns"
-	"github.com/kuadrant/kcp-glbc/pkg/traffic"
-	"github.com/kuadrant/kcp-glbc/pkg/util/metadata"
-	"github.com/kuadrant/kcp-glbc/pkg/util/slice"
-	"github.com/kuadrant/kcp-glbc/pkg/util/workloadMigration"
 )
 
 type DnsReconciler struct {
-	DeleteDNS        func(ctx context.Context, accessor traffic.Interface) error
-	GetDNS           func(ctx context.Context, accessor traffic.Interface) (*v1.DNSRecord, error)
+	DeleteDNS        func(ctx context.Context, accessor Interface) error
+	GetDNS           func(ctx context.Context, accessor Interface) (*v1.DNSRecord, error)
 	CreateDNS        func(ctx context.Context, dns *v1.DNSRecord) (*v1.DNSRecord, error)
 	UpdateDNS        func(ctx context.Context, dns *v1.DNSRecord) (*v1.DNSRecord, error)
 	WatchHost        func(ctx context.Context, key interface{}, host string) bool
 	ForgetHost       func(key interface{}, host string)
-	ListHostWatchers func(key interface{}) []net.RecordWatcher
-	DNSLookup        func(ctx context.Context, host string) ([]net.HostAddress, error)
+	ListHostWatchers func(key interface{}) []dns.RecordWatcher
+	DNSLookup        func(ctx context.Context, host string) ([]dns.HostAddress, error)
 	Log              logr.Logger
 }
 
@@ -44,26 +42,26 @@ func (r *DnsReconciler) GetName() string {
 	return "DNS Reconciler"
 }
 
-func (r *DnsReconciler) Reconcile(ctx context.Context, accessor traffic.Interface) (traffic.ReconcileStatus, error) {
+func (r *DnsReconciler) Reconcile(ctx context.Context, accessor Interface) (ReconcileStatus, error) {
 	if accessor.GetDeletionTimestamp() != nil && !accessor.GetDeletionTimestamp().IsZero() {
 		if err := r.DeleteDNS(ctx, accessor); err != nil && !k8errors.IsNotFound(err) {
-			return traffic.ReconcileStatusStop, err
+			return ReconcileStatusStop, err
 		}
-		return traffic.ReconcileStatusContinue, nil
+		return ReconcileStatusContinue, nil
 	}
 
 	key := objectKey(accessor)
-	managedHost := accessor.GetAnnotations()[traffic.ANNOTATION_HCG_HOST]
+	managedHost := accessor.GetAnnotations()[ANNOTATION_HCG_HOST]
 	var activeLBHosts []string
 	activeDNSTargetIPs := map[string][]string{}
 	deletingTargetIPs := map[string][]string{}
 
 	targets, err := accessor.GetTargets(ctx, r.DNSLookup)
 	if err != nil {
-		return traffic.ReconcileStatusContinue, err
+		return ReconcileStatusContinue, err
 	}
 	for cluster, targets := range targets {
-		deleteAnnotation := workloadMigration.WorkloadDeletingAnnotation + cluster.String()
+		deleteAnnotation := workload.InternalClusterDeletionTimestampAnnotationPrefix + cluster.String()
 		if metadata.HasAnnotation(accessor, deleteAnnotation) {
 			for host, target := range targets {
 				deletingTargetIPs[host] = append(deletingTargetIPs[host], target.Value...)
@@ -99,11 +97,11 @@ func (r *DnsReconciler) Reconcile(ctx context.Context, accessor traffic.Interfac
 	// If it doesn't exist, create it
 	if err != nil {
 		if !k8errors.IsNotFound(err) {
-			return traffic.ReconcileStatusStop, err
+			return ReconcileStatusStop, err
 		}
 		record, err := newDNSRecordForObject(accessor)
 		if err != nil {
-			return traffic.ReconcileStatusContinue, err
+			return ReconcileStatusContinue, err
 		}
 		r.setEndpointFromTargets(managedHost, activeDNSTargetIPs, record)
 		// Create the resource in the cluster
@@ -111,12 +109,12 @@ func (r *DnsReconciler) Reconcile(ctx context.Context, accessor traffic.Interfac
 			r.Log.V(3).Info("creating DNSRecord ", "record", record.Name, "endpoints for DNSRecord", record.Spec.Endpoints)
 			existing, err = r.CreateDNS(ctx, record)
 			if err != nil {
-				return traffic.ReconcileStatusContinue, err
+				return ReconcileStatusContinue, err
 			}
 			// metric to observe the accessor admission time
 			IngressObjectTimeToAdmission.Observe(existing.CreationTimestamp.Time.Sub(accessor.GetCreationTimestamp().Time).Seconds())
 		}
-		return traffic.ReconcileStatusContinue, nil
+		return ReconcileStatusContinue, nil
 	}
 	// If it does exist, update it
 	copyDNS := existing.DeepCopy()
@@ -124,11 +122,11 @@ func (r *DnsReconciler) Reconcile(ctx context.Context, accessor traffic.Interfac
 	if !equality.Semantic.DeepEqual(copyDNS, existing) {
 		r.Log.V(3).Info("updating DNSRecord ", "record", copyDNS.Name, "endpoints for DNSRecord", "endpoints", copyDNS.Spec.Endpoints)
 		if _, err = r.UpdateDNS(ctx, copyDNS); err != nil {
-			return traffic.ReconcileStatusStop, err
+			return ReconcileStatusStop, err
 		}
 	}
 
-	return traffic.ReconcileStatusContinue, nil
+	return ReconcileStatusContinue, nil
 }
 
 func newDNSRecordForObject(obj runtime.Object) (*v1.DNSRecord, error) {
@@ -161,15 +159,15 @@ func newDNSRecordForObject(obj runtime.Object) (*v1.DNSRecord, error) {
 		Name:      objMeta.GetName(),
 		Namespace: objMeta.GetNamespace(),
 	}
-	if _, ok := record.Annotations[traffic.ANNOTATION_TRAFFIC_KEY]; !ok {
+	if _, ok := record.Annotations[ANNOTATION_TRAFFIC_KEY]; !ok {
 		if record.Annotations == nil {
 			record.Annotations = map[string]string{}
 		}
-		record.Annotations[traffic.ANNOTATION_TRAFFIC_KEY] = string(objectKey(obj))
+		record.Annotations[ANNOTATION_TRAFFIC_KEY] = string(objectKey(obj))
 	}
 
 	metadata.CopyAnnotationsPredicate(objMeta, record, metadata.KeyPredicate(func(key string) bool {
-		return strings.HasPrefix(key, traffic.ANNOTATION_HEALTH_CHECK_PREFIX)
+		return strings.HasPrefix(key, ANNOTATION_HEALTH_CHECK_PREFIX)
 	}))
 	return record, nil
 

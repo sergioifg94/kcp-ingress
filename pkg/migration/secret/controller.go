@@ -13,8 +13,10 @@ import (
 	"k8s.io/client-go/tools/cache"
 	"k8s.io/client-go/util/workqueue"
 
+	"github.com/go-logr/logr"
 	"github.com/kcp-dev/logicalcluster/v2"
 
+	"github.com/kuadrant/kcp-glbc/pkg/migration/workload"
 	"github.com/kuadrant/kcp-glbc/pkg/reconciler"
 	basereconciler "github.com/kuadrant/kcp-glbc/pkg/reconciler"
 )
@@ -31,6 +33,7 @@ func NewController(config *ControllerConfig) (*Controller, error) {
 		sharedInformerFactory: config.SharedInformerFactory,
 	}
 	c.Process = c.process
+	c.migrationHandler = workload.Migrate
 
 	c.sharedInformerFactory.Core().V1().Secrets().Informer().AddEventHandler(cache.FilteringResourceEventHandler{
 		FilterFunc: func(obj interface{}) bool {
@@ -67,6 +70,7 @@ type Controller struct {
 	coreClient            kubernetes.ClusterInterface
 	indexer               cache.Indexer
 	secretLister          corev1listers.SecretLister
+	migrationHandler      func(obj metav1.Object, queue workqueue.RateLimitingInterface, logger logr.Logger)
 }
 
 func (c *Controller) process(ctx context.Context, key string) error {

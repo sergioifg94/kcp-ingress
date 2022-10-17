@@ -15,9 +15,9 @@ import (
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 
-	. "github.com/kuadrant/kcp-glbc/test/support"
+	"github.com/kuadrant/kcp-glbc/pkg/_internal/env"
 	kuadrantv1 "github.com/kuadrant/kcp-glbc/pkg/apis/kuadrant/v1"
-	"github.com/kuadrant/kcp-glbc/pkg/util/env"
+	. "github.com/kuadrant/kcp-glbc/test/support"
 )
 
 func createTestDNSRecord(t Test, namespace *corev1.Namespace, domain string) *kuadrantv1.DNSRecord {
@@ -70,14 +70,13 @@ func testDNSRecord(t Test, dnsRecordCount int, zoneID, glbcDomain string) {
 	namespace := t.NewTestNamespace(InWorkspace(workspace))
 	t.Expect(namespace).NotTo(BeNil())
 
-
 	t.T().Log(fmt.Sprintf("Creating %d DNSRecords in %s", dnsRecordCount, workspace.Name))
 
 	// Create DNSRecords
 	wg := sync.WaitGroup{}
 	for i := 1; i <= dnsRecordCount; i++ {
 		wg.Add(1)
-		go func (){
+		go func() {
 			defer wg.Done()
 			dnsRecord := createTestDNSRecord(t, namespace, glbcDomain)
 			t.Expect(dnsRecord).NotTo(BeNil())

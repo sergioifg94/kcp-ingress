@@ -8,25 +8,24 @@ import (
 
 	"k8s.io/client-go/tools/cache"
 
+	"github.com/kuadrant/kcp-glbc/pkg/migration/workload"
 	"github.com/kuadrant/kcp-glbc/pkg/traffic"
-	trafficReconcilers "github.com/kuadrant/kcp-glbc/pkg/traffic/reconcilers"
-	"github.com/kuadrant/kcp-glbc/pkg/util/workloadMigration"
 
 	utilserrors "k8s.io/apimachinery/pkg/util/errors"
 
-	"github.com/kuadrant/kcp-glbc/pkg/util/metadata"
+	"github.com/kuadrant/kcp-glbc/pkg/_internal/metadata"
 )
 
 func (c *Controller) reconcile(ctx context.Context, route *traffic.Route) error {
 	if route.DeletionTimestamp == nil {
 		metadata.AddFinalizer(route, traffic.FINALIZER_CASCADE_CLEANUP)
 	}
-	//TODO evaluate where this actually belongs
-	workloadMigration.Process(route, c.Queue, c.Logger)
+	// TODO evaluate where this actually belongs
+	workload.Migrate(route, c.Queue, c.Logger)
 
-	reconcilers := []trafficReconcilers.Reconciler{
+	reconcilers := []traffic.Reconciler{
 		//hostReconciler is first as the others depends on it for the host to be set on the route
-		&trafficReconcilers.HostReconciler{
+		&traffic.HostReconciler{
 			ManagedDomain:          c.domain,
 			Log:                    c.Logger,
 			CustomHostsEnabled:     c.customHostsEnabled,
@@ -35,7 +34,7 @@ func (c *Controller) reconcile(ctx context.Context, route *traffic.Route) error 
 			CreateOrUpdateTraffic:  c.createOrUpdateRoute,
 			DeleteTraffic:          c.deleteRoute,
 		},
-		&trafficReconcilers.CertificateReconciler{
+		&traffic.CertificateReconciler{
 			Log:                  c.Logger,
 			CreateCertificate:    c.certProvider.Create,
 			DeleteCertificate:    c.certProvider.Delete,
@@ -46,7 +45,7 @@ func (c *Controller) reconcile(ctx context.Context, route *traffic.Route) error 
 			DeleteSecret:         c.deleteTLSSecret,
 			GetSecret:            c.getSecret,
 		},
-		&trafficReconcilers.DnsReconciler{
+		&traffic.DnsReconciler{
 			DeleteDNS:        c.deleteDNS,
 			DNSLookup:        c.hostResolver.LookupIPAddr,
 			GetDNS:           c.getDNS,
@@ -76,7 +75,7 @@ func (c *Controller) reconcile(ctx context.Context, route *traffic.Route) error 
 			c.hostsWatcher.StopWatching(routeKey(route), "")
 			//in 0.5.0 these are never cleaned up properly
 			for _, f := range route.Finalizers {
-				if strings.Contains(f, workloadMigration.SyncerFinalizer) {
+				if strings.Contains(f, workload.SyncerFinalizer) {
 					metadata.RemoveFinalizer(route, f)
 				}
 			}

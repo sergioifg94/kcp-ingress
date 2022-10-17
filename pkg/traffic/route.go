@@ -12,11 +12,10 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
 
+	workload "github.com/kcp-dev/kcp/pkg/apis/workload/v1alpha1"
+	"github.com/kuadrant/kcp-glbc/pkg/_internal/metadata"
 	v1 "github.com/kuadrant/kcp-glbc/pkg/apis/kuadrant/v1"
-	"github.com/kuadrant/kcp-glbc/pkg/net"
-	"github.com/kuadrant/kcp-glbc/pkg/reconciler/dns"
-	"github.com/kuadrant/kcp-glbc/pkg/util/metadata"
-	"github.com/kuadrant/kcp-glbc/pkg/util/workloadMigration"
+	"github.com/kuadrant/kcp-glbc/pkg/dns"
 )
 
 const (
@@ -87,7 +86,7 @@ func (a *Route) GetTargets(ctx context.Context, dnsLookup dnsLookupFunc) (map[lo
 			ips, err := dnsLookup(ctx, host)
 			//couldn't find any IPs, just use the host
 			if err != nil {
-				ips = []net.HostAddress{}
+				ips = []dns.HostAddress{}
 			}
 			clusterTargets[host] = dns.Target{Value: []string{}, TargetType: dns.TargetTypeHost}
 			for _, ip := range ips {
@@ -186,12 +185,12 @@ func (a *Route) getStatuses() (map[logicalcluster.Name]routev1.RouteStatus, erro
 	statuses := map[logicalcluster.Name]routev1.RouteStatus{}
 	for k, v := range a.Annotations {
 		status := routev1.RouteStatus{}
-		if !strings.Contains(k, workloadMigration.WorkloadStatusAnnotation) {
+		if !strings.Contains(k, workload.InternalClusterStatusAnnotationPrefix) {
 			continue
 		}
 		annotationParts := strings.Split(k, "/")
 		if len(annotationParts) < 2 {
-			return nil, fmt.Errorf("advanced scheduling annotation malformed %s value %s", workloadMigration.WorkloadStatusAnnotation, a.Annotations[k])
+			return nil, fmt.Errorf("advanced scheduling annotation malformed %s value %s", workload.InternalClusterStatusAnnotationPrefix, a.Annotations[k])
 		}
 		clusterName := annotationParts[1]
 		err := json.Unmarshal([]byte(v), &status)

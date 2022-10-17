@@ -1,4 +1,4 @@
-package reconcilers
+package traffic
 
 import (
 	"context"
@@ -8,7 +8,6 @@ import (
 
 	"github.com/kuadrant/kcp-glbc/pkg/metrics"
 	"github.com/kuadrant/kcp-glbc/pkg/tls"
-	"github.com/kuadrant/kcp-glbc/pkg/traffic"
 )
 
 const (
@@ -19,7 +18,7 @@ const (
 )
 
 type Reconciler interface {
-	Reconcile(ctx context.Context, accessor traffic.Interface) (traffic.ReconcileStatus, error)
+	Reconcile(ctx context.Context, accessor Interface) (ReconcileStatus, error)
 	GetName() string
 }
 

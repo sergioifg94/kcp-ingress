@@ -1,6 +1,7 @@
 package aws
 
 import (
+	"context"
 	"fmt"
 	"strconv"
 
@@ -13,9 +14,8 @@ import (
 
 	kerrors "k8s.io/apimachinery/pkg/util/errors"
 
+	"github.com/kuadrant/kcp-glbc/pkg/_internal/log"
 	v1 "github.com/kuadrant/kcp-glbc/pkg/apis/kuadrant/v1"
-	"github.com/kuadrant/kcp-glbc/pkg/dns"
-	"github.com/kuadrant/kcp-glbc/pkg/log"
 )
 
 const (
@@ -29,8 +29,6 @@ const (
 	ProviderSpecificMultiValueAnswer     = "aws/multi-value-answer"
 	ProviderSpecificHealthCheckID        = "aws/health-check-id"
 )
-
-var _ dns.Provider = &Provider{}
 
 // Inspired by https://github.com/openshift/cluster-ingress-operator/blob/master/pkg/dns/aws/dns.go
 type Provider struct {
@@ -87,6 +85,10 @@ func NewProvider(config Config) (*Provider, error) {
 	if err := validateServiceEndpoints(p); err != nil {
 		return nil, fmt.Errorf("failed to validate AWS provider service endpoints: %v", err)
 	}
+	if p.healthCheckReconciler == nil {
+		p.healthCheckReconciler = newRoute53HealthCheckReconciler(p.route53, p.logger)
+	}
+
 	return p, nil
 }
 
@@ -116,12 +118,13 @@ func (p *Provider) Delete(record *v1.DNSRecord, zone v1.DNSZone) error {
 	return p.change(record, zone, deleteAction)
 }
 
-func (p *Provider) HealthCheckReconciler() dns.HealthCheckReconciler {
-	if p.healthCheckReconciler == nil {
-		p.healthCheckReconciler = newRoute53HealthCheckReconciler(p.route53, p.logger)
-	}
+func (p *Provider) ReconcileHealthCheck(ctx context.Context, hc v1.HealthCheck, endpoint *v1.Endpoint) error {
 
-	return p.healthCheckReconciler
+	return p.healthCheckReconciler.reconcile(ctx, hc, endpoint)
+}
+
+func (p *Provider) DeleteHealthCheck(ctx context.Context, endpoint *v1.Endpoint) error {
+	return p.healthCheckReconciler.deleteHealthCheck(ctx, endpoint)
 }
 
 // change will perform an action on a record.

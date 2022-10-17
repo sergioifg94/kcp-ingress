@@ -12,7 +12,6 @@ import (
 	"github.com/aws/aws-sdk-go/aws"
 
 	v1 "github.com/kuadrant/kcp-glbc/pkg/apis/kuadrant/v1"
-	"github.com/kuadrant/kcp-glbc/pkg/dns"
 )
 
 const ANNOTATION_HEALTH_CHECK_PREFIX = "kuadrant.experimental/health-"
@@ -22,7 +21,7 @@ type healthChecksConfig struct {
 	Endpoint         string
 	Port             *int64
 	FailureThreshold *int64
-	Protocol         *dns.HealthCheckProtocol
+	Protocol         *v1.HealthCheckProtocol
 }
 
 // annotationsConfigMap contains the logic to map an annotation-based configuration
@@ -36,11 +35,11 @@ var annotationsConfigMap = map[string]func(string, *healthChecksConfig) error{
 		c.Port = &port
 	})),
 	"protocol": notNilConfig(func(protocol string, c *healthChecksConfig) error {
-		var value dns.HealthCheckProtocol
+		var value v1.HealthCheckProtocol
 		switch protocol {
-		case string(dns.HealthCheckProtocolHTTP):
-		case string(dns.HealthCheckProtocolHTTPS):
-			value = dns.HealthCheckProtocol(protocol)
+		case string(v1.HealthCheckProtocolHTTP):
+		case string(v1.HealthCheckProtocolHTTPS):
+			value = v1.HealthCheckProtocol(protocol)
 		}
 
 		if value == "" {
@@ -73,7 +72,6 @@ func (c *Controller) ReconcileHealthChecks(ctx context.Context, dnsRecord *v1.DN
 }
 
 func (c *Controller) reconcileHealthCheck(ctx context.Context, config *healthChecksConfig, dnsRecord *v1.DNSRecord) error {
-	healthCheck := c.dnsProvider.HealthCheckReconciler()
 
 	for _, dnsEndpoint := range dnsRecord.Spec.Endpoints {
 		ok := false
@@ -87,7 +85,7 @@ func (c *Controller) reconcileHealthCheck(ctx context.Context, config *healthChe
 			return err
 		}
 
-		spec := dns.HealthCheckSpec{
+		spec := v1.HealthCheck{
 			Id:               endpointId,
 			Name:             fmt.Sprintf("%s-%s", dnsEndpoint.DNSName, dnsEndpoint.SetIdentifier),
 			Path:             config.Endpoint,
@@ -98,7 +96,7 @@ func (c *Controller) reconcileHealthCheck(ctx context.Context, config *healthChe
 
 		c.Logger.Info("Reconciling health check for endpoint", "name", dnsEndpoint.DNSName, "identifier", dnsEndpoint.SetIdentifier)
 
-		err = healthCheck.Reconcile(ctx, spec, dnsEndpoint)
+		err = c.dnsProvider.ReconcileHealthCheck(ctx, spec, dnsEndpoint)
 		if err != nil {
 			return err
 		}
@@ -108,11 +106,10 @@ func (c *Controller) reconcileHealthCheck(ctx context.Context, config *healthChe
 }
 
 func (c *Controller) reconcileHealthCheckDeletion(ctx context.Context, dnsRecord *v1.DNSRecord) error {
-	reconciler := c.dnsProvider.HealthCheckReconciler()
 
 	for _, zone := range dnsRecord.Status.Zones {
 		for _, endpoint := range zone.Endpoints {
-			if err := reconciler.Delete(ctx, endpoint); err != nil {
+			if err := c.dnsProvider.DeleteHealthCheck(ctx, endpoint); err != nil {
 				return err
 			}
 		}
@@ -180,7 +177,7 @@ func validateHealthChecksConfig(config *healthChecksConfig) error {
 		config.Port = aws.Int64(80)
 	}
 	if config.Protocol == nil {
-		defaultProtocol := dns.HealthCheckProtocolHTTP
+		defaultProtocol := v1.HealthCheckProtocolHTTP
 		config.Protocol = &defaultProtocol
 	}
 

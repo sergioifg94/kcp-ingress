@@ -11,17 +11,15 @@ type Provider interface {
 
 	// Delete will delete record.
 	Delete(record *v1.DNSRecord, zone v1.DNSZone) error
-
 	// Get a health check reconciler for this provider
-	HealthCheckReconciler() HealthCheckReconciler
+	HealthCheckReconciler
 }
 
-var _ Provider = &FakeProvider{}
+var _ Provider = &FakeProvider{fakeHealthCheckReconciler: &fakeHealthCheckReconciler{}}
 
-type FakeProvider struct{}
+type FakeProvider struct {
+	*fakeHealthCheckReconciler
+}
 
 func (_ *FakeProvider) Ensure(record *v1.DNSRecord, zone v1.DNSZone) error { return nil }
 func (_ *FakeProvider) Delete(record *v1.DNSRecord, zone v1.DNSZone) error { return nil }
-func (*FakeProvider) HealthCheckReconciler() HealthCheckReconciler {
-	return &fakeHealthCheckReconciler{}
-}

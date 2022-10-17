@@ -11,7 +11,6 @@ import (
 	"github.com/aws/aws-sdk-go/service/route53"
 
 	v1 "github.com/kuadrant/kcp-glbc/pkg/apis/kuadrant/v1"
-	"github.com/kuadrant/kcp-glbc/pkg/dns"
 )
 
 const (
@@ -27,8 +26,6 @@ type Route53HealthCheckReconciler struct {
 	logger logr.Logger
 }
 
-var _ dns.HealthCheckReconciler = &Route53HealthCheckReconciler{}
-
 func newRoute53HealthCheckReconciler(c *InstrumentedRoute53, l logr.Logger) *Route53HealthCheckReconciler {
 	return &Route53HealthCheckReconciler{
 		client: c,
@@ -36,7 +33,7 @@ func newRoute53HealthCheckReconciler(c *InstrumentedRoute53, l logr.Logger) *Rou
 	}
 }
 
-func (r *Route53HealthCheckReconciler) Reconcile(ctx context.Context, spec dns.HealthCheckSpec, endpoint *v1.Endpoint) error {
+func (r *Route53HealthCheckReconciler) reconcile(ctx context.Context, spec v1.HealthCheck, endpoint *v1.Endpoint) error {
 	healthCheck, exists, err := r.findHealthCheck(ctx, endpoint)
 	if err != nil {
 		return err
@@ -56,7 +53,7 @@ func (r *Route53HealthCheckReconciler) Reconcile(ctx context.Context, spec dns.H
 	return err
 }
 
-func (r *Route53HealthCheckReconciler) Delete(ctx context.Context, endpoint *v1.Endpoint) error {
+func (r *Route53HealthCheckReconciler) deleteHealthCheck(ctx context.Context, endpoint *v1.Endpoint) error {
 	healthCheck, found, err := r.findHealthCheck(ctx, endpoint)
 	if err != nil {
 		return err
@@ -94,7 +91,7 @@ func (r *Route53HealthCheckReconciler) findHealthCheck(ctx context.Context, endp
 
 }
 
-func (r *Route53HealthCheckReconciler) createHealthCheck(ctx context.Context, spec dns.HealthCheckSpec, endpoint *v1.Endpoint) (*route53.HealthCheck, error) {
+func (r *Route53HealthCheckReconciler) createHealthCheck(ctx context.Context, spec v1.HealthCheck, endpoint *v1.Endpoint) (*route53.HealthCheck, error) {
 	address, _ := endpoint.GetAddress()
 	host := endpoint.DNSName
 
@@ -114,6 +111,7 @@ func (r *Route53HealthCheckReconciler) createHealthCheck(ctx context.Context, sp
 		return nil, err
 	}
 
+	name := spec.Name
 	// Add the tag to identify it
 	_, err = r.client.ChangeTagsForResourceWithContext(ctx, &route53.ChangeTagsForResourceInput{
 		AddTags: []*route53.Tag{
@@ -123,7 +121,7 @@ func (r *Route53HealthCheckReconciler) createHealthCheck(ctx context.Context, sp
 			},
 			{
 				Key:   aws.String("Name"),
-				Value: &spec.Name,
+				Value: &name,
 			},
 		},
 		ResourceId:   output.HealthCheck.Id,
@@ -136,7 +134,7 @@ func (r *Route53HealthCheckReconciler) createHealthCheck(ctx context.Context, sp
 	return output.HealthCheck, nil
 }
 
-func (r *Route53HealthCheckReconciler) updateHealthCheck(ctx context.Context, spec dns.HealthCheckSpec, endpoint *v1.Endpoint, healthCheck *route53.HealthCheck) error {
+func (r *Route53HealthCheckReconciler) updateHealthCheck(ctx context.Context, spec v1.HealthCheck, endpoint *v1.Endpoint, healthCheck *route53.HealthCheck) error {
 	diff := healthCheckDiff(healthCheck, spec, endpoint)
 	if diff == nil {
 		return nil
@@ -155,7 +153,7 @@ func (r *Route53HealthCheckReconciler) updateHealthCheck(ctx context.Context, sp
 // healthCheckDiff creates a `UpdateHealthCheckInput` object with the fields to
 // update on healthCheck based on the given spec.
 // If the health check matches the spec, returns `nil`
-func healthCheckDiff(healthCheck *route53.HealthCheck, spec dns.HealthCheckSpec, endpoint *v1.Endpoint) *route53.UpdateHealthCheckInput {
+func healthCheckDiff(healthCheck *route53.HealthCheck, spec v1.HealthCheck, endpoint *v1.Endpoint) *route53.UpdateHealthCheckInput {
 	var result *route53.UpdateHealthCheckInput
 
 	diff := func() *route53.UpdateHealthCheckInput {
@@ -179,6 +177,7 @@ func healthCheckDiff(healthCheck *route53.HealthCheck, spec dns.HealthCheckSpec,
 	if !strValuesEqual(&spec.Path, healthCheck.HealthCheckConfig.ResourcePath) {
 		diff().ResourcePath = &spec.Path
 	}
+
 	if !intValuesEqual(spec.Port, healthCheck.HealthCheckConfig.Port) {
 		diff().Port = spec.Port
 	}
@@ -196,16 +195,16 @@ func init() {
 	}
 }
 
-func healthCheckType(protocol *dns.HealthCheckProtocol) *string {
+func healthCheckType(protocol *v1.HealthCheckProtocol) *string {
 	if protocol == nil {
 		return nil
 	}
 
 	switch *protocol {
-	case dns.HealthCheckProtocolHTTP:
+	case v1.HealthCheckProtocolHTTP:
 		return aws.String(route53.HealthCheckTypeHttp)
 
-	case dns.HealthCheckProtocolHTTPS:
+	case v1.HealthCheckProtocolHTTPS:
 		return aws.String(route53.HealthCheckTypeHttps)
 	}
 

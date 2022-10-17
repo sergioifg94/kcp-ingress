@@ -29,9 +29,8 @@ import (
 
 	"github.com/kcp-dev/logicalcluster/v2"
 
+	"github.com/kuadrant/kcp-glbc/pkg/_internal/env"
 	"github.com/kuadrant/kcp-glbc/pkg/traffic"
-	"github.com/kuadrant/kcp-glbc/pkg/traffic/reconcilers"
-	"github.com/kuadrant/kcp-glbc/pkg/util/env"
 	. "github.com/kuadrant/kcp-glbc/test/support"
 )
 
@@ -97,7 +96,7 @@ func TestTLS(t *testing.T) {
 	ingress := GetIngress(test, namespace, name)
 	accessor := &traffic.Ingress{Ingress: ingress}
 	hostname := accessor.GetAnnotations()[traffic.ANNOTATION_HCG_HOST]
-	secretName := reconcilers.TLSSecretName(accessor)
+	secretName := traffic.TLSSecretName(accessor)
 
 	// Check the Ingress TLS spec
 	test.Expect(ingress).To(WithTransform(IngressTLS, ConsistOf(

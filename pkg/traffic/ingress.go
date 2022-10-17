@@ -12,11 +12,11 @@ import (
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/utils/strings/slices"
 
+	workload "github.com/kcp-dev/kcp/pkg/apis/workload/v1alpha1"
+	"github.com/kuadrant/kcp-glbc/pkg/_internal/metadata"
+	"github.com/kuadrant/kcp-glbc/pkg/_internal/slice"
 	v1 "github.com/kuadrant/kcp-glbc/pkg/apis/kuadrant/v1"
-	"github.com/kuadrant/kcp-glbc/pkg/reconciler/dns"
-	"github.com/kuadrant/kcp-glbc/pkg/util/metadata"
-	"github.com/kuadrant/kcp-glbc/pkg/util/slice"
-	"github.com/kuadrant/kcp-glbc/pkg/util/workloadMigration"
+	"github.com/kuadrant/kcp-glbc/pkg/dns"
 )
 
 func NewIngress(i *networkingv1.Ingress) *Ingress {
@@ -135,12 +135,12 @@ func (a *Ingress) getStatuses() (map[logicalcluster.Name]networkingv1.IngressSta
 	statuses := map[logicalcluster.Name]networkingv1.IngressStatus{}
 	for k, v := range a.Annotations {
 		status := networkingv1.IngressStatus{}
-		if !strings.Contains(k, workloadMigration.WorkloadStatusAnnotation) {
+		if !strings.Contains(k, workload.InternalClusterStatusAnnotationPrefix) {
 			continue
 		}
 		annotationParts := strings.Split(k, "/")
 		if len(annotationParts) < 2 {
-			return nil, fmt.Errorf("advanced scheduling annotation malformed %s value %s", workloadMigration.WorkloadStatusAnnotation, a.Annotations[k])
+			return nil, fmt.Errorf("advanced scheduling annotation malformed %s value %s", workload.InternalClusterStatusAnnotationPrefix, a.Annotations[k])
 		}
 		clusterName := annotationParts[1]
 		err := json.Unmarshal([]byte(v), &status)

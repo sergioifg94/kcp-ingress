@@ -19,8 +19,8 @@ import (
 	"k8s.io/client-go/util/workqueue"
 
 	kuadrantv1 "github.com/kuadrant/kcp-glbc/pkg/apis/kuadrant/v1"
+	"github.com/kuadrant/kcp-glbc/pkg/dns"
 	"github.com/kuadrant/kcp-glbc/pkg/traffic"
-	"github.com/kuadrant/kcp-glbc/pkg/traffic/reconcilers"
 
 	"github.com/kcp-dev/logicalcluster/v2"
 
@@ -30,7 +30,6 @@ import (
 
 	kuadrantclientv1 "github.com/kuadrant/kcp-glbc/pkg/client/kuadrant/clientset/versioned"
 	kuadrantInformer "github.com/kuadrant/kcp-glbc/pkg/client/kuadrant/informers/externalversions"
-	"github.com/kuadrant/kcp-glbc/pkg/net"
 	basereconciler "github.com/kuadrant/kcp-glbc/pkg/reconciler"
 	"github.com/kuadrant/kcp-glbc/pkg/tls"
 )
@@ -46,11 +45,11 @@ func NewController(config *ControllerConfig) *Controller {
 
 	hostResolver := config.HostResolver
 	switch impl := hostResolver.(type) {
-	case *net.ConfigMapHostResolver:
+	case *dns.ConfigMapHostResolver:
 		impl.Client = config.KubeClient
 	}
 
-	hostResolver = net.NewSafeHostResolver(hostResolver)
+	hostResolver = dns.NewSafeHostResolver(hostResolver)
 
 	base := basereconciler.NewController(controllerName, queue)
 	c := &Controller{
@@ -63,7 +62,7 @@ func NewController(config *ControllerConfig) *Controller {
 		kuadrantClient:            config.DnsRecordClient,
 		domain:                    config.Domain,
 		hostResolver:              hostResolver,
-		hostsWatcher:              net.NewHostsWatcher(&base.Logger, hostResolver, net.DefaultInterval),
+		hostsWatcher:              dns.NewHostsWatcher(&base.Logger, hostResolver, dns.DefaultInterval),
 		customHostsEnabled:        config.CustomHostsEnabled,
 		certInformerFactory:       config.CertificateInformer,
 		KuadrantInformerFactory:   config.KuadrantInformer,
@@ -130,7 +129,7 @@ func NewController(config *ControllerConfig) *Controller {
 		Handler: cache.ResourceEventHandlerFuncs{
 			AddFunc: func(obj interface{}) {
 				certificate := obj.(*certman.Certificate)
-				reconcilers.CertificateAddedHandler(certificate)
+				traffic.CertificateAddedHandler(certificate)
 			},
 			UpdateFunc: func(oldObj, newObj interface{}) {
 				oldCert := oldObj.(*certman.Certificate)
@@ -139,7 +138,7 @@ func NewController(config *ControllerConfig) *Controller {
 					return
 				}
 
-				enq := reconcilers.CertificateUpdatedHandler(oldCert, newCert)
+				enq := traffic.CertificateUpdatedHandler(oldCert, newCert)
 				if enq {
 
 					ingressKey := newCert.Annotations[traffic.ANNOTATION_TRAFFIC_KEY]
@@ -151,7 +150,7 @@ func NewController(config *ControllerConfig) *Controller {
 				certificate := obj.(*certman.Certificate)
 				// handle metric requeue ingress if the cert is deleted and the ingress still exists
 				// covers a manual deletion of cert and will ensure a new cert is created
-				reconcilers.CertificateDeletedHandler(certificate)
+				traffic.CertificateDeletedHandler(certificate)
 				ingressKey := certificate.Annotations[traffic.ANNOTATION_TRAFFIC_KEY]
 				c.Logger.V(3).Info("reqeuing ingress certificate deleted", "certificate", certificate.Name, "ingresskey", ingressKey)
 				c.enqueueIngressByKey(ingressKey)
@@ -165,7 +164,7 @@ func NewController(config *ControllerConfig) *Controller {
 	// appropriate indexer for the corresponding virtual workspace where the ingress is accessible will be able to
 	// process the request.
 	c.glbcInformerFactory.Core().V1().Secrets().Informer().AddEventHandler(cache.FilteringResourceEventHandler{
-		FilterFunc: reconcilers.CertificateSecretFilter,
+		FilterFunc: traffic.CertificateSecretFilter,
 		Handler: cache.ResourceEventHandlerFuncs{
 			AddFunc: func(obj interface{}) {
 				secret := obj.(*corev1.Secret)
@@ -237,7 +236,7 @@ type ControllerConfig struct {
 	KuadrantInformer          kuadrantInformer.SharedInformerFactory
 	Domain                    string
 	CertProvider              tls.Provider
-	HostResolver              net.HostResolver
+	HostResolver              dns.HostResolver
 	CustomHostsEnabled        bool
 	AdvancedSchedulingEnabled bool
 	GLBCWorkspace             logicalcluster.Name
@@ -254,8 +253,8 @@ type Controller struct {
 	certificateLister         certmanlister.CertificateLister
 	certProvider              tls.Provider
 	domain                    string
-	hostResolver              net.HostResolver
-	hostsWatcher              *net.HostsWatcher
+	hostResolver              dns.HostResolver
+	hostsWatcher              *dns.HostsWatcher
 	customHostsEnabled        bool
 	advancedSchedulingEnabled bool
 	certInformerFactory       certmaninformer.SharedInformerFactory

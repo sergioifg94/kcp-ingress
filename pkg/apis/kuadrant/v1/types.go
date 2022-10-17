@@ -289,3 +289,18 @@ func (endpoint *Endpoint) GetAddress() (string, bool) {
 
 	return string(endpoint.Targets[0]), true
 }
+
+// not currently a generated API used internally only
+type HealthCheck struct {
+	Id               string
+	Name             string
+	Port             *int64
+	FailureThreshold *int64
+	Path             string
+	Protocol         *HealthCheckProtocol
+}
+
+type HealthCheckProtocol string
+
+const HealthCheckProtocolHTTP HealthCheckProtocol = "HTTP"
+const HealthCheckProtocolHTTPS HealthCheckProtocol = "HTTPS"

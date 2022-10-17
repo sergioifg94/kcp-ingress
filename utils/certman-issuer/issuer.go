@@ -10,7 +10,7 @@ import (
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/cli-runtime/pkg/printers"
 
-	"github.com/kuadrant/kcp-glbc/pkg/util/env"
+	"github.com/kuadrant/kcp-glbc/pkg/_internal/env"
 )
 
 const (

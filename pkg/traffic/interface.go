@@ -12,8 +12,7 @@ import (
 	"k8s.io/apimachinery/pkg/types"
 
 	v1 "github.com/kuadrant/kcp-glbc/pkg/apis/kuadrant/v1"
-	"github.com/kuadrant/kcp-glbc/pkg/net"
-	"github.com/kuadrant/kcp-glbc/pkg/reconciler/dns"
+	"github.com/kuadrant/kcp-glbc/pkg/dns"
 )
 
 type ReconcileStatus int
@@ -32,7 +31,7 @@ const (
 	FINALIZER_CASCADE_CLEANUP           = "kuadrant.dev/cascade-cleanup"
 )
 
-type dnsLookupFunc func(ctx context.Context, host string) ([]net.HostAddress, error)
+type dnsLookupFunc func(ctx context.Context, host string) ([]dns.HostAddress, error)
 type CreateOrUpdateTraffic func(ctx context.Context, i Interface) error
 type DeleteTraffic func(ctx context.Context, i Interface) error
 

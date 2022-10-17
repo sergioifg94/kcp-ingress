@@ -14,9 +14,9 @@ import (
 	utilerrors "k8s.io/apimachinery/pkg/util/errors"
 	utilclock "k8s.io/utils/clock"
 
+	"github.com/kuadrant/kcp-glbc/pkg/_internal/metadata"
+	"github.com/kuadrant/kcp-glbc/pkg/_internal/slice"
 	v1 "github.com/kuadrant/kcp-glbc/pkg/apis/kuadrant/v1"
-	"github.com/kuadrant/kcp-glbc/pkg/util/metadata"
-	"github.com/kuadrant/kcp-glbc/pkg/util/slice"
 )
 
 type ConditionStatus string

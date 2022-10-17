@@ -25,7 +25,7 @@ import (
 	"k8s.io/client-go/tools/cache"
 	"k8s.io/client-go/util/workqueue"
 
-	"github.com/kuadrant/kcp-glbc/pkg/log"
+	"github.com/kuadrant/kcp-glbc/pkg/_internal/log"
 )
 
 const LABEL_HCG_MANAGED = "kuadrant.dev/hcg.managed"

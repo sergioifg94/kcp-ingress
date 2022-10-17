@@ -23,7 +23,7 @@ import (
 	certman "github.com/jetstack/cert-manager/pkg/apis/certmanager/v1"
 	cmmeta "github.com/jetstack/cert-manager/pkg/apis/meta/v1"
 	certmanclient "github.com/jetstack/cert-manager/pkg/client/clientset/versioned"
-	"github.com/kuadrant/kcp-glbc/pkg/util/metadata"
+	"github.com/kuadrant/kcp-glbc/pkg/_internal/metadata"
 
 	corev1 "k8s.io/api/core/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"

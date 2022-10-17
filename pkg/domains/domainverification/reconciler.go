@@ -11,7 +11,7 @@ import (
 	utilserrors "k8s.io/apimachinery/pkg/util/errors"
 
 	v1 "github.com/kuadrant/kcp-glbc/pkg/apis/kuadrant/v1"
-	"github.com/kuadrant/kcp-glbc/pkg/net"
+	"github.com/kuadrant/kcp-glbc/pkg/dns"
 )
 
 type reconcileStatus int
@@ -45,10 +45,10 @@ func (dsr *domainVerificationStatus) reconcile(ctx context.Context, dv *v1.Domai
 	var status = reconcileStatusContinue
 	var errs error
 	verified, ensureErr := dsr.ensureDomainVerificationStatus(ctx, dv)
-	if ensureErr != nil && !net.IsNoSuchHostError(ensureErr) {
+	if ensureErr != nil && !dns.IsNoSuchHostError(ensureErr) {
 		errs = multierror.Append(errs, fmt.Errorf("error ensuring domain verification: %v", ensureErr))
 		status = reconcileStatusStop
-	} else if ensureErr != nil && net.IsNoSuchHostError(ensureErr) {
+	} else if ensureErr != nil && dns.IsNoSuchHostError(ensureErr) {
 		//don't return error if host does not exist, returning errors here causes an immediate requeue of the resource
 		status = reconcileStatusStop
 	}

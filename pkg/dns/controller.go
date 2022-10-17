@@ -2,7 +2,6 @@ package dns
 
 import (
 	"context"
-	"fmt"
 	"os"
 
 	"k8s.io/apimachinery/pkg/api/equality"
@@ -16,8 +15,6 @@ import (
 	kuadrantv1 "github.com/kuadrant/kcp-glbc/pkg/client/kuadrant/clientset/versioned"
 	"github.com/kuadrant/kcp-glbc/pkg/client/kuadrant/informers/externalversions"
 	kuadrantv1lister "github.com/kuadrant/kcp-glbc/pkg/client/kuadrant/listers/kuadrant/v1"
-	"github.com/kuadrant/kcp-glbc/pkg/dns"
-	awsdns "github.com/kuadrant/kcp-glbc/pkg/dns/aws"
 	"github.com/kuadrant/kcp-glbc/pkg/reconciler"
 )
 
@@ -34,7 +31,7 @@ func NewController(config *ControllerConfig) (*Controller, error) {
 	}
 	c.Process = c.process
 
-	dnsProvider, err := c.createDNSProvider(config.DNSProvider)
+	dnsProvider, err := DNSProvider(config.DNSProvider)
 	if err != nil {
 		return nil, err
 	}
@@ -97,7 +94,7 @@ type Controller struct {
 	dnsRecordClient       kuadrantv1.ClusterInterface
 	indexer               cache.Indexer
 	lister                kuadrantv1lister.DNSRecordLister
-	dnsProvider           dns.Provider
+	dnsProvider           Provider
 	dnsZones              []v1.DNSZone
 }
 
@@ -134,27 +131,4 @@ func (c *Controller) process(ctx context.Context, key string) error {
 	}
 
 	return nil
-}
-
-func (c *Controller) createDNSProvider(dnsProviderName string) (dns.Provider, error) {
-	var dnsProvider dns.Provider
-	var dnsError error
-	switch dnsProviderName {
-	case "aws":
-		dnsProvider, dnsError = newAWSDNSProvider()
-	default:
-		dnsProvider = &dns.FakeProvider{}
-	}
-	return dnsProvider, dnsError
-}
-
-func newAWSDNSProvider() (dns.Provider, error) {
-	var dnsProvider dns.Provider
-	provider, err := awsdns.NewProvider(awsdns.Config{})
-	if err != nil {
-		return nil, fmt.Errorf("failed to create AWS DNS manager: %v", err)
-	}
-	dnsProvider = provider
-
-	return dnsProvider, nil
 }

@@ -1,4 +1,4 @@
-package reconcilers
+package traffic
 
 import (
 	"context"
@@ -10,9 +10,8 @@ import (
 	certman "github.com/jetstack/cert-manager/pkg/apis/certmanager/v1"
 	cmmeta "github.com/jetstack/cert-manager/pkg/apis/meta/v1"
 
+	"github.com/kuadrant/kcp-glbc/pkg/_internal/metadata"
 	basereconciler "github.com/kuadrant/kcp-glbc/pkg/reconciler"
-	"github.com/kuadrant/kcp-glbc/pkg/traffic"
-	"github.com/kuadrant/kcp-glbc/pkg/util/metadata"
 
 	corev1 "k8s.io/api/core/v1"
 	networkingv1 "k8s.io/api/networking/v1"
@@ -55,7 +54,7 @@ func CertificateSecretFilter(obj interface{}) bool {
 	}
 	if s.Annotations != nil {
 		if _, ok := s.Annotations[tls.TlsIssuerAnnotation]; ok {
-			if _, ok := s.Annotations[traffic.ANNOTATION_TRAFFIC_KEY]; ok {
+			if _, ok := s.Annotations[ANNOTATION_TRAFFIC_KEY]; ok {
 				return true
 			}
 		}
@@ -135,7 +134,7 @@ func certificateReady(cert *certman.Certificate) bool {
 	return false
 }
 
-func CertificateName(accessor traffic.Interface) string {
+func CertificateName(accessor Interface) string {
 	// Removes chars which are invalid characters for cert manager certificate names. RFC 1123 subdomain must consist of
 	// lower case alphanumeric characters, '-' or '.', and must start and end with an alphanumeric character
 
@@ -143,25 +142,25 @@ func CertificateName(accessor traffic.Interface) string {
 }
 
 // TLSSecretName returns the name for the secret in the end user namespace
-func TLSSecretName(accessor traffic.Interface) string {
+func TLSSecretName(accessor Interface) string {
 	return strings.ToLower(fmt.Sprintf("hcg-tls-%s-%s", accessor.GetKind(), accessor.GetName()))
 }
 
-func (r *CertificateReconciler) Reconcile(ctx context.Context, accessor traffic.Interface) (traffic.ReconcileStatus, error) {
+func (r *CertificateReconciler) Reconcile(ctx context.Context, accessor Interface) (ReconcileStatus, error) {
 	annotations := map[string]string{}
 	labels := map[string]string{
 		basereconciler.LABEL_HCG_MANAGED: "true",
 	}
 	key, err := cache.MetaNamespaceKeyFunc(accessor)
 
-	managedHost := accessor.GetAnnotations()[traffic.ANNOTATION_HCG_HOST]
+	managedHost := accessor.GetAnnotations()[ANNOTATION_HCG_HOST]
 
 	if err != nil {
-		return traffic.ReconcileStatusStop, err
+		return ReconcileStatusStop, err
 	}
 	tlsSecretName := TLSSecretName(accessor)
 	//set the accessor key on the certificate to help us with locating the accessor later
-	annotations[traffic.ANNOTATION_TRAFFIC_KEY] = key
+	annotations[ANNOTATION_TRAFFIC_KEY] = key
 	certReq := tls.CertificateRequest{
 		Name:        CertificateName(accessor),
 		Labels:      labels,
@@ -172,21 +171,21 @@ func (r *CertificateReconciler) Reconcile(ctx context.Context, accessor traffic.
 	if accessor.GetDeletionTimestamp() != nil && !accessor.GetDeletionTimestamp().IsZero() {
 		if err := r.DeleteCertificate(ctx, certReq); err != nil && !strings.Contains(err.Error(), "not found") {
 			r.Log.Info("error deleting certificate")
-			return traffic.ReconcileStatusStop, err
+			return ReconcileStatusStop, err
 		}
 		//TODO remove once owner refs work in kcp
 		if err := r.DeleteSecret(ctx, logicalcluster.From(accessor), accessor.GetNamespace(), tlsSecretName); err != nil && !strings.Contains(err.Error(), "not found") {
 			r.Log.Info("error deleting certificate secret")
-			return traffic.ReconcileStatusStop, err
+			return ReconcileStatusStop, err
 		}
-		return traffic.ReconcileStatusContinue, nil
+		return ReconcileStatusContinue, nil
 	}
 
 	err = r.CreateCertificate(ctx, certReq)
 	if err != nil && !errors.IsAlreadyExists(err) {
-		return traffic.ReconcileStatusStop, err
+		return ReconcileStatusStop, err
 	}
-	metadata.AddAnnotation(accessor, traffic.ANNOTATION_CERTIFICATE_STATE, "requested")
+	metadata.AddAnnotation(accessor, ANNOTATION_CERTIFICATE_STATE, "requested")
 	if errors.IsAlreadyExists(err) {
 		// get certificate secret and copy
 		secret, err := r.GetCertificateSecret(ctx, certReq)
@@ -195,15 +194,15 @@ func (r *CertificateReconciler) Reconcile(ctx context.Context, accessor traffic.
 				// cetificate not ready so update the status and allow it continue Reconcile. Will be requeued once certificate becomes ready
 				status, err := r.GetCertificateStatus(ctx, certReq)
 				if err != nil {
-					return traffic.ReconcileStatusStop, err
+					return ReconcileStatusStop, err
 				}
 				//NB we stop reconcile until the certificate is ready. We don't want things like DNS set up until the certificate is ready
-				metadata.AddAnnotation(accessor, traffic.ANNOTATION_CERTIFICATE_STATE, string(status))
-				return traffic.ReconcileStatusContinue, nil
+				metadata.AddAnnotation(accessor, ANNOTATION_CERTIFICATE_STATE, string(status))
+				return ReconcileStatusContinue, nil
 			}
-			return traffic.ReconcileStatusStop, err
+			return ReconcileStatusStop, err
 		}
-		metadata.AddAnnotation(accessor, traffic.ANNOTATION_CERTIFICATE_STATE, "ready") // todo remove hardcoded string
+		metadata.AddAnnotation(accessor, ANNOTATION_CERTIFICATE_STATE, "ready") // todo remove hardcoded string
 		//copy over the secret to the accessor namesapce
 		scopy := secret.DeepCopy()
 		scopy.SetOwnerReferences([]metav1.OwnerReference{
@@ -220,19 +219,19 @@ func (r *CertificateReconciler) Reconcile(ctx context.Context, accessor traffic.
 		scopy.Namespace = accessor.GetNamespace()
 		scopy.Name = tlsSecretName
 		if err := r.CopySecret(ctx, logicalcluster.From(accessor), accessor.GetNamespace(), scopy); err != nil {
-			return traffic.ReconcileStatusStop, err
+			return ReconcileStatusStop, err
 		}
 	}
 	if err != nil && !errors.IsAlreadyExists(err) {
-		return traffic.ReconcileStatusStop, err
+		return ReconcileStatusStop, err
 	}
 
 	// set tls setting on the accessor
 	certSecret, err := r.GetSecret(ctx, tlsSecretName, accessor.GetNamespace(), accessor.GetLogicalCluster())
 	if err != nil {
-		return traffic.ReconcileStatusStop, err
+		return ReconcileStatusStop, err
 	}
 	accessor.AddTLS(certReq.Host, certSecret)
 
-	return traffic.ReconcileStatusContinue, nil
+	return ReconcileStatusContinue, nil
 }

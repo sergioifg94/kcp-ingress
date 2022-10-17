@@ -11,8 +11,8 @@ import (
 
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 
+	workload "github.com/kcp-dev/kcp/pkg/apis/workload/v1alpha1"
 	"github.com/kuadrant/kcp-glbc/pkg/traffic"
-	"github.com/kuadrant/kcp-glbc/pkg/util/workloadMigration"
 
 	. "github.com/onsi/gomega"
 	. "github.com/onsi/gomega/gstruct"
@@ -108,7 +108,7 @@ func TestIngress(t *testing.T) {
 
 	ingressStatus := &networkingv1.IngressStatus{}
 	for a, v := range ingress.Annotations {
-		if strings.Contains(a, workloadMigration.WorkloadStatusAnnotation) {
+		if strings.Contains(a, workload.InternalClusterStatusAnnotationPrefix) {
 			err = json.Unmarshal([]byte(v), &ingressStatus)
 			break
 		}

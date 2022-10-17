@@ -1,4 +1,4 @@
-package reconcilers
+package traffic
 
 import (
 	"context"
@@ -11,12 +11,11 @@ import (
 	"k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 
+	workload "github.com/kcp-dev/kcp/pkg/apis/workload/v1alpha1"
+	"github.com/kuadrant/kcp-glbc/pkg/_internal/log"
+	"github.com/kuadrant/kcp-glbc/pkg/_internal/slice"
 	v1 "github.com/kuadrant/kcp-glbc/pkg/apis/kuadrant/v1"
-	"github.com/kuadrant/kcp-glbc/pkg/log"
-	"github.com/kuadrant/kcp-glbc/pkg/net"
-	"github.com/kuadrant/kcp-glbc/pkg/traffic"
-	"github.com/kuadrant/kcp-glbc/pkg/util/slice"
-	"github.com/kuadrant/kcp-glbc/pkg/util/workloadMigration"
+	"github.com/kuadrant/kcp-glbc/pkg/dns"
 )
 
 type validatedDNSClient struct {
@@ -43,7 +42,7 @@ func (ve *validatedDNSClient) update(validate func(dns *v1.DNSRecord) error) fun
 
 }
 
-func (ve *validatedDNSClient) get(getfunc func(ctx context.Context, accessor traffic.Interface) (*v1.DNSRecord, error)) func(ctx context.Context, accessor traffic.Interface) (*v1.DNSRecord, error) {
+func (ve *validatedDNSClient) get(getfunc func(ctx context.Context, accessor Interface) (*v1.DNSRecord, error)) func(ctx context.Context, accessor Interface) (*v1.DNSRecord, error) {
 	ve.getCalled++
 	return getfunc
 }
@@ -51,15 +50,15 @@ func (ve *validatedDNSClient) get(getfunc func(ctx context.Context, accessor tra
 func TestDNSReconciler(t *testing.T) {
 
 	// sets up 2 ingresses one with status in the advanced scheduling annotation and one in the regular status block
-	setupAccessors := func(managedHost string, ingressStatus networkingv1.IngressStatus) []traffic.Interface {
-		var accessors []traffic.Interface
+	setupAccessors := func(managedHost string, ingressStatus networkingv1.IngressStatus) []Interface {
+		var accessors []Interface
 		for i := 0; i <= 1; i++ {
 			ing := &networkingv1.Ingress{
 				ObjectMeta: metav1.ObjectMeta{
 					Name: fmt.Sprintf("ingress-%d", i),
 					Annotations: map[string]string{
-						traffic.ANNOTATION_HCG_HOST: managedHost,
-						"kcp.dev/cluster":           "somecluster",
+						ANNOTATION_HCG_HOST: managedHost,
+						"kcp.dev/cluster":   "somecluster",
 					},
 				},
 			}
@@ -73,11 +72,11 @@ func TestDNSReconciler(t *testing.T) {
 			if i == 0 {
 				// add to annotation
 				status, _ := json.Marshal(ingressStatus)
-				ing.Annotations[workloadMigration.WorkloadStatusAnnotation+"/somecluster"] = string(status)
+				ing.Annotations[workload.InternalClusterStatusAnnotationPrefix+"/somecluster"] = string(status)
 			} else {
 				ing.Status = ingressStatus
 			}
-			accessor := traffic.NewIngress(ing)
+			accessor := NewIngress(ing)
 			accessor.GetAnnotations()
 			accessors = append(accessors, accessor)
 		}
@@ -85,8 +84,8 @@ func TestDNSReconciler(t *testing.T) {
 		return accessors
 	}
 
-	fakewatcher := func(k interface{}) []net.RecordWatcher {
-		return []net.RecordWatcher{}
+	fakewatcher := func(k interface{}) []dns.RecordWatcher {
+		return []dns.RecordWatcher{}
 	}
 
 	commonDNSValidate := func(expectedIPs []string) func(dns *v1.DNSRecord) error {
@@ -116,13 +115,13 @@ func TestDNSReconciler(t *testing.T) {
 
 	cases := []struct {
 		Name           string
-		getDNS         func(ctx context.Context, accessor traffic.Interface) (*v1.DNSRecord, error)
-		validateResult func(status traffic.ReconcileStatus, dnsClient *validatedDNSClient, err error) error
-		accessors      []traffic.Interface
+		getDNS         func(ctx context.Context, accessor Interface) (*v1.DNSRecord, error)
+		validateResult func(status ReconcileStatus, dnsClient *validatedDNSClient, err error) error
+		accessors      []Interface
 		expectedIPs    []string
 	}{{
 		Name: "test DNSRecord is created with correct values when it doesn't exist",
-		getDNS: func(ctx context.Context, accessor traffic.Interface) (*v1.DNSRecord, error) {
+		getDNS: func(ctx context.Context, accessor Interface) (*v1.DNSRecord, error) {
 			return nil, errors.NewNotFound(v1.Resource("dnsrecord"), accessor.GetName())
 		},
 		accessors: setupAccessors("test.cb.example.com", networkingv1.IngressStatus{
@@ -134,9 +133,9 @@ func TestDNSReconciler(t *testing.T) {
 			},
 		}),
 		expectedIPs: []string{"192.168.33.2"},
-		validateResult: func(status traffic.ReconcileStatus, dnsClient *validatedDNSClient, err error) error {
-			if status != traffic.ReconcileStatusContinue || err != nil {
-				return fmt.Errorf("expected Reconcile status to be %v got %v. Expected err to be nil got %v", traffic.ReconcileStatusContinue, status, err)
+		validateResult: func(status ReconcileStatus, dnsClient *validatedDNSClient, err error) error {
+			if status != ReconcileStatusContinue || err != nil {
+				return fmt.Errorf("expected Reconcile status to be %v got %v. Expected err to be nil got %v", ReconcileStatusContinue, status, err)
 			}
 			if dnsClient.createCalled != 1 {
 				return fmt.Errorf("expected create dns to be called 1 time but was called %d", dnsClient.createCalled)
@@ -148,7 +147,7 @@ func TestDNSReconciler(t *testing.T) {
 		},
 	}, {
 		Name: "test DNSRecord is created with correct values when it does exist",
-		getDNS: func(ctx context.Context, accessor traffic.Interface) (*v1.DNSRecord, error) {
+		getDNS: func(ctx context.Context, accessor Interface) (*v1.DNSRecord, error) {
 			return &v1.DNSRecord{
 				Spec: v1.DNSRecordSpec{
 					Endpoints: []*v1.Endpoint{
@@ -157,9 +156,9 @@ func TestDNSReconciler(t *testing.T) {
 				},
 			}, nil
 		},
-		validateResult: func(status traffic.ReconcileStatus, dnsClient *validatedDNSClient, err error) error {
-			if status != traffic.ReconcileStatusContinue || err != nil {
-				return fmt.Errorf("expected Reconcile status to be %v got %v. Expected err to be nil got %v", traffic.ReconcileStatusContinue, status, err)
+		validateResult: func(status ReconcileStatus, dnsClient *validatedDNSClient, err error) error {
+			if status != ReconcileStatusContinue || err != nil {
+				return fmt.Errorf("expected Reconcile status to be %v got %v. Expected err to be nil got %v", ReconcileStatusContinue, status, err)
 			}
 			if dnsClient.createCalled != 0 {
 				return fmt.Errorf("expected create dns to be called 1 time but was called %d", dnsClient.createCalled)

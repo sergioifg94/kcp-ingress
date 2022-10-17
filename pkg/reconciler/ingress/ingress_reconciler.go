@@ -12,10 +12,9 @@ import (
 
 	"k8s.io/client-go/tools/cache"
 
+	"github.com/kuadrant/kcp-glbc/pkg/_internal/metadata"
+	"github.com/kuadrant/kcp-glbc/pkg/migration/workload"
 	"github.com/kuadrant/kcp-glbc/pkg/traffic"
-	accessReconcilers "github.com/kuadrant/kcp-glbc/pkg/traffic/reconcilers"
-	"github.com/kuadrant/kcp-glbc/pkg/util/metadata"
-	"github.com/kuadrant/kcp-glbc/pkg/util/workloadMigration"
 )
 
 func (c *Controller) reconcile(ctx context.Context, ingress traffic.Interface) error {
@@ -24,12 +23,12 @@ func (c *Controller) reconcile(ctx context.Context, ingress traffic.Interface) e
 	}
 	//TODO evaluate where this actually belongs
 	if c.advancedSchedulingEnabled {
-		workloadMigration.Process(ingress, c.Queue, c.Logger)
+		workload.Migrate(ingress, c.Queue, c.Logger)
 	}
 
-	reconcilers := []accessReconcilers.Reconciler{
+	reconcilers := []traffic.Reconciler{
 		//hostReconciler is first as the others depends on it for the host to be set on the ingress
-		&accessReconcilers.HostReconciler{
+		&traffic.HostReconciler{
 			ManagedDomain:          c.domain,
 			Log:                    c.Logger,
 			CustomHostsEnabled:     c.customHostsEnabled,
@@ -38,7 +37,7 @@ func (c *Controller) reconcile(ctx context.Context, ingress traffic.Interface) e
 			CreateOrUpdateTraffic:  c.createOrUpdateIngress,
 			DeleteTraffic:          c.deleteRoute,
 		},
-		&accessReconcilers.CertificateReconciler{
+		&traffic.CertificateReconciler{
 			CreateCertificate:    c.certProvider.Create,
 			DeleteCertificate:    c.certProvider.Delete,
 			GetCertificateSecret: c.certProvider.GetCertificateSecret,
@@ -49,7 +48,7 @@ func (c *Controller) reconcile(ctx context.Context, ingress traffic.Interface) e
 			DeleteSecret:         c.deleteTLSSecret,
 			Log:                  c.Logger,
 		},
-		&accessReconcilers.DnsReconciler{
+		&traffic.DnsReconciler{
 			DeleteDNS:        c.deleteDNS,
 			DNSLookup:        c.hostResolver.LookupIPAddr,
 			GetDNS:           c.getDNS,
@@ -80,7 +79,7 @@ func (c *Controller) reconcile(ctx context.Context, ingress traffic.Interface) e
 			c.hostsWatcher.StopWatching(objectKey(ingress), "")
 			//in 0.5.0 these are never cleaned up properly
 			for _, f := range ingress.GetFinalizers() {
-				if strings.Contains(f, workloadMigration.SyncerFinalizer) {
+				if strings.Contains(f, workload.SyncerFinalizer) {
 					metadata.RemoveFinalizer(ingress, f)
 				}
 			}

@@ -25,7 +25,7 @@ import (
 	"github.com/kcp-dev/logicalcluster/v2"
 
 	kuadrantv1 "github.com/kuadrant/kcp-glbc/pkg/apis/kuadrant/v1"
-	"github.com/kuadrant/kcp-glbc/pkg/net"
+	"github.com/kuadrant/kcp-glbc/pkg/dns"
 	traffic "github.com/kuadrant/kcp-glbc/pkg/traffic"
 )
 
@@ -101,7 +101,7 @@ type Zone []Record
 
 func AddRecord(t Test, host string, record Record) error {
 	currentZone, err := GetZone(t, host)
-	if err != nil && !net.IsNoSuchHostError(err) {
+	if err != nil && !dns.IsNoSuchHostError(err) {
 		return err
 	}
 	currentZone = append(currentZone, record)
@@ -137,7 +137,7 @@ func GetZone(t Test, host string) (Zone, error) {
 		}
 		return results, nil
 	}
-	return results, net.NoSuchHost
+	return results, dns.NoSuchHost
 }
 
 // setDNSRecord - do not call this directly - use SetTXTRecord or SetARecord

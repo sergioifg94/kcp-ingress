@@ -10,7 +10,7 @@ import (
 
 	. "github.com/onsi/gomega"
 
-	"github.com/kuadrant/kcp-glbc/pkg/util/env"
+	"github.com/kuadrant/kcp-glbc/pkg/_internal/env"
 	. "github.com/kuadrant/kcp-glbc/test/smoke"
 	. "github.com/kuadrant/kcp-glbc/test/support"
 )

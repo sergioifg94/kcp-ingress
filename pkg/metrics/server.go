@@ -24,7 +24,7 @@ import (
 
 	"github.com/prometheus/client_golang/prometheus/promhttp"
 
-	"github.com/kuadrant/kcp-glbc/pkg/log"
+	"github.com/kuadrant/kcp-glbc/pkg/_internal/log"
 )
 
 const defaultMetricsEndpoint = "/metrics"

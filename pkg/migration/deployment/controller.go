@@ -1,42 +1,46 @@
-package service
+package deployment
 
 import (
 	"context"
 
-	corev1 "k8s.io/api/core/v1"
+	appsv1 "k8s.io/api/apps/v1"
 	"k8s.io/apimachinery/pkg/api/equality"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/client-go/informers"
 	"k8s.io/client-go/kubernetes"
+	appsv1listers "k8s.io/client-go/listers/apps/v1"
 	corev1listers "k8s.io/client-go/listers/core/v1"
 	"k8s.io/client-go/tools/cache"
 	"k8s.io/client-go/util/workqueue"
 
+	"github.com/go-logr/logr"
 	"github.com/kcp-dev/logicalcluster/v2"
-
+	"github.com/kuadrant/kcp-glbc/pkg/migration/workload"
 	"github.com/kuadrant/kcp-glbc/pkg/reconciler"
 )
 
-const defaultControllerName = "kcp-glbc-service"
+const defaultControllerName = "kcp-glbc-deployment"
 
-// NewController returns a new Controller which reconciles Service.
+// NewController returns a new Controller which reconciles Deployment.
 func NewController(config *ControllerConfig) (*Controller, error) {
 	controllerName := config.GetName(defaultControllerName)
 	queue := workqueue.NewNamedRateLimitingQueue(workqueue.DefaultControllerRateLimiter(), controllerName)
 	c := &Controller{
 		Controller:            reconciler.NewController(controllerName, queue),
-		coreClient:            config.ServicesClient,
+		coreClient:            config.DeploymentClient,
 		sharedInformerFactory: config.SharedInformerFactory,
 	}
 	c.Process = c.process
+	c.migrationHandler = workload.Migrate
 
-	c.sharedInformerFactory.Core().V1().Services().Informer().AddEventHandler(cache.ResourceEventHandlerFuncs{
+	c.sharedInformerFactory.Apps().V1().Deployments().Informer().AddEventHandler(cache.ResourceEventHandlerFuncs{
 		AddFunc:    func(obj interface{}) { c.Enqueue(obj) },
 		UpdateFunc: func(_, obj interface{}) { c.Enqueue(obj) },
 		DeleteFunc: func(obj interface{}) { c.Enqueue(obj) },
 	})
 
-	c.indexer = c.sharedInformerFactory.Core().V1().Services().Informer().GetIndexer()
+	c.indexer = c.sharedInformerFactory.Apps().V1().Deployments().Informer().GetIndexer()
+	c.deploymentLister = c.sharedInformerFactory.Apps().V1().Deployments().Lister()
 	c.serviceLister = c.sharedInformerFactory.Core().V1().Services().Lister()
 
 	return c, nil
@@ -44,7 +48,7 @@ func NewController(config *ControllerConfig) (*Controller, error) {
 
 type ControllerConfig struct {
 	*reconciler.ControllerConfig
-	ServicesClient        kubernetes.ClusterInterface
+	DeploymentClient      kubernetes.ClusterInterface
 	SharedInformerFactory informers.SharedInformerFactory
 }
 
@@ -53,7 +57,9 @@ type Controller struct {
 	sharedInformerFactory informers.SharedInformerFactory
 	coreClient            kubernetes.ClusterInterface
 	indexer               cache.Indexer
+	deploymentLister      appsv1listers.DeploymentLister
 	serviceLister         corev1listers.ServiceLister
+	migrationHandler      func(obj metav1.Object, queue workqueue.RateLimitingInterface, logger logr.Logger)
 }
 
 func (c *Controller) process(ctx context.Context, key string) error {
@@ -63,19 +69,20 @@ func (c *Controller) process(ctx context.Context, key string) error {
 	}
 
 	if !exists {
-		c.Logger.Info("Service was deleted", "key", key)
+		c.Logger.Info("Deployment was deleted", "key", key)
 		return nil
 	}
 
-	current := object.(*corev1.Service)
+	current := object.(*appsv1.Deployment)
 	target := current.DeepCopy()
 
 	if err = c.reconcile(ctx, target); err != nil {
 		return err
 	}
 
-	if !equality.Semantic.DeepEqual(current, target) {
-		_, err := c.coreClient.Cluster(logicalcluster.From(target)).CoreV1().Services(target.Namespace).Update(ctx, target, metav1.UpdateOptions{})
+	// If the object being reconciled changed as a result, update it.
+	if !equality.Semantic.DeepEqual(target, current) {
+		_, err := c.coreClient.Cluster(logicalcluster.From(target)).AppsV1().Deployments(target.Namespace).Update(ctx, target, metav1.UpdateOptions{})
 		return err
 	}
 
