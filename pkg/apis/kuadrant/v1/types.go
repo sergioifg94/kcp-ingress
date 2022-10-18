@@ -6,6 +6,7 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 
 	"github.com/kcp-dev/logicalcluster/v2"
+	"github.com/kuadrant/kcp-glbc/pkg/_internal/util/math"
 )
 
 // +crd
@@ -25,7 +26,7 @@ type DomainVerification struct {
 }
 
 func (in *DomainVerification) GetToken() string {
-	return fmt.Sprintf("glbctoken=glbc-%s", logicalcluster.From(in))
+	return fmt.Sprint(math.HashString(logicalcluster.From(in).String()))
 }
 
 type DomainVerificationSpec struct {

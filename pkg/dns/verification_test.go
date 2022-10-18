@@ -18,7 +18,7 @@ func (mr *mockResolver) LookupTXT(ctx context.Context, domain string) ([]string,
 }
 
 func TestTxtRecordExists(t *testing.T) {
-	expectedRecordValue := "glbctoken=glbc-root:default:kcp-glbc"
+	expectedRecordValue := "bEwDwoiX4Y4VpLPgzUbZ0WKSKqjWaZ8EIMtMs3"
 	cases := []struct {
 		Name        string
 		ExpectErr   bool
