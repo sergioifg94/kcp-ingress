@@ -5,6 +5,7 @@ import (
 	"time"
 
 	"github.com/go-logr/logr"
+	utilmath "github.com/kuadrant/kcp-glbc/pkg/_internal/util/math"
 )
 
 // HostsWatcher keeps track of changes in host addresses in the background.
@@ -56,6 +57,7 @@ func (w *HostsWatcher) StartWatching(ctx context.Context, obj interface{}, host 
 		onChange:      w.OnChange,
 		records:       []HostAddress{},
 		watchInterval: w.WatchInterval,
+		errInterval:   errorInterval,
 	}
 	recordWatcher.watch(c)
 
@@ -85,9 +87,13 @@ type RecordWatcher struct {
 	key           interface{}
 	onChange      func(key interface{})
 	watchInterval func(ttl time.Duration) time.Duration
+	errInterval   time.Duration
 	Host          string
 	records       []HostAddress
 }
+
+var maxErrorInterval time.Duration = time.Minute * 5
+var errorInterval time.Duration = time.Second * 2
 
 func DefaultInterval(ttl time.Duration) time.Duration {
 	return ttl / 2
@@ -105,8 +111,14 @@ func (w *RecordWatcher) watch(ctx context.Context) {
 			newRecords, err := w.resolver.LookupIPAddr(ctx, w.Host)
 			if err != nil {
 				w.logger.Error(err, "Failed to lookup IP address")
+				sleepTime := w.errInterval
+				w.errInterval = w.errInterval * w.errInterval
+				time.Sleep(utilmath.Min(sleepTime, maxErrorInterval))
+
 				continue
 			}
+
+			w.errInterval = errorInterval
 
 			if updated := w.updateRecords(newRecords); updated {
 				w.logger.V(3).Info("New records found")
