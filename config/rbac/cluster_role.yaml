@@ -20,3 +20,35 @@ rules:
       - create
       - update
       - delete
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: domainverifications:admin:maximal-permission-policy
+rules:
+  - apiGroups:
+    - kuadrant.dev
+    resources:
+      - domainverifications
+    verbs:
+      - create
+      - update
+      - patch
+      - delete
+      - watch
+      - get  
+      - list  
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: domainverifications:authenticated:maximal-permission-policy
+rules:
+  - apiGroups:
+    - kuadrant.dev
+    resources:
+      - domainverifications
+    verbs:
+      - watch
+      - get  
+      - list  

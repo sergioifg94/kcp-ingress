@@ -9,3 +9,29 @@ roleRef:
 subjects:
   - kind: ServiceAccount
     name: kcp-glbc-controller-manager
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: domainverifications:admin:maximal-permission-policy
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: domainverifications:admin:maximal-permission-policy
+subjects:
+  - kind: Group
+    apiGroup: rbac.authorization.k8s.io 
+    name: apis.kcp.dev:binding:system:kcp:admin
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: domainverifications:authenticated:maximal-permission-policy
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: domainverifications:authenticated:maximal-permission-policy
+subjects:
+  - kind: Group
+    apiGroup: rbac.authorization.k8s.io 
+    name: apis.kcp.dev:binding:system:authenticated
