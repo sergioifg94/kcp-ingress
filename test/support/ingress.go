@@ -191,10 +191,10 @@ func HostsEqualsToGeneratedHost(ingress *traffic.Ingress) bool {
 	return equals
 }
 
-func LBHostEqualToGeneratedHost(ingress *traffic.Ingress) bool {
+func LBHostEqualToGeneratedHost(ingress *traffic.Ingress, record *kuadrantv1.DNSRecord) bool {
 	equals := true
 	for _, i := range ingress.Status.LoadBalancer.Ingress {
-		if i.Hostname != Annotations(ingress)[traffic.ANNOTATION_HCG_HOST] {
+		if i.Hostname != Annotations(record)[traffic.ANNOTATION_HCG_HOST] {
 			equals = false
 		}
 	}

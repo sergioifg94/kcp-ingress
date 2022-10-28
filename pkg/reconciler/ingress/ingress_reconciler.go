@@ -24,9 +24,20 @@ func (c *Controller) reconcile(ctx context.Context, ingress traffic.Interface) e
 	workload.Migrate(ingress, c.Queue, c.Logger)
 
 	reconcilers := []traffic.Reconciler{
-		//hostReconciler is first as the others depends on it for the host to be set on the ingress
+		// DnsReconciler is first as it will set generatedHost field on the traffic object based on the DNSRecord it creates for each ingress
+		&traffic.DnsReconciler{
+			DeleteDNS:        c.deleteDNS,
+			DNSLookup:        c.hostResolver.LookupIPAddr,
+			GetDNS:           c.getDNS,
+			CreateDNS:        c.createDNS,
+			UpdateDNS:        c.updateDNS,
+			WatchHost:        c.hostsWatcher.StartWatching,
+			ForgetHost:       c.hostsWatcher.StopWatching,
+			ListHostWatchers: c.hostsWatcher.ListHostRecordWatchers,
+			ManagedDomain:    c.domain,
+			Log:              c.Logger,
+		},
 		&traffic.HostReconciler{
-			ManagedDomain:          c.domain,
 			Log:                    c.Logger,
 			GetDomainVerifications: c.getDomainVerifications,
 			CreateOrUpdateTraffic:  c.createOrUpdateIngress,
@@ -42,17 +53,6 @@ func (c *Controller) reconcile(ctx context.Context, ingress traffic.Interface) e
 			GetSecret:            c.getSecret,
 			DeleteSecret:         c.deleteTLSSecret,
 			Log:                  c.Logger,
-		},
-		&traffic.DnsReconciler{
-			DeleteDNS:        c.deleteDNS,
-			DNSLookup:        c.hostResolver.LookupIPAddr,
-			GetDNS:           c.getDNS,
-			CreateDNS:        c.createDNS,
-			UpdateDNS:        c.updateDNS,
-			WatchHost:        c.hostsWatcher.StartWatching,
-			ForgetHost:       c.hostsWatcher.StopWatching,
-			ListHostWatchers: c.hostsWatcher.ListHostRecordWatchers,
-			Log:              c.Logger,
 		},
 	}
 	var errs []error

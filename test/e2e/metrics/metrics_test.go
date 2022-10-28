@@ -21,8 +21,6 @@ import (
 	"testing"
 	"time"
 
-	"github.com/kuadrant/kcp-glbc/pkg/traffic"
-
 	. "github.com/onsi/gomega"
 	. "github.com/onsi/gomega/gstruct"
 
@@ -32,6 +30,7 @@ import (
 
 	"github.com/kcp-dev/logicalcluster/v2"
 
+	"github.com/kuadrant/kcp-glbc/pkg/traffic"
 	. "github.com/kuadrant/kcp-glbc/test/support"
 )
 
@@ -131,14 +130,15 @@ func TestMetrics(t *testing.T) {
 	))
 	// Wait until the Ingress is reconciled with the load balancer set. This is how we know the ingress is considered ready
 	test.Eventually(Ingress(test, namespace, name)).WithTimeout(TestTimeoutMedium).Should(And(
-		// Host spec
-		WithTransform(Annotations, And(
-			HaveKey(traffic.ANNOTATION_HCG_HOST),
-		)),
 		// Load balancer status
 		WithTransform(LoadBalancerIngresses, HaveLen(1)),
-		Satisfy(LBHostEqualToGeneratedHost),
 	))
+
+	ingerss := GetIngress(test, namespace, name)
+	record := GetDNSRecord(test, namespace, name)
+	if !LBHostEqualToGeneratedHost(ingerss, record) {
+		test.T().Fatalf("Generated host label on the ingress %s does not match load balancer host name %s", record.Annotations[traffic.ANNOTATION_HCG_HOST], ingerss.Status.LoadBalancer.Ingress[0].Hostname)
+	}
 
 	// Check the metrics
 	test.Expect(GetMetrics(test)).To(And(

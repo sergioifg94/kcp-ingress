@@ -51,7 +51,9 @@ type Interface interface {
 	metav1.Object
 	GetKind() string
 	GetHosts() []string
+	GetHCGHost() string
 	SetDNSLBHost(string)
+	SetHCGHost(string)
 	Transform(previous Interface) error
 	GetDNSTargets(ctx context.Context, dnsLookup dnsLookupFunc) (map[logicalcluster.Name]map[string]dns.Target, error)
 	GetLogicalCluster() logicalcluster.Name

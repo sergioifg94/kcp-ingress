@@ -48,17 +48,17 @@ func (ve *validatedDNSClient) get(getfunc func(ctx context.Context, accessor Int
 }
 
 func TestDNSReconciler(t *testing.T) {
+	managedHost := "test.cb.example.com"
 
 	// sets up 2 ingresses one with status in the advanced scheduling annotation and one in the regular status block
-	setupAccessors := func(managedHost string, ingressStatus networkingv1.IngressStatus) []Interface {
+	setupAccessors := func(ingressStatus networkingv1.IngressStatus) []Interface {
 		var accessors []Interface
 		for i := 0; i <= 1; i++ {
 			ing := &networkingv1.Ingress{
 				ObjectMeta: metav1.ObjectMeta{
 					Name: fmt.Sprintf("ingress-%d", i),
 					Annotations: map[string]string{
-						ANNOTATION_HCG_HOST: managedHost,
-						"kcp.dev/cluster":   "somecluster",
+						"kcp.dev/cluster": "somecluster",
 					},
 				},
 			}
@@ -77,7 +77,7 @@ func TestDNSReconciler(t *testing.T) {
 				ing.Status = ingressStatus
 			}
 			accessor := NewIngress(ing)
-			accessor.GetAnnotations()
+			accessor.SetHCGHost(managedHost)
 			accessors = append(accessors, accessor)
 		}
 
@@ -92,9 +92,6 @@ func TestDNSReconciler(t *testing.T) {
 		return func(dns *v1.DNSRecord) error {
 			if dns == nil {
 				return fmt.Errorf("did not expect a nil dns record")
-			}
-			if len(dns.Spec.Endpoints) != 1 {
-				return fmt.Errorf("expected only 1 dns endpoint but got %d", len(dns.Spec.Endpoints))
 			}
 			for _, ep := range dns.Spec.Endpoints {
 				if len(ep.Targets) != len(expectedIPs) {
@@ -117,21 +114,21 @@ func TestDNSReconciler(t *testing.T) {
 		Name           string
 		getDNS         func(ctx context.Context, accessor Interface) (*v1.DNSRecord, error)
 		validateResult func(status ReconcileStatus, dnsClient *validatedDNSClient, err error) error
-		accessors      []Interface
+		ingressStatus  networkingv1.IngressStatus
 		expectedIPs    []string
 	}{{
 		Name: "test DNSRecord is created with correct values when it doesn't exist",
 		getDNS: func(ctx context.Context, accessor Interface) (*v1.DNSRecord, error) {
 			return nil, errors.NewNotFound(v1.Resource("dnsrecord"), accessor.GetName())
 		},
-		accessors: setupAccessors("test.cb.example.com", networkingv1.IngressStatus{
+		ingressStatus: networkingv1.IngressStatus{
 			LoadBalancer: corev1.LoadBalancerStatus{
 				Ingress: []corev1.LoadBalancerIngress{{
 					IP: "192.168.33.2",
 				},
 				},
 			},
-		}),
+		},
 		expectedIPs: []string{"192.168.33.2"},
 		validateResult: func(status ReconcileStatus, dnsClient *validatedDNSClient, err error) error {
 			if status != ReconcileStatusContinue || err != nil {
@@ -149,6 +146,10 @@ func TestDNSReconciler(t *testing.T) {
 		Name: "test DNSRecord is created with correct values when it does exist",
 		getDNS: func(ctx context.Context, accessor Interface) (*v1.DNSRecord, error) {
 			return &v1.DNSRecord{
+				ObjectMeta: metav1.ObjectMeta{
+					Annotations: map[string]string{
+						ANNOTATION_HCG_HOST: managedHost},
+				},
 				Spec: v1.DNSRecordSpec{
 					Endpoints: []*v1.Endpoint{
 						{DNSName: "192.168.33.2", Targets: []string{"192.168.33.2"}},
@@ -168,20 +169,20 @@ func TestDNSReconciler(t *testing.T) {
 			}
 			return nil
 		},
-		accessors: setupAccessors("test.cb.example.com", networkingv1.IngressStatus{
+		ingressStatus: networkingv1.IngressStatus{
 			LoadBalancer: corev1.LoadBalancerStatus{
 				Ingress: []corev1.LoadBalancerIngress{{
 					IP: "192.168.33.3",
 				},
 				},
 			},
-		}),
+		},
 		expectedIPs: []string{"192.168.33.3"},
 	}}
 
 	for _, tc := range cases {
 		t.Run(tc.Name, func(t *testing.T) {
-			for _, acc := range tc.accessors {
+			for _, acc := range setupAccessors(tc.ingressStatus) {
 				fake := &validatedDNSClient{}
 				rec := &DnsReconciler{
 					GetDNS:           fake.get(tc.getDNS),

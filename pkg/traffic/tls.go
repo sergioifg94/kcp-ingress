@@ -157,7 +157,6 @@ func (r *CertificateReconciler) Reconcile(ctx context.Context, accessor Interfac
 	if err != nil {
 		return ReconcileStatusStop, err
 	}
-	managedHost := accessor.GetAnnotations()[ANNOTATION_HCG_HOST]
 
 	tlsSecretName := TLSSecretName(accessor)
 	//set the accessor key on the certificate to help us with locating the accessor later
@@ -167,7 +166,6 @@ func (r *CertificateReconciler) Reconcile(ctx context.Context, accessor Interfac
 		Name:        CertificateName(accessor),
 		Labels:      labels,
 		Annotations: annotations,
-		Host:        managedHost,
 	}
 
 	if accessor.GetDeletionTimestamp() != nil && !accessor.GetDeletionTimestamp().IsZero() {
@@ -182,6 +180,12 @@ func (r *CertificateReconciler) Reconcile(ctx context.Context, accessor Interfac
 		}
 		return ReconcileStatusContinue, nil
 	}
+
+	managedHost := accessor.GetHCGHost()
+	if managedHost == "" {
+		return ReconcileStatusStop, ErrGeneratedHostMissing
+	}
+	certReq.Host = managedHost
 
 	err = r.CreateCertificate(ctx, certReq)
 	if err != nil && !errors.IsAlreadyExists(err) {
