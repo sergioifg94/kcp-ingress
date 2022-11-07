@@ -156,7 +156,7 @@ func (a *Ingress) GetSpec() interface{} {
 func (a *Ingress) Transform(old Interface) error {
 	oldIngress := old.(*Ingress)
 	patches := []patch{}
-	if !equality.Semantic.DeepEqual(a.Spec.Rules, oldIngress.Spec.Rules) {
+	if a.Spec.Rules != nil && !equality.Semantic.DeepEqual(a.Spec.Rules, oldIngress.Spec.Rules) {
 		rulesPatch := patch{
 			OP:    "replace",
 			Path:  "/rules",
@@ -164,7 +164,7 @@ func (a *Ingress) Transform(old Interface) error {
 		}
 		patches = append(patches, rulesPatch)
 	}
-	if !equality.Semantic.DeepEqual(a.Spec.TLS, oldIngress.Spec.TLS) {
+	if a.Spec.TLS != nil && !equality.Semantic.DeepEqual(a.Spec.TLS, oldIngress.Spec.TLS) {
 		tlsPatch := patch{
 			OP:    "replace",
 			Path:  "/tls",
@@ -250,7 +250,7 @@ func (a *Ingress) ProcessCustomHosts(_ context.Context, dvs *v1.DomainVerificati
 		for _, uh := range unverifiedRules {
 			replacedHosts = append(replacedHosts, uh.Host)
 		}
-		metadata.AddAnnotation(a, ANNOTATION_HCG_CUSTOM_HOST_REPLACED, fmt.Sprintf(" replaced custom hosts as they are not verfified %v", replacedHosts))
+		metadata.AddAnnotation(a, ANNOTATION_HCG_CUSTOM_HOST_REPLACED, fmt.Sprintf("%v", replacedHosts))
 	} else {
 		metadata.RemoveLabel(a, LABEL_HAS_PENDING_HOSTS)
 		metadata.RemoveAnnotation(a, ANNOTATION_HCG_CUSTOM_HOST_REPLACED)
