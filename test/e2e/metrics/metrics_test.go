@@ -32,6 +32,7 @@ import (
 
 	"github.com/kuadrant/kcp-glbc/pkg/traffic"
 	. "github.com/kuadrant/kcp-glbc/test/support"
+	. "github.com/kuadrant/kcp-glbc/test/support/ingress"
 )
 
 const issuer = "glbc-ca"
@@ -134,10 +135,12 @@ func TestMetrics(t *testing.T) {
 		WithTransform(LoadBalancerIngresses, HaveLen(1)),
 	))
 
-	ingerss := GetIngress(test, namespace, name)
+	test.T().Logf("ingress %s created and ready", name)
+
+	ingress := GetIngress(test, namespace, name)
 	record := GetDNSRecord(test, namespace, name)
-	if !LBHostEqualToGeneratedHost(ingerss, record) {
-		test.T().Fatalf("Generated host label on the ingress %s does not match load balancer host name %s", record.Annotations[traffic.ANNOTATION_HCG_HOST], ingerss.Status.LoadBalancer.Ingress[0].Hostname)
+	if !LBHostEqualToGeneratedHost(ingress, record) {
+		test.T().Fatalf("Generated host label on the ingress %s does not match load balancer host name %s", record.Annotations[traffic.ANNOTATION_HCG_HOST], ingress.Status.LoadBalancer.Ingress[0].Hostname)
 	}
 
 	// Check the metrics

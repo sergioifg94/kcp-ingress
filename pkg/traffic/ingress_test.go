@@ -7,10 +7,12 @@ import (
 	"testing"
 
 	workload "github.com/kcp-dev/kcp/pkg/apis/workload/v1alpha1"
+
 	kuadrantv1 "github.com/kuadrant/kcp-glbc/pkg/apis/kuadrant/v1"
 	"github.com/kuadrant/kcp-glbc/pkg/dns"
 	"github.com/kuadrant/kcp-glbc/pkg/traffic"
-	testSupport "github.com/kuadrant/kcp-glbc/test/support"
+	testSupport "github.com/kuadrant/kcp-glbc/test/support/ingress"
+
 	v1 "k8s.io/api/core/v1"
 	networkingv1 "k8s.io/api/networking/v1"
 	"k8s.io/apimachinery/pkg/api/equality"
@@ -229,7 +231,7 @@ func TestApplyTransformsIngress(t *testing.T) {
 			}
 			t.Log(reconciledIng.Annotations)
 			// we should now have annotations applying the transforms. Validate the transformed spec matches the transform annotations.
-			if err := testSupport.ValidateTransformedIngress(transformedCopy.Spec, reconciledIng, testCase.ExpectRulesDiff, testCase.ExpectTLSDiff); err != nil {
+			if err := testSupport.ValidateTransformed(transformedCopy.Spec, reconciledIng, testCase.ExpectRulesDiff, testCase.ExpectTLSDiff); err != nil {
 				t.Fatalf("transforms were invalid %s", err)
 			}
 
