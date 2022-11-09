@@ -2,6 +2,7 @@ package traffic
 
 import (
 	"context"
+	"fmt"
 	"sort"
 	"strconv"
 	"strings"
@@ -24,6 +25,7 @@ import (
 	v1 "github.com/kuadrant/kcp-glbc/pkg/apis/kuadrant/v1"
 	"github.com/kuadrant/kcp-glbc/pkg/dns"
 	"github.com/kuadrant/kcp-glbc/pkg/dns/aws"
+	"github.com/rs/xid"
 )
 
 type DnsReconciler struct {
@@ -35,6 +37,7 @@ type DnsReconciler struct {
 	ForgetHost       func(key interface{}, host string)
 	ListHostWatchers func(key interface{}) []dns.RecordWatcher
 	DNSLookup        func(ctx context.Context, host string) ([]dns.HostAddress, error)
+	ManagedDomain    string
 	Log              logr.Logger
 }
 
@@ -51,10 +54,50 @@ func (r *DnsReconciler) Reconcile(ctx context.Context, accessor Interface) (Reco
 	}
 
 	key := objectKey(accessor)
-	managedHost := accessor.GetAnnotations()[ANNOTATION_HCG_HOST]
 	var activeLBHosts []string
+	// clean up any watchers no longer needed
+	hostRecordWatchers := r.ListHostWatchers(key)
+	for _, watcher := range hostRecordWatchers {
+		if !slice.ContainsString(activeLBHosts, watcher.Host) {
+			r.ForgetHost(key, watcher.Host)
+		}
+	}
+	// Attempt to retrieve the existing DNSRecord for this traffic object
+	existing, err := r.GetDNS(ctx, accessor)
+	// If it doesn't exist, create it
+	if err != nil {
+		if !k8errors.IsNotFound(err) {
+			return ReconcileStatusStop, err
+		}
+		record, err := newDNSRecordForObject(accessor)
+		if err != nil {
+			return ReconcileStatusContinue, err
+		}
+		generatedHost := AddHostAnnotations(record, r.ManagedDomain)
+		accessor.SetHCGHost(generatedHost)
+		// Create the resource in the cluster
+		r.Log.V(3).Info("creating DNSRecord ", "record", record.Name)
+		_, err = r.CreateDNS(ctx, record)
+		if err != nil {
+			return ReconcileStatusContinue, err
+		}
+		return ReconcileStatusContinue, nil
+	}
+
+	// If it does exist, update it
 	activeDNSTargetIPs := map[string][]string{}
 	deletingTargetIPs := map[string][]string{}
+	managedHost := metadata.GetAnnotation(existing, ANNOTATION_HCG_HOST)
+	if managedHost == "" {
+		// This covers upgrade scenario: checking traffic object for the generated host label and updating DNS record with it
+		managedHost = metadata.GetAnnotation(accessor, ANNOTATION_HCG_HOST)
+		if managedHost == "" {
+			return ReconcileStatusStop, ErrGeneratedHostMissing
+		}
+		metadata.AddAnnotation(existing, ANNOTATION_HCG_HOST, managedHost)
+		metadata.RemoveAnnotation(accessor, ANNOTATION_HCG_HOST)
+	}
+	accessor.SetHCGHost(managedHost)
 
 	targets, err := accessor.GetDNSTargets(ctx, r.DNSLookup)
 	if err != nil {
@@ -85,38 +128,6 @@ func (r *DnsReconciler) Reconcile(ctx context.Context, accessor Interface) (Reco
 		r.Log.V(3).Info("setting the dns Target to the deleting Target as no new dns targets set yet")
 		activeDNSTargetIPs = deletingTargetIPs
 	}
-	// clean up any watchers no longer needed
-	hostRecordWatchers := r.ListHostWatchers(key)
-	for _, watcher := range hostRecordWatchers {
-		if !slice.ContainsString(activeLBHosts, watcher.Host) {
-			r.ForgetHost(key, watcher.Host)
-		}
-	}
-	// Attempt to retrieve the existing DNSRecord for this traffic object
-	existing, err := r.GetDNS(ctx, accessor)
-	// If it doesn't exist, create it
-	if err != nil {
-		if !k8errors.IsNotFound(err) {
-			return ReconcileStatusStop, err
-		}
-		record, err := newDNSRecordForObject(accessor)
-		if err != nil {
-			return ReconcileStatusContinue, err
-		}
-		r.setEndpointFromTargets(managedHost, activeDNSTargetIPs, record)
-		// Create the resource in the cluster
-		if len(record.Spec.Endpoints) > 0 {
-			r.Log.V(3).Info("creating DNSRecord ", "record", record.Name, "endpoints for DNSRecord", record.Spec.Endpoints)
-			existing, err = r.CreateDNS(ctx, record)
-			if err != nil {
-				return ReconcileStatusContinue, err
-			}
-			// metric to observe the accessor admission time
-			IngressObjectTimeToAdmission.Observe(existing.CreationTimestamp.Time.Sub(accessor.GetCreationTimestamp().Time).Seconds())
-		}
-		return ReconcileStatusContinue, nil
-	}
-	// If it does exist, update it
 	copyDNS := existing.DeepCopy()
 	r.setEndpointFromTargets(managedHost, activeDNSTargetIPs, copyDNS)
 	objMeta, err := meta.Accessor(accessor)
@@ -125,6 +136,10 @@ func (r *DnsReconciler) Reconcile(ctx context.Context, accessor Interface) (Reco
 	}
 	copyHealthAnnotations(copyDNS, objMeta)
 	if !equality.Semantic.DeepEqual(copyDNS, existing) {
+		if existing.Spec.Endpoints == nil && copyDNS.Spec.Endpoints != nil {
+			// metric to observe the accessor admission time
+			IngressObjectTimeToAdmission.Observe(copyDNS.CreationTimestamp.Time.Sub(accessor.GetCreationTimestamp().Time).Seconds())
+		}
 		r.Log.V(3).Info("updating DNSRecord ", "record", copyDNS.Name, "endpoints for DNSRecord", "endpoints", copyDNS.Spec.Endpoints)
 		if _, err = r.UpdateDNS(ctx, copyDNS); err != nil {
 			return ReconcileStatusStop, err
@@ -240,6 +255,19 @@ func awsEndpointWeight(numIPs int) string {
 		numIPs = maxWeight
 	}
 	return strconv.Itoa(maxWeight / numIPs)
+}
+
+// AddHostAnnotations adds generated host annotation to a provided DNS Record CR
+func AddHostAnnotations(record metav1.Object, host string) string {
+	if !metadata.HasAnnotation(record, ANNOTATION_HCG_HOST) {
+		// Let's assign it a global hostname if any
+		generatedHost := fmt.Sprintf("%s.%s", xid.New(), host)
+		metadata.AddAnnotation(record, ANNOTATION_HCG_HOST, generatedHost)
+		//we need this host set and saved on the accessor before we go any further so force an update
+		// if this is not saved we end up with a new host and the certificate can have the wrong host
+		return generatedHost
+	}
+	return ""
 }
 
 func objectKey(obj runtime.Object) cache.ExplicitKey {

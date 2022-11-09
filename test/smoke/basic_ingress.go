@@ -111,9 +111,6 @@ func TestIngressBasic(t Test, ingressCount int, zoneID, glbcDomain string) {
 	for _, ingress := range createdIngresses {
 
 		t.Eventually(Ingress(t, namespace, ingress.Name)).WithTimeout(TestTimeoutShort).Should(And(
-			WithTransform(Annotations, And(
-				HaveKey(traffic.ANNOTATION_HCG_HOST),
-			)),
 			WithTransform(Labels, And(
 				HaveKey(traffic.LABEL_HAS_PENDING_HOSTS),
 			)),
@@ -138,6 +135,9 @@ func TestIngressBasic(t Test, ingressCount int, zoneID, glbcDomain string) {
 	for _, record := range dnsRecords {
 		t.Eventually(DNSRecord(t, namespace, record.Name)).Should(And(
 			WithTransform(DNSRecordEndpointsCount, BeNumerically(">=", 1)),
+			WithTransform(Annotations, And(
+				HaveKey(traffic.ANNOTATION_HCG_HOST),
+			)),
 			WithTransform(DNSRecordCondition(zoneID, kuadrantv1.DNSRecordFailedConditionType), MatchFieldsP(IgnoreExtras,
 				Fields{
 					"Status":  Equal("False"),
@@ -153,20 +153,21 @@ func TestIngressBasic(t Test, ingressCount int, zoneID, glbcDomain string) {
 	// Assert Ingresses reconcile success now that cert and dns in place so the lb should be set to the generated host
 	for _, ingress := range ingresses {
 		tlsSecretName := fmt.Sprintf("hcg-tls-ingress-%s", ingress.Name)
-		generatedHost := ingress.Annotations[traffic.ANNOTATION_HCG_HOST]
+		generatedHost := GetDNSRecord(t, namespace, ingress.Name).Annotations[traffic.ANNOTATION_HCG_HOST]
 		t.T().Log("tls secret name ", tlsSecretName, "generated host ", generatedHost)
 		t.Eventually(Ingress(t, namespace, ingress.Name)).WithTimeout(TestTimeoutMedium).Should(And(
-			WithTransform(Annotations, And(
-				HaveKey(traffic.ANNOTATION_HCG_HOST),
-			)),
 			WithTransform(Labels, And(
 				HaveKey(traffic.LABEL_HAS_PENDING_HOSTS),
 			)),
 			WithTransform(LoadBalancerIngresses, HaveLen(1)),
 			//No custom hosts approved so only expect our default spec in the transform
 			Satisfy(TransformedSpec(t, GetDefaultSpec(generatedHost, tlsSecretName, name), true, true)),
-			Satisfy(LBHostEqualToGeneratedHost),
 		))
+		record := GetDNSRecord(t, namespace, ingress.Name)
+		trafficIngress := traffic.NewIngress(&ingress)
+		if !LBHostEqualToGeneratedHost(trafficIngress, record) {
+			t.T().Fatalf("Generated host label on the ingress %s does not match load balancer host name %s", record.Annotations[traffic.ANNOTATION_HCG_HOST], trafficIngress.Status.LoadBalancer.Ingress[0].Hostname)
+		}
 	}
 
 	t.T().Log("Ingress reached correct final state")

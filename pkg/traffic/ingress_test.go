@@ -45,27 +45,28 @@ func defaultTestIngress(hosts []string, backend string, tls []networkingv1.Ingre
 func TestProcessCustomHosts(t *testing.T) {
 	cases := []struct {
 		Name                string
-		OriginalIngress     func() *networkingv1.Ingress
-		ExpectedIngress     func() *networkingv1.Ingress
+		OriginalIngress     func() *traffic.Ingress
+		ExpectedIngress     func() *traffic.Ingress
 		DomainVerifications *kuadrantv1.DomainVerificationList
 		ExpectErr           bool
 	}{
 		{
 			Name: "test unverified host removed and replaced with glbc host",
-			OriginalIngress: func() *networkingv1.Ingress {
-				ing := defaultTestIngress([]string{"example.com"}, "test",
+			OriginalIngress: func() *traffic.Ingress {
+				ing := traffic.NewIngress(defaultTestIngress([]string{"example.com"}, "test",
 					[]networkingv1.IngressTLS{
 						{Hosts: []string{"example.com"}, SecretName: "test"},
 						{Hosts: []string{"guid.hcg.com"}, SecretName: "guid-hcg-com"},
-					})
-				ing.Annotations = map[string]string{traffic.ANNOTATION_HCG_HOST: "guid.hcg.com"}
+					}))
+				ing.SetHCGHost("guid.hcg.com")
 				return ing
 			},
-			ExpectedIngress: func() *networkingv1.Ingress {
-				ing := defaultTestIngress([]string{"guid.hcg.com"}, "test", []networkingv1.IngressTLS{
+			ExpectedIngress: func() *traffic.Ingress {
+				ing := traffic.NewIngress(defaultTestIngress([]string{"guid.hcg.com"}, "test", []networkingv1.IngressTLS{
 					{Hosts: []string{"guid.hcg.com"}, SecretName: "guid-hcg-com"},
-				})
-				ing.Annotations = map[string]string{traffic.ANNOTATION_HCG_HOST: "guid.hcg.com", traffic.ANNOTATION_HCG_CUSTOM_HOST_REPLACED: "[example.com]"}
+				}))
+				ing.SetHCGHost("guid.hcg.com")
+				ing.Annotations = map[string]string{traffic.ANNOTATION_HCG_CUSTOM_HOST_REPLACED: "[example.com]"}
 				ing.Labels = map[string]string{traffic.LABEL_HAS_PENDING_HOSTS: "true"}
 				return ing
 			},
@@ -73,22 +74,22 @@ func TestProcessCustomHosts(t *testing.T) {
 		},
 		{
 			Name: "test verfied host left in place and glbc rule appended",
-			OriginalIngress: func() *networkingv1.Ingress {
-				ing := defaultTestIngress([]string{"example.com"}, "test",
+			OriginalIngress: func() *traffic.Ingress {
+				ing := traffic.NewIngress(defaultTestIngress([]string{"example.com"}, "test",
 					[]networkingv1.IngressTLS{
 						{Hosts: []string{"example.com"}, SecretName: "test"},
 						{Hosts: []string{"guid.hcg.com"}, SecretName: "guid-hcg-com"},
-					})
-				ing.Annotations = map[string]string{traffic.ANNOTATION_HCG_HOST: "guid.hcg.com"}
+					}))
+				ing.SetHCGHost("guid.hcg.com")
 				return ing
 			},
-			ExpectedIngress: func() *networkingv1.Ingress {
-				ing := defaultTestIngress([]string{"example.com", "guid.hcg.com"}, "test",
+			ExpectedIngress: func() *traffic.Ingress {
+				ing := traffic.NewIngress(defaultTestIngress([]string{"example.com", "guid.hcg.com"}, "test",
 					[]networkingv1.IngressTLS{
 						{Hosts: []string{"example.com"}, SecretName: "test"},
 						{Hosts: []string{"guid.hcg.com"}, SecretName: "guid-hcg-com"},
-					})
-				ing.Annotations = map[string]string{traffic.ANNOTATION_HCG_HOST: "guid.hcg.com"}
+					}))
+				ing.SetHCGHost("guid.hcg.com")
 				return ing
 			},
 			DomainVerifications: &kuadrantv1.DomainVerificationList{
@@ -106,7 +107,7 @@ func TestProcessCustomHosts(t *testing.T) {
 
 	for _, tc := range cases {
 		t.Run(tc.Name, func(t *testing.T) {
-			ing := traffic.NewIngress(tc.OriginalIngress())
+			ing := tc.OriginalIngress()
 			err := ing.ProcessCustomHosts(context.TODO(), tc.DomainVerifications, nil, nil)
 			if tc.ExpectErr && err == nil {
 				t.Fatalf("expected an error for ProcessCustomHosts but got none")
@@ -114,7 +115,7 @@ func TestProcessCustomHosts(t *testing.T) {
 			if !tc.ExpectErr && err != nil {
 				t.Fatalf("did not expect an error for ProcessCustomHosts but got %s ", err)
 			}
-			expected := traffic.NewIngress(tc.ExpectedIngress())
+			expected := tc.ExpectedIngress()
 			if !equality.Semantic.DeepEqual(ing.Spec, expected.Spec) {
 				t.Log("exp spec", expected.Spec)
 				t.Log("got spec", ing.Spec)

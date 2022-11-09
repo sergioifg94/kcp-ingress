@@ -7,6 +7,7 @@ import (
 	"strings"
 
 	"github.com/kcp-dev/logicalcluster/v2"
+
 	corev1 "k8s.io/api/core/v1"
 	networkingv1 "k8s.io/api/networking/v1"
 	"k8s.io/apimachinery/pkg/api/equality"
@@ -26,6 +27,7 @@ func NewIngress(i *networkingv1.Ingress) *Ingress {
 
 type Ingress struct {
 	*networkingv1.Ingress
+	generatedHost string
 }
 
 func (a *Ingress) SetDNSLBHost(host string) {
@@ -37,6 +39,10 @@ func (a *Ingress) SetDNSLBHost(host string) {
 		},
 	}
 
+}
+
+func (a *Ingress) SetHCGHost(s string) {
+	a.generatedHost = s
 }
 
 func (a *Ingress) GetSyncTargets() []string {
@@ -53,7 +59,8 @@ func (a *Ingress) TMCEnabed() bool {
 	//once the status gets set to something other than the glbc provided host we are sure it is not advanced scheduling
 	if len(a.Status.LoadBalancer.Ingress) == 1 {
 		if a.Status.LoadBalancer.Ingress[0].Hostname != "" {
-			enabled = a.Status.LoadBalancer.Ingress[0].Hostname == a.Annotations[ANNOTATION_HCG_HOST]
+			host := a.GetHCGHost()
+			enabled = a.Status.LoadBalancer.Ingress[0].Hostname == host
 		} else {
 			enabled = a.Status.LoadBalancer.Ingress[0].IP == ""
 		}
@@ -74,6 +81,10 @@ func (a *Ingress) GetHosts() []string {
 	}
 
 	return hosts
+}
+
+func (a *Ingress) GetHCGHost() string {
+	return a.generatedHost
 }
 
 func (a *Ingress) AddTLS(host string, secret *corev1.Secret) {
@@ -216,13 +227,13 @@ func (a *Ingress) getStatuses() (map[logicalcluster.Name]networkingv1.IngressSta
 }
 
 func (a *Ingress) ProcessCustomHosts(_ context.Context, dvs *v1.DomainVerificationList, _ CreateOrUpdateTraffic, _ DeleteTraffic) error {
-	generatedHost, ok := a.GetAnnotations()[ANNOTATION_HCG_HOST]
+	generatedHost := a.GetHCGHost()
+	if generatedHost == "" && a.DeletionTimestamp == nil {
+		return ErrGeneratedHostMissing
+	}
 	var unverifiedRules []networkingv1.IngressRule
 	var verifiedRules []networkingv1.IngressRule
 	replacedHosts := []string{}
-	if !ok || generatedHost == "" {
-		return ErrGeneratedHostMissing
-	}
 	//find any rules in the spec that are for unverifiedHosts that are not verified
 	for _, rule := range a.Spec.Rules {
 		//ignore any rules for generated unverifiedHosts (these are recalculated later)
@@ -323,5 +334,5 @@ func (a *Ingress) GetNamespaceName() types.NamespacedName {
 }
 
 func (a *Ingress) String() string {
-	return fmt.Sprintf("logical cluster: %v, kind: %v, namespace/name: %v, tmc enabled : %v ", a.GetLogicalCluster(), a.GetKind(), a.GetNamespaceName(), a.TMCEnabed())
+	return fmt.Sprintf("logical cluster: %v, kind: %v, namespace/name: %v", a.GetLogicalCluster(), a.GetKind(), a.GetNamespaceName())
 }

@@ -6,7 +6,7 @@ import (
 
 var (
 	ErrInvalidAccessObject  = fmt.Errorf("not a valid traffic object type (expected: ingress or route)")
-	ErrGeneratedHostMissing = fmt.Errorf("generated host annotation '%v' was expected but was not present", ANNOTATION_HCG_HOST)
+	ErrGeneratedHostMissing = fmt.Errorf("generated host annotation was expected but was not set. Ensure DNSRecord created")
 )
 
 func IsInvalidAccessObjectError(err error) bool {

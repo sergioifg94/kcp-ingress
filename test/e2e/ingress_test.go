@@ -95,9 +95,6 @@ func TestIngress(t *testing.T) {
 
 	// Test our annotations are as expected and that we have not modified the original spec
 	test.Eventually(Ingress(test, namespace, name)).WithTimeout(TestTimeoutMedium).Should(And(
-		WithTransform(Annotations, And(
-			HaveKey(traffic.ANNOTATION_HCG_HOST),
-		)),
 		WithTransform(Labels, And(
 			HaveKey(traffic.LABEL_HAS_PENDING_HOSTS),
 		)),
@@ -107,7 +104,8 @@ func TestIngress(t *testing.T) {
 	test.T().Log("ingress in expected state")
 	// now our ingress is in the expected state assert TLS, DNS and Transforms correct
 	ingress = GetIngress(test, namespace, name)
-	hostname := ingress.Annotations[traffic.ANNOTATION_HCG_HOST]
+	record := GetDNSRecord(test, namespace, name)
+	hostname := record.Annotations[traffic.ANNOTATION_HCG_HOST]
 	resolver := dns.ConfigMapHostResolver{}
 	zoneID := os.Getenv("AWS_DNS_PUBLIC_ZONE_ID")
 	test.Expect(zoneID).NotTo(BeNil())
@@ -205,6 +203,9 @@ func TestIngress(t *testing.T) {
 		// ensure the ingress certificate is marked as ready when the DNSrecord is created
 		WithTransform(DNSRecordToIngressCertReady(test, namespace, name), Equal("ready")),
 		WithTransform(DNSRecordEndpoints, HaveLen(1)),
+		WithTransform(Annotations, And(
+			HaveKey(traffic.ANNOTATION_HCG_HOST),
+		)),
 		WithTransform(DNSRecordEndpoints, ContainElements(IngressEndpoints(test, ingress, &resolver))),
 		WithTransform(DNSRecordCondition(zoneID, kuadrantv1.DNSRecordFailedConditionType), MatchFieldsP(IgnoreExtras,
 			Fields{
@@ -214,7 +215,7 @@ func TestIngress(t *testing.T) {
 			})),
 	))
 	test.T().Log("DNS is as expected")
-	glbcHost := ingress.Annotations[traffic.ANNOTATION_HCG_HOST]
+	glbcHost := record.Annotations[traffic.ANNOTATION_HCG_HOST]
 
 	// Test that our transforms have the expected spec and that our status is set to the generated host
 	test.Eventually(Ingress(test, namespace, name)).WithTimeout(TestTimeoutShort).Should(And(
@@ -222,8 +223,12 @@ func TestIngress(t *testing.T) {
 		Satisfy(TransformedSpec(test, GetDefaultSpec(glbcHost, secretName, name), true, true)),
 		//check that we have a LB set to our generated host
 		WithTransform(LoadBalancerIngresses, HaveLen(1)),
-		Satisfy(LBHostEqualToGeneratedHost),
 	))
+
+	ingress = GetIngress(test, namespace, name)
+	if !LBHostEqualToGeneratedHost(ingress, record) {
+		test.T().Fatalf("Generated host label on the ingress %s does not match load balancer host name", record.Annotations[traffic.ANNOTATION_HCG_HOST])
+	}
 	test.T().Log("transforms are in place and ingress is ready (dns load balancer is set in the status)")
 
 	// Create a domain verification for the custom domain

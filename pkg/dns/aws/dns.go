@@ -174,6 +174,9 @@ func (p *Provider) updateRecord(record *v1.DNSRecord, zoneID, action string) err
 		}
 	}
 
+	if len(changes) == 0 {
+		return nil
+	}
 	input.ChangeBatch = &route53.ChangeBatch{
 		Changes: changes,
 	}

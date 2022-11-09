@@ -30,6 +30,7 @@ func NewRoute(r *routev1.Route) *Route {
 
 type Route struct {
 	*routev1.Route
+	generatedHost string
 }
 
 func (a *Route) GetKind() string {
@@ -62,6 +63,10 @@ func (a *Route) SetDNSLBHost(lbHost string) {
 	}
 }
 
+func (a *Route) SetHCGHost(s string) {
+	a.generatedHost = s
+}
+
 func (a *Route) Transform(previous Interface) error {
 	hostPatch := patch{
 		OP:    "replace",
@@ -86,6 +91,10 @@ func (a *Route) Transform(previous Interface) error {
 		a.Spec = oldSpec
 	}
 	return nil
+}
+
+func (a *Route) GetHCGHost() string {
+	return a.generatedHost
 }
 
 func (a *Route) AddTLS(host string, secret *corev1.Secret) {
@@ -138,7 +147,10 @@ func (a *Route) GetDNSTargets(ctx context.Context, dnsLookup dnsLookupFunc) (map
 }
 
 func (a *Route) ProcessCustomHosts(ctx context.Context, dvs *v1.DomainVerificationList, createOrUpdate CreateOrUpdateTraffic, delete DeleteTraffic) error {
-	generatedHost := metadata.GetAnnotation(a.Route, ANNOTATION_HCG_HOST)
+	generatedHost := a.GetHCGHost()
+	if generatedHost == "" && a.DeletionTimestamp == nil {
+		return ErrGeneratedHostMissing
+	}
 	//don't process custom hosts for shadows
 	if metadata.HasAnnotation(a.Route, ANNOTATION_IS_GLBC_SHADOW) {
 		//reset the host to our generated host
@@ -179,7 +191,6 @@ func (a *Route) ProcessCustomHosts(ctx context.Context, dvs *v1.DomainVerificati
 		// prepopulate generatedhost in spec and annotation on the shadow
 		shadow.Spec.Host = generatedHost
 		shadow.Name = a.GetName() + "-shadow"
-		metadata.AddAnnotation(shadow, ANNOTATION_HCG_HOST, generatedHost)
 		metadata.AddAnnotation(shadow, ANNOTATION_IS_GLBC_SHADOW, "true")
 		metadata.RemoveAnnotation(shadow, ANNOTATION_PENDING_CUSTOM_HOSTS)
 		t := true
