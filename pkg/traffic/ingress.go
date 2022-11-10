@@ -120,44 +120,30 @@ func (a *Ingress) RemoveTLS(hosts []string) {
 	}
 }
 
-func (a *Ingress) GetDNSTargets(ctx context.Context, dnsLookup dnsLookupFunc) (map[logicalcluster.Name]map[string]dns.Target, error) {
+// GetDNSTargets will return the LB hosts and or IPs from the the Ingress object associated with the cluster they came from
+func (a *Ingress) GetDNSTargets() ([]dns.Target, error) {
 	statuses, err := a.getStatuses()
 	if err != nil {
 		return nil, err
 	}
-
-	targets := map[logicalcluster.Name]map[string]dns.Target{}
+	dnsTargets := []dns.Target{}
 	for cluster, status := range statuses {
-		statusTargets, err := a.targetsFromStatus(ctx, status, dnsLookup)
-		if err != nil {
-			return nil, err
-		}
-		targets[cluster] = statusTargets
-	}
-
-	return targets, nil
-}
-
-func (a *Ingress) targetsFromStatus(ctx context.Context, status networkingv1.IngressStatus, dnsLookup dnsLookupFunc) (map[string]dns.Target, error) {
-	targets := map[string]dns.Target{}
-	for _, lb := range status.LoadBalancer.Ingress {
-		if lb.IP != "" {
-			targets[lb.IP] = dns.Target{Value: []string{lb.IP}, TargetType: dns.TargetTypeIP}
-		}
-		if lb.Hostname != "" {
-			ips, err := dnsLookup(ctx, lb.Hostname)
-			if err != nil {
-				return nil, err
+		for _, lb := range status.LoadBalancer.Ingress {
+			dnsTarget := dns.Target{}
+			dnsTarget.Cluster = cluster.String()
+			if lb.IP != "" {
+				dnsTarget.TargetType = dns.TargetTypeIP
+				dnsTarget.Value = lb.IP
 			}
-			targets[lb.Hostname] = dns.Target{Value: []string{}, TargetType: dns.TargetTypeHost}
-			for _, ip := range ips {
-				t := targets[lb.Hostname]
-				t.Value = append(targets[lb.Hostname].Value, ip.IP.String())
-				targets[lb.Hostname] = t
+			if lb.Hostname != "" {
+				dnsTarget.TargetType = dns.TargetTypeHost
+				dnsTarget.Value = lb.Hostname
+
 			}
+			dnsTargets = append(dnsTargets, dnsTarget)
 		}
 	}
-	return targets, nil
+	return dnsTargets, nil
 }
 
 func (a *Ingress) GetSpec() interface{} {
@@ -218,9 +204,9 @@ func (a *Ingress) getStatuses() (map[logicalcluster.Name]networkingv1.IngressSta
 		statuses[logicalcluster.New(clusterName)] = status
 	}
 
-	cluster := logicalcluster.From(a)
 	if !tmcEnabled(a) {
 		// when tmc enabled we don't want this status
+		cluster := logicalcluster.From(a)
 		statuses[cluster] = a.Status
 	}
 	return statuses, nil

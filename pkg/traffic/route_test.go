@@ -1,8 +1,12 @@
 package traffic_test
 
 import (
+	"encoding/json"
+	"fmt"
 	"testing"
 
+	workload "github.com/kcp-dev/kcp/pkg/apis/workload/v1alpha1"
+	"github.com/kuadrant/kcp-glbc/pkg/dns"
 	"github.com/kuadrant/kcp-glbc/pkg/traffic"
 	testSupport "github.com/kuadrant/kcp-glbc/test/support"
 	routev1 "github.com/openshift/api/route/v1"
@@ -99,4 +103,133 @@ func TestApplyTransformsRoute(t *testing.T) {
 			}
 		})
 	}
+}
+
+func TestGetDNSTargetsRoute(t *testing.T) {
+	var (
+		lbHostFmt = "lb%d.example.com"
+		//lbIPFmt    = "53.23.2.%d"
+		clusterFmt = "c%d"
+	)
+
+	var containsTarget = func(targets []dns.Target, target dns.Target) bool {
+		for _, t := range targets {
+			if equality.Semantic.DeepEqual(t, target) {
+				return true
+			}
+		}
+		return false
+	}
+
+	cases := []struct {
+		Name      string
+		Route     func() *routev1.Route
+		ExpectErr bool
+		Validate  func([]dns.Target) error
+	}{{
+		Name: "test single cluster host",
+		Route: func() *routev1.Route {
+			r := &routev1.Route{
+				ObjectMeta: metav1.ObjectMeta{
+					Name: "test",
+				},
+			}
+			status := routev1.RouteStatus{
+				Ingress: []routev1.RouteIngress{
+					{
+						RouterCanonicalHostname: fmt.Sprintf(lbHostFmt, 0),
+					},
+				},
+			}
+			c1, _ := json.Marshal(status)
+			r.Annotations = map[string]string{}
+			r.Annotations[workload.InternalClusterStatusAnnotationPrefix+fmt.Sprintf(clusterFmt, 0)] = string(c1)
+			return r
+		},
+		Validate: func(t []dns.Target) error {
+			if len(t) != 1 {
+				return fmt.Errorf("expected a single dns target but got %d", len(t))
+			}
+			for i := range t {
+				targetCluster := fmt.Sprintf(clusterFmt, i)
+				targetHost := fmt.Sprintf(lbHostFmt, i)
+				expectedTarget := dns.Target{
+					Cluster:    targetCluster,
+					TargetType: dns.TargetTypeHost,
+					Value:      targetHost,
+				}
+
+				if !containsTarget(t, expectedTarget) {
+					return fmt.Errorf("dns target %v not present", expectedTarget)
+				}
+			}
+			return nil
+		},
+	},
+		{
+			Name: "test multiple cluster host",
+			Route: func() *routev1.Route {
+				r := &routev1.Route{
+					ObjectMeta: metav1.ObjectMeta{
+						Name: "test",
+					},
+				}
+				c1status := routev1.RouteStatus{
+					Ingress: []routev1.RouteIngress{
+						{
+							RouterCanonicalHostname: fmt.Sprintf(lbHostFmt, 0),
+						},
+					},
+				}
+				c2status := routev1.RouteStatus{
+					Ingress: []routev1.RouteIngress{
+						{
+							RouterCanonicalHostname: fmt.Sprintf(lbHostFmt, 1),
+						},
+					},
+				}
+				c1, _ := json.Marshal(c1status)
+				r.Annotations = map[string]string{}
+				r.Annotations[workload.InternalClusterStatusAnnotationPrefix+fmt.Sprintf(clusterFmt, 0)] = string(c1)
+				c2, _ := json.Marshal(c2status)
+				r.Annotations[workload.InternalClusterStatusAnnotationPrefix+fmt.Sprintf(clusterFmt, 1)] = string(c2)
+				return r
+			},
+			Validate: func(t []dns.Target) error {
+				if len(t) != 2 {
+					return fmt.Errorf("expected a single dns target but got %d", len(t))
+				}
+				for i := range t {
+					targetCluster := fmt.Sprintf(clusterFmt, i)
+					targetHost := fmt.Sprintf(lbHostFmt, i)
+					expectedTarget := dns.Target{
+						Cluster:    targetCluster,
+						TargetType: dns.TargetTypeHost,
+						Value:      targetHost,
+					}
+
+					if !containsTarget(t, expectedTarget) {
+						return fmt.Errorf("dns target %v not present", expectedTarget)
+					}
+				}
+				return nil
+			},
+		}}
+	for _, tc := range cases {
+		t.Run(tc.Name, func(t *testing.T) {
+			ti := traffic.NewRoute(tc.Route())
+			targets, err := ti.GetDNSTargets()
+			if tc.ExpectErr && err == nil {
+				t.Fatalf("expected an error but got none")
+			}
+			if !tc.ExpectErr && err != nil {
+				t.Fatalf("did not expect an error but got %s ", err)
+			}
+			t.Log("targets", targets)
+			if err := tc.Validate(targets); err != nil {
+				t.Fatalf("unable to validate dns targets %s", err)
+			}
+		})
+	}
+
 }

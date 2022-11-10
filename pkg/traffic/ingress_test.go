@@ -2,11 +2,16 @@ package traffic_test
 
 import (
 	"context"
+	"encoding/json"
+	"fmt"
 	"testing"
 
+	workload "github.com/kcp-dev/kcp/pkg/apis/workload/v1alpha1"
 	kuadrantv1 "github.com/kuadrant/kcp-glbc/pkg/apis/kuadrant/v1"
+	"github.com/kuadrant/kcp-glbc/pkg/dns"
 	"github.com/kuadrant/kcp-glbc/pkg/traffic"
 	testSupport "github.com/kuadrant/kcp-glbc/test/support"
+	v1 "k8s.io/api/core/v1"
 	networkingv1 "k8s.io/api/networking/v1"
 	"k8s.io/apimachinery/pkg/api/equality"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -42,7 +47,7 @@ func defaultTestIngress(hosts []string, backend string, tls []networkingv1.Ingre
 	return ing
 }
 
-func TestProcessCustomHosts(t *testing.T) {
+func TestProcessCustomHostsIngress(t *testing.T) {
 	cases := []struct {
 		Name                string
 		OriginalIngress     func() *traffic.Ingress
@@ -230,5 +235,190 @@ func TestApplyTransformsIngress(t *testing.T) {
 
 		})
 	}
+}
 
+func TestGetDNSTargetsIngress(t *testing.T) {
+
+	var (
+		lbHostFmt  = "lb%d.example.com"
+		lbIPFmt    = "53.23.2.%d"
+		clusterFmt = "c%d"
+	)
+
+	var containsTarget = func(targets []dns.Target, target dns.Target) bool {
+		for _, t := range targets {
+			if equality.Semantic.DeepEqual(t, target) {
+				return true
+			}
+		}
+		return false
+	}
+
+	cases := []struct {
+		Name      string
+		Ingress   func() *networkingv1.Ingress
+		ExpectErr bool
+		Validate  func([]dns.Target) error
+	}{
+		{
+			Name: "test single cluster host",
+			Ingress: func() *networkingv1.Ingress {
+				ing := defaultTestIngress([]string{"guid.example.com"}, "test", []networkingv1.IngressTLS{{
+					Hosts:      []string{"guid.example.com"},
+					SecretName: "test",
+				}})
+				c1 := networkingv1.IngressStatus{
+					LoadBalancer: v1.LoadBalancerStatus{
+						Ingress: []v1.LoadBalancerIngress{
+							{
+								Hostname: fmt.Sprintf(lbHostFmt, 0),
+							},
+						},
+					},
+				}
+				ing.Annotations = map[string]string{}
+				jsonStatus, _ := json.Marshal(c1)
+				ing.Annotations[workload.InternalClusterStatusAnnotationPrefix+fmt.Sprintf(clusterFmt, 0)] = string(jsonStatus)
+				return ing
+			},
+			Validate: func(targets []dns.Target) error {
+				if len(targets) != 1 {
+					return fmt.Errorf("expected a single dns target but got %v", len(targets))
+				}
+
+				targetHost := fmt.Sprintf(lbHostFmt, 0)
+				targetCluster := fmt.Sprintf(clusterFmt, 0)
+				expectedTarget := dns.Target{
+					Cluster:    targetCluster,
+					TargetType: dns.TargetTypeHost,
+					Value:      targetHost,
+				}
+				if !containsTarget(targets, expectedTarget) {
+					return fmt.Errorf("dns target %v not present", expectedTarget)
+				}
+				return nil
+			},
+		},
+		{
+			Name: "test multiple clusters hosts",
+			Ingress: func() *networkingv1.Ingress {
+				ing := defaultTestIngress([]string{"guid.example.com"}, "test", []networkingv1.IngressTLS{{
+					Hosts:      []string{"guid.example.com"},
+					SecretName: "test",
+				}})
+				c1 := networkingv1.IngressStatus{
+					LoadBalancer: v1.LoadBalancerStatus{
+						Ingress: []v1.LoadBalancerIngress{
+							{
+								Hostname: fmt.Sprintf(lbHostFmt, 0),
+							},
+						},
+					},
+				}
+				c2 := networkingv1.IngressStatus{
+					LoadBalancer: v1.LoadBalancerStatus{
+						Ingress: []v1.LoadBalancerIngress{
+							{
+								Hostname: fmt.Sprintf(lbHostFmt, 1),
+							},
+						},
+					},
+				}
+				ing.Annotations = map[string]string{}
+				jsonStatus, _ := json.Marshal(c1)
+				ing.Annotations[workload.InternalClusterStatusAnnotationPrefix+fmt.Sprintf(clusterFmt, 0)] = string(jsonStatus)
+				jsonStatus, _ = json.Marshal(c2)
+				ing.Annotations[workload.InternalClusterStatusAnnotationPrefix+fmt.Sprintf(clusterFmt, 1)] = string(jsonStatus)
+				return ing
+			},
+			Validate: func(targets []dns.Target) error {
+				if len(targets) != 2 {
+					return fmt.Errorf("expected 2 dns targets but got %v", len(targets))
+				}
+				for i := range targets {
+					targetCluster := fmt.Sprintf(clusterFmt, i)
+					targetHost := fmt.Sprintf(lbHostFmt, i)
+					expectedTarget := dns.Target{
+						Cluster:    targetCluster,
+						TargetType: dns.TargetTypeHost,
+						Value:      targetHost,
+					}
+
+					if !containsTarget(targets, expectedTarget) {
+						return fmt.Errorf("dns target %v not present", expectedTarget)
+					}
+				}
+				return nil
+			},
+		},
+		{
+			Name: "test multiple clusters IPs",
+			Ingress: func() *networkingv1.Ingress {
+				ing := defaultTestIngress([]string{"guid.example.com"}, "test", []networkingv1.IngressTLS{{
+					Hosts:      []string{"guid.example.com"},
+					SecretName: "test",
+				}})
+				c1 := networkingv1.IngressStatus{
+					LoadBalancer: v1.LoadBalancerStatus{
+						Ingress: []v1.LoadBalancerIngress{
+							{
+								IP: fmt.Sprintf(lbIPFmt, 0),
+							},
+						},
+					},
+				}
+				c2 := networkingv1.IngressStatus{
+					LoadBalancer: v1.LoadBalancerStatus{
+						Ingress: []v1.LoadBalancerIngress{
+							{
+								IP: fmt.Sprintf(lbIPFmt, 1),
+							},
+						},
+					},
+				}
+				ing.Annotations = map[string]string{}
+				jsonStatus, _ := json.Marshal(c1)
+				ing.Annotations[workload.InternalClusterStatusAnnotationPrefix+fmt.Sprintf(clusterFmt, 0)] = string(jsonStatus)
+				jsonStatus, _ = json.Marshal(c2)
+				ing.Annotations[workload.InternalClusterStatusAnnotationPrefix+fmt.Sprintf(clusterFmt, 1)] = string(jsonStatus)
+				return ing
+			},
+			Validate: func(targets []dns.Target) error {
+				if len(targets) != 2 {
+					return fmt.Errorf("expected a single dns target but got %v", len(targets))
+				}
+				for i := range targets {
+					targetCluster := fmt.Sprintf(clusterFmt, i)
+					targetHost := fmt.Sprintf(lbIPFmt, i)
+					expectedTarget := dns.Target{
+						Cluster:    targetCluster,
+						TargetType: dns.TargetTypeIP,
+						Value:      targetHost,
+					}
+
+					if !containsTarget(targets, expectedTarget) {
+						return fmt.Errorf("dns target %v not present", expectedTarget)
+					}
+				}
+				return nil
+			},
+		},
+	}
+
+	for _, tc := range cases {
+		t.Run(tc.Name, func(t *testing.T) {
+			ti := traffic.NewIngress(tc.Ingress())
+			targets, err := ti.GetDNSTargets()
+			if tc.ExpectErr && err == nil {
+				t.Fatalf("expected an error but got none")
+			}
+			if !tc.ExpectErr && err != nil {
+				t.Fatalf("did not expect an error but got %s ", err)
+			}
+			t.Log("targets", targets)
+			if err := tc.Validate(targets); err != nil {
+				t.Fatalf("unable to validate dns targets %s", err)
+			}
+		})
+	}
 }

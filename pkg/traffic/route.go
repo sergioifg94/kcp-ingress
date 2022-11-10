@@ -118,32 +118,21 @@ func (a *Route) RemoveTLS(hosts []string) {
 	}
 }
 
-func (a *Route) GetDNSTargets(ctx context.Context, dnsLookup dnsLookupFunc) (map[logicalcluster.Name]map[string]dns.Target, error) {
-	targets := map[logicalcluster.Name]map[string]dns.Target{}
+func (a *Route) GetDNSTargets() ([]dns.Target, error) {
+	dnsTargets := []dns.Target{}
 	statuses, err := a.getStatuses()
 	if err != nil {
-		return targets, err
+		return dnsTargets, err
 	}
 	for cluster, status := range statuses {
-		clusterTargets := map[string]dns.Target{}
 		for _, ingress := range status.Ingress {
+			// with a Route it is always a host
 			host := ingress.RouterCanonicalHostname
-			ips, err := dnsLookup(ctx, host)
-			//couldn't find any IPs, just use the host
-			if err != nil {
-				ips = []dns.HostAddress{}
-			}
-			clusterTargets[host] = dns.Target{Value: []string{}, TargetType: dns.TargetTypeHost}
-			for _, ip := range ips {
-				t := clusterTargets[host]
-				t.Value = append(clusterTargets[host].Value, ip.IP.String())
-				clusterTargets[host] = t
-			}
+			target := dns.Target{Value: host, TargetType: dns.TargetTypeHost, Cluster: cluster.String()}
+			dnsTargets = append(dnsTargets, target)
 		}
-		targets[cluster] = clusterTargets
 	}
-
-	return targets, nil
+	return dnsTargets, nil
 }
 
 func (a *Route) ProcessCustomHosts(ctx context.Context, dvs *v1.DomainVerificationList, createOrUpdate CreateOrUpdateTraffic, delete DeleteTraffic) error {

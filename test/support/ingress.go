@@ -51,24 +51,20 @@ func Ingress(t Test, namespace *corev1.Namespace, name string) func(g gomega.Gom
 
 func IngressEndpoints(t Test, ingress *traffic.Ingress, res dns.HostResolver) []types.GomegaMatcher {
 	host := ingress.Annotations[traffic.ANNOTATION_HCG_HOST]
-	targets, err := ingress.GetDNSTargets(t.Ctx(), res.LookupIPAddr)
+	targets, err := ingress.GetDNSTargets()
 	t.Expect(err).NotTo(gomega.HaveOccurred())
 	matchers := []types.GomegaMatcher{}
 	for _, target := range targets {
-		for _, clusterTargets := range target {
-			for _, ip := range clusterTargets.Value {
-				t.T().Log("Host is ", host)
-				matchers = append(matchers, MatchFieldsP(IgnoreExtras,
-					Fields{
-						"DNSName":          Equal(host),
-						"Targets":          ConsistOf(ip),
-						"RecordType":       Equal("A"),
-						"RecordTTL":        Equal(kuadrantv1.TTL(60)),
-						"SetIdentifier":    Equal(ip),
-						"ProviderSpecific": ConsistOf(kuadrantv1.ProviderSpecific{{Name: "aws/weight", Value: "120"}}),
-					}))
-			}
-		}
+		matchers = append(matchers, MatchFieldsP(IgnoreExtras,
+			Fields{
+				"DNSName":          Equal(host),
+				"Targets":          ConsistOf(target.Value),
+				"RecordType":       Equal("A"),
+				"RecordTTL":        Equal(kuadrantv1.TTL(60)),
+				"SetIdentifier":    Equal(target.Value),
+				"ProviderSpecific": ConsistOf(kuadrantv1.ProviderSpecific{{Name: "aws/weight", Value: "120"}}),
+			}))
+
 	}
 	return matchers
 

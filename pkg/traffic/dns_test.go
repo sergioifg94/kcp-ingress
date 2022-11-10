@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"net"
 	"testing"
 
 	corev1 "k8s.io/api/core/v1"
@@ -93,6 +94,9 @@ func TestDNSReconciler(t *testing.T) {
 			if dns == nil {
 				return fmt.Errorf("did not expect a nil dns record")
 			}
+			if len(expectedIPs) != len(dns.Spec.Endpoints) {
+				return fmt.Errorf("expected %d endpoints but got %d ", len(expectedIPs), len(dns.Spec.Endpoints))
+			}
 			for _, ep := range dns.Spec.Endpoints {
 				if len(ep.Targets) != len(expectedIPs) {
 					return fmt.Errorf("expected only 1 dns Target but got %d", len(ep.Targets))
@@ -116,69 +120,119 @@ func TestDNSReconciler(t *testing.T) {
 		validateResult func(status ReconcileStatus, dnsClient *validatedDNSClient, err error) error
 		ingressStatus  networkingv1.IngressStatus
 		expectedIPs    []string
-	}{{
-		Name: "test DNSRecord is created with correct values when it doesn't exist",
-		getDNS: func(ctx context.Context, accessor Interface) (*v1.DNSRecord, error) {
-			return nil, errors.NewNotFound(v1.Resource("dnsrecord"), accessor.GetName())
-		},
-		ingressStatus: networkingv1.IngressStatus{
-			LoadBalancer: corev1.LoadBalancerStatus{
-				Ingress: []corev1.LoadBalancerIngress{{
-					IP: "192.168.33.2",
-				},
-				},
+		DNSLookup      func(ctx context.Context, host string) ([]dns.HostAddress, error)
+	}{
+		{
+			Name: "test DNSRecord is created when it doesn't exist with no endpoints",
+			getDNS: func(ctx context.Context, accessor Interface) (*v1.DNSRecord, error) {
+				return nil, errors.NewNotFound(v1.Resource("dnsrecord"), accessor.GetName())
 			},
-		},
-		expectedIPs: []string{"192.168.33.2"},
-		validateResult: func(status ReconcileStatus, dnsClient *validatedDNSClient, err error) error {
-			if status != ReconcileStatusContinue || err != nil {
-				return fmt.Errorf("expected Reconcile status to be %v got %v. Expected err to be nil got %v", ReconcileStatusContinue, status, err)
-			}
-			if dnsClient.createCalled != 1 {
-				return fmt.Errorf("expected create dns to be called 1 time but was called %d", dnsClient.createCalled)
-			}
-			if dnsClient.updateCalled != 0 {
-				return fmt.Errorf("expected update dns to be called 0 times but was called %d", dnsClient.updateCalled)
-			}
-			return nil
-		},
-	}, {
-		Name: "test DNSRecord is created with correct values when it does exist",
-		getDNS: func(ctx context.Context, accessor Interface) (*v1.DNSRecord, error) {
-			return &v1.DNSRecord{
-				ObjectMeta: metav1.ObjectMeta{
-					Annotations: map[string]string{
-						ANNOTATION_HCG_HOST: managedHost},
-				},
-				Spec: v1.DNSRecordSpec{
-					Endpoints: []*v1.Endpoint{
-						{DNSName: "192.168.33.2", Targets: []string{"192.168.33.2"}},
+			ingressStatus: networkingv1.IngressStatus{
+				LoadBalancer: corev1.LoadBalancerStatus{
+					Ingress: []corev1.LoadBalancerIngress{{
+						IP: "192.168.33.2",
+					},
 					},
 				},
-			}, nil
-		},
-		validateResult: func(status ReconcileStatus, dnsClient *validatedDNSClient, err error) error {
-			if status != ReconcileStatusContinue || err != nil {
-				return fmt.Errorf("expected Reconcile status to be %v got %v. Expected err to be nil got %v", ReconcileStatusContinue, status, err)
-			}
-			if dnsClient.createCalled != 0 {
-				return fmt.Errorf("expected create dns to be called 1 time but was called %d", dnsClient.createCalled)
-			}
-			if dnsClient.updateCalled != 1 {
-				return fmt.Errorf("expected update dns to be called 0 times but was called %d", dnsClient.updateCalled)
-			}
-			return nil
-		},
-		ingressStatus: networkingv1.IngressStatus{
-			LoadBalancer: corev1.LoadBalancerStatus{
-				Ingress: []corev1.LoadBalancerIngress{{
-					IP: "192.168.33.3",
-				},
-				},
+			},
+			DNSLookup: func(ctx context.Context, host string) ([]dns.HostAddress, error) {
+				return nil, fmt.Errorf("DNSLookup should not have been called")
+			},
+			expectedIPs: []string{},
+			validateResult: func(status ReconcileStatus, dnsClient *validatedDNSClient, err error) error {
+				if status != ReconcileStatusContinue || err != nil {
+					return fmt.Errorf("expected Reconcile status to be %v got %v. Expected err to be nil got %v", ReconcileStatusContinue, status, err)
+				}
+				if dnsClient.createCalled != 1 {
+					return fmt.Errorf("expected create dns to be called 1 time but was called %d", dnsClient.createCalled)
+				}
+				if dnsClient.updateCalled != 0 {
+					return fmt.Errorf("expected update dns to be called 0 times but was called %d", dnsClient.updateCalled)
+				}
+				return nil
 			},
 		},
-		expectedIPs: []string{"192.168.33.3"},
-	}}
+		{
+			Name: "test DNSRecord is created with correct values when it does exist",
+			getDNS: func(ctx context.Context, accessor Interface) (*v1.DNSRecord, error) {
+				return &v1.DNSRecord{
+					ObjectMeta: metav1.ObjectMeta{
+						Annotations: map[string]string{
+							ANNOTATION_HCG_HOST: managedHost},
+					},
+					Spec: v1.DNSRecordSpec{
+						Endpoints: []*v1.Endpoint{
+							{DNSName: "192.168.33.2", Targets: []string{"192.168.33.2"}},
+						},
+					},
+				}, nil
+			},
+			validateResult: func(status ReconcileStatus, dnsClient *validatedDNSClient, err error) error {
+				if status != ReconcileStatusContinue || err != nil {
+					return fmt.Errorf("expected Reconcile status to be %v got %v. Expected err to be nil got %v", ReconcileStatusContinue, status, err)
+				}
+				if dnsClient.createCalled != 0 {
+					return fmt.Errorf("expected create dns to be called 1 time but was called %d", dnsClient.createCalled)
+				}
+				if dnsClient.updateCalled != 1 {
+					return fmt.Errorf("expected update dns to be called 0 times but was called %d", dnsClient.updateCalled)
+				}
+				return nil
+			},
+			ingressStatus: networkingv1.IngressStatus{
+				LoadBalancer: corev1.LoadBalancerStatus{
+					Ingress: []corev1.LoadBalancerIngress{{
+						IP: "192.168.33.3",
+					},
+					},
+				},
+			},
+			DNSLookup: func(ctx context.Context, host string) ([]dns.HostAddress, error) {
+				return nil, fmt.Errorf("DNSLookup should not have been called")
+			},
+			expectedIPs: []string{"192.168.33.3"},
+		},
+		{
+			Name: "test DNSRecord is created with correct values when it a host is returned",
+			getDNS: func(ctx context.Context, accessor Interface) (*v1.DNSRecord, error) {
+				return &v1.DNSRecord{
+					ObjectMeta: metav1.ObjectMeta{
+						Annotations: map[string]string{
+							ANNOTATION_HCG_HOST: managedHost},
+					},
+					Spec: v1.DNSRecordSpec{
+						Endpoints: []*v1.Endpoint{},
+					},
+				}, nil
+			},
+			ingressStatus: networkingv1.IngressStatus{
+				LoadBalancer: corev1.LoadBalancerStatus{
+					Ingress: []corev1.LoadBalancerIngress{{
+						Hostname: "test.example.com",
+					},
+					},
+				},
+			},
+			DNSLookup: func(ctx context.Context, host string) ([]dns.HostAddress, error) {
+				return []dns.HostAddress{{
+					IP: net.ParseIP("192.168.33.2"),
+				}}, nil
+			},
+			expectedIPs: []string{"192.168.33.2"},
+			validateResult: func(status ReconcileStatus, dnsClient *validatedDNSClient, err error) error {
+				if status != ReconcileStatusContinue || err != nil {
+					return fmt.Errorf("expected Reconcile status to be %v got %v. Expected err to be nil got %v", ReconcileStatusContinue, status, err)
+				}
+				if dnsClient.createCalled != 0 {
+					return fmt.Errorf("expected create dns to be called 1 time but was called %d", dnsClient.createCalled)
+				}
+				if dnsClient.updateCalled != 1 {
+					return fmt.Errorf("expected update dns to be called 0 times but was called %d", dnsClient.updateCalled)
+				}
+				return nil
+			},
+		},
+	}
 
 	for _, tc := range cases {
 		t.Run(tc.Name, func(t *testing.T) {
@@ -190,6 +244,10 @@ func TestDNSReconciler(t *testing.T) {
 					UpdateDNS:        fake.update(commonDNSValidate(tc.expectedIPs)),
 					ListHostWatchers: fakewatcher,
 					Log:              log.New(),
+					DNSLookup:        tc.DNSLookup,
+					WatchHost: func(ctx context.Context, key interface{}, host string) bool {
+						return true
+					},
 				}
 				result, err := rec.Reconcile(context.TODO(), acc)
 

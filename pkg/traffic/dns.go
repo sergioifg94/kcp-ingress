@@ -36,9 +36,9 @@ type DnsReconciler struct {
 	WatchHost        func(ctx context.Context, key interface{}, host string) bool
 	ForgetHost       func(key interface{}, host string)
 	ListHostWatchers func(key interface{}) []dns.RecordWatcher
-	DNSLookup        func(ctx context.Context, host string) ([]dns.HostAddress, error)
-	ManagedDomain    string
 	Log              logr.Logger
+	ManagedDomain    string
+	DNSLookup        func(ctx context.Context, host string) ([]dns.HostAddress, error)
 }
 
 func (r *DnsReconciler) GetName() string {
@@ -54,14 +54,6 @@ func (r *DnsReconciler) Reconcile(ctx context.Context, accessor Interface) (Reco
 	}
 
 	key := objectKey(accessor)
-	var activeLBHosts []string
-	// clean up any watchers no longer needed
-	hostRecordWatchers := r.ListHostWatchers(key)
-	for _, watcher := range hostRecordWatchers {
-		if !slice.ContainsString(activeLBHosts, watcher.Host) {
-			r.ForgetHost(key, watcher.Host)
-		}
-	}
 	// Attempt to retrieve the existing DNSRecord for this traffic object
 	existing, err := r.GetDNS(ctx, accessor)
 	// If it doesn't exist, create it
@@ -83,7 +75,6 @@ func (r *DnsReconciler) Reconcile(ctx context.Context, accessor Interface) (Reco
 		}
 		return ReconcileStatusContinue, nil
 	}
-
 	// If it does exist, update it
 	activeDNSTargetIPs := map[string][]string{}
 	deletingTargetIPs := map[string][]string{}
@@ -95,31 +86,45 @@ func (r *DnsReconciler) Reconcile(ctx context.Context, accessor Interface) (Reco
 			return ReconcileStatusStop, ErrGeneratedHostMissing
 		}
 		metadata.AddAnnotation(existing, ANNOTATION_HCG_HOST, managedHost)
+		// ok to remove as in TMC we add as status and in none TMC we add a host directly to the object
 		metadata.RemoveAnnotation(accessor, ANNOTATION_HCG_HOST)
 	}
 	accessor.SetHCGHost(managedHost)
-
-	targets, err := accessor.GetDNSTargets(ctx, r.DNSLookup)
+	targets, err := accessor.GetDNSTargets()
 	if err != nil {
 		return ReconcileStatusContinue, err
 	}
-	for cluster, targets := range targets {
-		deleteAnnotation := workload.InternalClusterDeletionTimestampAnnotationPrefix + cluster.String()
+	var activeLBHosts []string
+	for _, target := range targets {
+		host := target.Value
+		deleteAnnotation := workload.InternalClusterDeletionTimestampAnnotationPrefix + target.Cluster
 		if metadata.HasAnnotation(accessor, deleteAnnotation) {
-			for host, target := range targets {
-				deletingTargetIPs[host] = append(deletingTargetIPs[host], target.Value...)
-			}
+			deletingTargetIPs[host] = append(deletingTargetIPs[host], host)
 			continue
 		}
-		for host, target := range targets {
-			if metadata.HasAnnotation(accessor, deleteAnnotation) {
-				continue
-			}
-			if target.TargetType == dns.TargetTypeHost {
-				r.WatchHost(ctx, key, host)
-				activeLBHosts = append(activeLBHosts, host)
-			}
-			activeDNSTargetIPs[host] = append(activeDNSTargetIPs[host], target.Value...)
+		if target.TargetType == dns.TargetTypeIP {
+			activeDNSTargetIPs[host] = append(activeDNSTargetIPs[host], host)
+			continue
+		}
+		// for a non ip value look up the DNS
+		addr, err := r.DNSLookup(ctx, host)
+		if err != nil {
+			return ReconcileStatusContinue, fmt.Errorf("DNSLookup failed for host %s : %s", host, err)
+		}
+		for _, add := range addr {
+			activeDNSTargetIPs[host] = append(activeDNSTargetIPs[host], add.IP.String())
+		}
+		//add the host to host watcher to keep our DNS upto date
+		// If it is not an IP we add it to the host watcher that triggers an update when it gets IPS
+		r.WatchHost(ctx, key, host)
+		activeLBHosts = append(activeLBHosts, host)
+	}
+
+	// clean up any watchers no longer needed TODO(cbrookes) we may want to put this in a defer or a different routine so it always cleans up
+	hostRecordWatchers := r.ListHostWatchers(key)
+	for _, watcher := range hostRecordWatchers {
+		if !slice.ContainsString(activeLBHosts, watcher.Host) {
+			r.ForgetHost(key, watcher.Host)
 		}
 	}
 

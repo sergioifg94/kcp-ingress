@@ -42,7 +42,6 @@ type patch struct {
 	Value interface{} `json:"value"`
 }
 
-type dnsLookupFunc func(ctx context.Context, host string) ([]dns.HostAddress, error)
 type CreateOrUpdateTraffic func(ctx context.Context, i Interface) error
 type DeleteTraffic func(ctx context.Context, i Interface) error
 
@@ -55,7 +54,7 @@ type Interface interface {
 	SetDNSLBHost(string)
 	SetHCGHost(string)
 	Transform(previous Interface) error
-	GetDNSTargets(ctx context.Context, dnsLookup dnsLookupFunc) (map[logicalcluster.Name]map[string]dns.Target, error)
+	GetDNSTargets() ([]dns.Target, error)
 	GetLogicalCluster() logicalcluster.Name
 	GetNamespaceName() types.NamespacedName
 	AddTLS(host string, secret *corev1.Secret)

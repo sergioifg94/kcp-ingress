@@ -6,6 +6,7 @@ const (
 )
 
 type Target struct {
+	Cluster    string
 	TargetType string
-	Value      []string
+	Value      string
 }

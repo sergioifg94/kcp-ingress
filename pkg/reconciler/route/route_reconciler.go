@@ -27,7 +27,6 @@ func (c *Controller) reconcile(ctx context.Context, route *traffic.Route) error 
 		// DnsReconciler is first as it will set generatedHost field on the traffic object based on the DNSRecord it creates for each route
 		&traffic.DnsReconciler{
 			DeleteDNS:        c.deleteDNS,
-			DNSLookup:        c.hostResolver.LookupIPAddr,
 			GetDNS:           c.getDNS,
 			CreateDNS:        c.createDNS,
 			UpdateDNS:        c.updateDNS,
@@ -36,6 +35,7 @@ func (c *Controller) reconcile(ctx context.Context, route *traffic.Route) error 
 			ListHostWatchers: c.hostsWatcher.ListHostRecordWatchers,
 			ManagedDomain:    c.domain,
 			Log:              c.Logger,
+			DNSLookup:        c.hostResolver.LookupIPAddr,
 		},
 		&traffic.HostReconciler{
 			Log:                    c.Logger,
