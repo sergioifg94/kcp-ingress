@@ -26,7 +26,6 @@ import (
 
 	kuadrantv1 "github.com/kuadrant/kcp-glbc/pkg/apis/kuadrant/v1"
 	"github.com/kuadrant/kcp-glbc/pkg/dns"
-	traffic "github.com/kuadrant/kcp-glbc/pkg/traffic"
 )
 
 const (
@@ -82,13 +81,6 @@ func DNSRecordCondition(zoneID, condition string) func(record *kuadrantv1.DNSRec
 			return nil
 		}
 		return nil
-	}
-}
-
-func DNSRecordToIngressCertReady(t Test, namespace *corev1.Namespace, name string) func(dnsrecord *kuadrantv1.DNSRecord) string {
-	return func(dnsrecord *kuadrantv1.DNSRecord) string {
-		ing := GetIngress(t, namespace, dnsrecord.Name)
-		return ing.Annotations[traffic.ANNOTATION_CERTIFICATE_STATE]
 	}
 }
 

@@ -12,21 +12,20 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 
-package support
+package ingress
 
 import (
 	"encoding/json"
 	"fmt"
 	"strings"
 
-	kuadrantv1 "github.com/kuadrant/kcp-glbc/pkg/apis/kuadrant/v1"
 	"github.com/onsi/gomega"
-	. "github.com/onsi/gomega"
-	. "github.com/onsi/gomega/gstruct"
-	"github.com/onsi/gomega/types"
+
+	kuadrantv1 "github.com/kuadrant/kcp-glbc/pkg/apis/kuadrant/v1"
+	. "github.com/kuadrant/kcp-glbc/test/support"
 
 	workload "github.com/kcp-dev/kcp/pkg/apis/workload/v1alpha1"
-	"github.com/kuadrant/kcp-glbc/pkg/dns"
+
 	"github.com/kuadrant/kcp-glbc/pkg/traffic"
 
 	"github.com/kcp-dev/logicalcluster/v2"
@@ -49,28 +48,7 @@ func Ingress(t Test, namespace *corev1.Namespace, name string) func(g gomega.Gom
 	}
 }
 
-func IngressEndpoints(t Test, ingress *traffic.Ingress, res dns.HostResolver) []types.GomegaMatcher {
-	host := ingress.Annotations[traffic.ANNOTATION_HCG_HOST]
-	targets, err := ingress.GetDNSTargets()
-	t.Expect(err).NotTo(gomega.HaveOccurred())
-	matchers := []types.GomegaMatcher{}
-	for _, target := range targets {
-		matchers = append(matchers, MatchFieldsP(IgnoreExtras,
-			Fields{
-				"DNSName":          Equal(host),
-				"Targets":          ConsistOf(target.Value),
-				"RecordType":       Equal("A"),
-				"RecordTTL":        Equal(kuadrantv1.TTL(60)),
-				"SetIdentifier":    Equal(target.Value),
-				"ProviderSpecific": ConsistOf(kuadrantv1.ProviderSpecific{{Name: "aws/weight", Value: "120"}}),
-			}))
-
-	}
-	return matchers
-
-}
-
-func ValidateTransformedIngress(expectedSpec networkingv1.IngressSpec, transformed *traffic.Ingress, expectRulesPatch, expectTLSPatch bool) error {
+func ValidateTransformed(expectedSpec networkingv1.IngressSpec, transformed *traffic.Ingress, expectRulesPatch, expectTLSPatch bool) error {
 	st := transformed.GetSyncTargets()
 	for _, target := range st {
 		// ensure each target has a transform value set and it is correct
@@ -134,7 +112,7 @@ func ValidateTransformedIngress(expectedSpec networkingv1.IngressSpec, transform
 func TransformedSpec(test Test, expectedSpec networkingv1.IngressSpec, expectRulesDiff, expectTLSDiff bool) func(ingress *traffic.Ingress) bool {
 	test.T().Log("Validating transformed spec for ingress")
 	return func(ingress *traffic.Ingress) bool {
-		if err := ValidateTransformedIngress(expectedSpec, ingress, expectRulesDiff, expectTLSDiff); err != nil {
+		if err := ValidateTransformed(expectedSpec, ingress, expectRulesDiff, expectTLSDiff); err != nil {
 			test.T().Log("transformed spec is not valid", err)
 			return false
 
@@ -172,7 +150,7 @@ func LoadBalancerIngresses(ingress *traffic.Ingress) []corev1.LoadBalancerIngres
 
 }
 
-func IngressTLS(ingress *networkingv1.Ingress) []networkingv1.IngressTLS {
+func TLS(ingress *networkingv1.Ingress) []networkingv1.IngressTLS {
 	return ingress.Spec.TLS
 }
 
@@ -245,8 +223,8 @@ func GetDefaultSpec(host, tlsSecretName, serviceName string) networkingv1.Ingres
 	}
 }
 
-// IngressHosts returns each unique host used in the rules
-func IngressHosts(ingress *traffic.Ingress) map[string]string {
+// Hosts returns each unique host used in the rules
+func Hosts(ingress *traffic.Ingress) map[string]string {
 	hosts := map[string]string{}
 	for _, rule := range ingress.Spec.Rules {
 		hosts[rule.Host] = rule.Host
@@ -254,8 +232,8 @@ func IngressHosts(ingress *traffic.Ingress) map[string]string {
 	return hosts
 }
 
-// IngressPendingHosts returns each unique host in the pending rules annotation
-func IngressPendingHosts(ingress *traffic.Ingress) map[string]string {
+// PendingHosts returns each unique host in the pending rules annotation
+func PendingHosts(ingress *traffic.Ingress) map[string]string {
 	hosts := map[string]string{}
 	pendingRules := traffic.Pending{}
 	pendingRulesAnnotation, ok := ingress.Annotations[traffic.ANNOTATION_PENDING_CUSTOM_HOSTS]
@@ -281,5 +259,12 @@ func HasTLSSecretForGeneratedHost(secret string) func(ingress *traffic.Ingress) 
 			}
 		}
 		return false
+	}
+}
+
+func DNSRecordToCertReady(t Test, namespace *corev1.Namespace) func(dnsrecord *kuadrantv1.DNSRecord) string {
+	return func(dnsrecord *kuadrantv1.DNSRecord) string {
+		ing := GetIngress(t, namespace, dnsrecord.Name)
+		return ing.Annotations[traffic.ANNOTATION_CERTIFICATE_STATE]
 	}
 }

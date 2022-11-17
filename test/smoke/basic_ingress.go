@@ -31,6 +31,7 @@ import (
 	kuadrantv1 "github.com/kuadrant/kcp-glbc/pkg/apis/kuadrant/v1"
 	"github.com/kuadrant/kcp-glbc/pkg/traffic"
 	. "github.com/kuadrant/kcp-glbc/test/support"
+	. "github.com/kuadrant/kcp-glbc/test/support/ingress"
 )
 
 func createTestIngress(t Test, namespace *corev1.Namespace, serviceName string) *networkingv1.Ingress {

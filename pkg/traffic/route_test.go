@@ -6,9 +6,11 @@ import (
 	"testing"
 
 	workload "github.com/kcp-dev/kcp/pkg/apis/workload/v1alpha1"
+
 	"github.com/kuadrant/kcp-glbc/pkg/dns"
 	"github.com/kuadrant/kcp-glbc/pkg/traffic"
-	testSupport "github.com/kuadrant/kcp-glbc/test/support"
+	testSupport "github.com/kuadrant/kcp-glbc/test/support/route"
+
 	routev1 "github.com/openshift/api/route/v1"
 	"k8s.io/apimachinery/pkg/api/equality"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -89,7 +91,7 @@ func TestApplyTransformsRoute(t *testing.T) {
 				t.Fatalf("expected the spec of the orignal and transformed to have remained the same. Expected %v Got %v", testCase.OriginalRoute.Spec, testCase.ReconciledRoute.Spec)
 			}
 			// we should now have annotations applying the transforms. Validate the transformed spec matches the transform annotations.
-			if err := testSupport.ValidateTransformedRoute(transformedCopy.Spec, reconciled); err != nil {
+			if err := testSupport.ValidateTransformed(transformedCopy.Spec, reconciled); err != nil {
 				t.Fatalf("transforms were invalid %s", err)
 			}
 			if testCase.ExpectErr {
